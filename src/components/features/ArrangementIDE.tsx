@@ -28,6 +28,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
   const playlist = currentSet?.playlist || []
   const [editingPrompt, setEditingPrompt] = useState(currentSet?.prompt || '')
   const [isPromptEditing, setIsPromptEditing] = useState(false)
+  const [pendingArcChange, setPendingArcChange] = useState<string | null>(null)
 
   const [selectedNodeIndex, setSelectedNodeIndex] = useState<number | null>(0)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
@@ -224,6 +225,47 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
     }
   }, [editingPrompt, isGenerating, playlist.length, aiProvider, updateSetWithPrompt, setIsGenerating])
 
+  const handleArcChange = useCallback((arcId: string) => {
+    if (arcId === activeTemplate) return
+    setPendingArcChange(arcId)
+  }, [activeTemplate])
+
+  const confirmArcChange = useCallback(async () => {
+    if (!pendingArcChange || isGenerating) return
+
+    const arc = ARC_TEMPLATES.find(a => a.id === pendingArcChange)
+    if (!arc) return
+
+    setActiveTemplate(pendingArcChange)
+    setPendingArcChange(null)
+    setIsGenerating(true)
+
+    try {
+      // Build prompt with arc description
+      const basePrompt = editingPrompt || currentSet?.prompt || 'Create an amazing DJ set'
+      const arcPrompt = `${basePrompt}. Energy arc style: ${arc.name} - create a ${arc.name.toLowerCase()} energy progression throughout the set.`
+
+      const trackCount = playlist.length || 8
+      const result = await generatePlaylist({
+        prompt: arcPrompt,
+        constraints: {
+          trackCount,
+          bpmRange: { min: 80, max: 160 }
+        } as AIConstraints,
+        provider: aiProvider
+      })
+
+      if (result.success && result.playlist) {
+        updateSetWithPrompt(result.playlist, arcPrompt)
+        setEditingPrompt(arcPrompt)
+      }
+    } catch (error) {
+      console.error('Failed to regenerate with arc:', error)
+    } finally {
+      setIsGenerating(false)
+    }
+  }, [pendingArcChange, isGenerating, editingPrompt, currentSet?.prompt, playlist.length, aiProvider, updateSetWithPrompt, setIsGenerating])
+
   const selectedNode = selectedNodeIndex !== null ? playlist[selectedNodeIndex] : null
   const totalDuration = playlist.reduce((acc, node) => acc + node.track.duration, 0)
 
@@ -356,9 +398,10 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                 {ARC_TEMPLATES.map((arc) => (
                   <button
                     key={arc.id}
-                    onClick={() => setActiveTemplate(arc.id)}
+                    onClick={() => handleArcChange(arc.id)}
+                    disabled={isGenerating}
                     className={cn(
-                      'p-3 border rounded-xl transition-all text-left',
+                      'p-3 border rounded-xl transition-all text-left disabled:opacity-50',
                       activeTemplate === arc.id
                         ? 'border-cyan-500/50 bg-cyan-500/5'
                         : 'border-white/5 hover:border-white/10'
@@ -808,6 +851,71 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
           )}
         </AnimatePresence>
       </div>
+
+      {/* Arc Change Confirmation Modal */}
+      <AnimatePresence>
+        {pendingArcChange && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-6"
+          >
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={() => setPendingArcChange(null)} />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-[#0a0c1c] border border-white/10 max-w-md w-full p-8 rounded-3xl overflow-hidden"
+            >
+              <div className="absolute -top-24 -right-24 w-64 h-64 bg-pink-500/10 blur-[100px]" />
+
+              <h2 className="text-2xl font-black tracking-tighter mb-2 uppercase">Change Arc Template?</h2>
+              <p className="text-gray-400 text-sm mb-6">
+                This will regenerate your entire set with the <span className="text-cyan-400 font-bold">{ARC_TEMPLATES.find(a => a.id === pendingArcChange)?.name}</span> energy arc. Your current tracks will be replaced.
+              </p>
+
+              {/* Preview the arc */}
+              <div className="p-4 bg-white/5 rounded-xl border border-white/10 mb-6">
+                <svg className="w-full h-12" viewBox="0 0 100 30">
+                  <path
+                    d={ARC_TEMPLATES.find(a => a.id === pendingArcChange)?.svg}
+                    fill="none"
+                    stroke="#00f2ff"
+                    strokeWidth="2"
+                  />
+                </svg>
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setPendingArcChange(null)}
+                  className="flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest text-white bg-white/5 hover:bg-white/10 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmArcChange}
+                  disabled={isGenerating}
+                  className="flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest text-black bg-cyan-500 hover:bg-cyan-400 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isGenerating ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4" />
+                      Regenerate
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Export Modal */}
       <AnimatePresence>
