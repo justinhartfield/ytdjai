@@ -221,9 +221,18 @@ async function generateWithOpenAI(prompt: string, constraints: GeneratePlaylistR
           {
             role: 'system',
             content: `You are a professional DJ and music curator. Generate a playlist based on the user's description.
-            Return a JSON array of track objects with: title, artist, bpm, key, genre, energy (0-1), duration (seconds).
+            Return a JSON array of track objects with these fields:
+            - title: string (track name)
+            - artist: string (artist name)
+            - bpm: number (beats per minute, typically 80-180)
+            - key: string (musical key like "Am", "F#m", "C")
+            - genre: string (music genre)
+            - energy: number (0-1 scale)
+            - duration: number (in seconds, typically 180-420)
+            - aiReasoning: string (1-2 sentences explaining why this track fits the set and transitions well)
+
             Consider transitions between tracks - adjacent tracks should have compatible BPMs and keys.
-            The response should ONLY be valid JSON, no additional text.`
+            The response should ONLY be valid JSON array, no additional text or markdown.`
           },
           {
             role: 'user',
@@ -281,7 +290,16 @@ async function generateWithClaude(prompt: string, constraints: GeneratePlaylistR
             - Moods: ${constraints?.moods?.join(', ') || 'varied'}
             - Exclude artists: ${constraints?.excludeArtists?.join(', ') || 'none'}
 
-            Return ONLY a JSON array of track objects with: title, artist, bpm, key, genre, energy (0-1), duration (seconds).
+            Return ONLY a JSON array of track objects with these fields:
+            - title: string (track name)
+            - artist: string (artist name)
+            - bpm: number (beats per minute)
+            - key: string (musical key like "Am", "F#m", "C")
+            - genre: string (music genre)
+            - energy: number (0-1 scale)
+            - duration: number (in seconds)
+            - aiReasoning: string (1-2 sentences explaining why this track fits the set and transitions well)
+
             Consider transitions - adjacent tracks should have compatible BPMs and keys.`
           }
         ]
@@ -333,7 +351,16 @@ async function generateWithGemini(prompt: string, constraints: GeneratePlaylistR
                   - Moods: ${constraints?.moods?.join(', ') || 'varied'}
                   - Exclude artists: ${constraints?.excludeArtists?.join(', ') || 'none'}
 
-                  Return ONLY a JSON array of track objects with: title, artist, bpm, key, genre, energy (0-1), duration (seconds).
+                  Return ONLY a JSON array of track objects with these fields:
+                  - title: string (track name)
+                  - artist: string (artist name)
+                  - bpm: number (beats per minute)
+                  - key: string (musical key like "Am", "F#m", "C")
+                  - genre: string (music genre)
+                  - energy: number (0-1 scale)
+                  - duration: number (in seconds)
+                  - aiReasoning: string (1-2 sentences explaining why this track fits the set and transitions well)
+
                   Consider transitions - adjacent tracks should have compatible BPMs and keys.`
                 }
               ]
@@ -380,7 +407,8 @@ async function tracksToPlaylistNodes(tracks: Partial<Track>[]): Promise<Playlist
       key: track.key,
       genre: track.genre,
       energy: track.energy,
-      thumbnail: track.thumbnail || `https://picsum.photos/seed/${Date.now() + index}/200/200`
+      thumbnail: track.thumbnail || `https://picsum.photos/seed/${Date.now() + index}/200/200`,
+      aiReasoning: track.aiReasoning
     },
     position: index,
     transitionToNext: index < enrichedTracks.length - 1 ? {

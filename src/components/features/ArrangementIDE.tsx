@@ -40,6 +40,85 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
 
   const canvasRef = useRef<HTMLDivElement>(null)
 
+  // Handle window events for drag (to capture events outside canvas)
+  useEffect(() => {
+    if (draggedIndex === null) return
+
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      if (!canvasRef.current || draggedIndex === null) return
+
+      const rect = canvasRef.current.getBoundingClientRect()
+      const deltaX = Math.abs(e.clientX - dragStartX)
+
+      // Determine drag direction - horizontal for reorder, vertical for BPM
+      if (!isDraggingHorizontal && deltaX > 10) {
+        setIsDraggingHorizontal(true)
+      }
+
+      if (isDraggingHorizontal) {
+        // Horizontal drag - reordering
+        setDragCurrentX(e.clientX)
+
+        // Calculate which position we're over
+        const xPercent = ((e.clientX - rect.left) / rect.width) * 100
+        let newDropIndex = 0
+
+        for (let i = 0; i < playlist.length; i++) {
+          const nodeX = ((i + 1) / (playlist.length + 1)) * 100
+          if (xPercent > nodeX) {
+            newDropIndex = i + 1
+          }
+        }
+
+        // Don't show drop indicator at current position
+        if (newDropIndex === draggedIndex || newDropIndex === draggedIndex + 1) {
+          setDropTargetIndex(null)
+        } else {
+          setDropTargetIndex(newDropIndex)
+        }
+      } else {
+        // Vertical drag - BPM adjustment
+        const y = ((e.clientY - rect.top) / rect.height) * 100
+        const clampedY = Math.max(10, Math.min(90, y))
+
+        // Convert Y to BPM
+        const newBpm = Math.round(200 - (clampedY / 100) * 140)
+
+        // Update the track's target BPM
+        const newPlaylist = [...playlist]
+        newPlaylist[draggedIndex] = {
+          ...newPlaylist[draggedIndex],
+          targetBpm: newBpm
+        }
+        updatePlaylist(newPlaylist)
+      }
+    }
+
+    const handleWindowMouseUp = () => {
+      if (draggedIndex !== null && dropTargetIndex !== null && isDraggingHorizontal) {
+        // Reorder the playlist
+        const newPlaylist = [...playlist]
+        const [removed] = newPlaylist.splice(draggedIndex, 1)
+        const insertIndex = dropTargetIndex > draggedIndex ? dropTargetIndex - 1 : dropTargetIndex
+        newPlaylist.splice(insertIndex, 0, removed)
+        updatePlaylist(newPlaylist)
+        setSelectedNodeIndex(insertIndex)
+      }
+
+      setDraggedIndex(null)
+      setDropTargetIndex(null)
+      setIsDraggingHorizontal(false)
+    }
+
+    window.addEventListener('mousemove', handleWindowMouseMove)
+    window.addEventListener('mouseup', handleWindowMouseUp)
+
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove)
+      window.removeEventListener('mouseup', handleWindowMouseUp)
+    }
+  }, [draggedIndex, dragStartX, isDraggingHorizontal, playlist, dropTargetIndex, updatePlaylist])
+
   // Calculate node positions based on BPM
   const nodePositions = useMemo(() => {
     return playlist.map((node, index) => {
@@ -65,79 +144,13 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
   }, [nodePositions])
 
   const handleNodeDragStart = useCallback((e: React.MouseEvent, index: number) => {
+    e.preventDefault()
     setDraggedIndex(index)
     setSelectedNodeIndex(index)
     setDragStartX(e.clientX)
     setDragCurrentX(e.clientX)
     setIsDraggingHorizontal(false)
   }, [])
-
-  const handleNodeDrag = useCallback((e: React.MouseEvent) => {
-    if (!canvasRef.current || draggedIndex === null) return
-
-    const rect = canvasRef.current.getBoundingClientRect()
-    const deltaX = Math.abs(e.clientX - dragStartX)
-    const deltaY = Math.abs(e.clientY - (rect.top + rect.height / 2))
-
-    // Determine drag direction - horizontal for reorder, vertical for BPM
-    if (!isDraggingHorizontal && deltaX > 20) {
-      setIsDraggingHorizontal(true)
-    }
-
-    if (isDraggingHorizontal) {
-      // Horizontal drag - reordering
-      setDragCurrentX(e.clientX)
-
-      // Calculate which position we're over
-      const xPercent = ((e.clientX - rect.left) / rect.width) * 100
-      let newDropIndex = 0
-
-      for (let i = 0; i < playlist.length; i++) {
-        const nodeX = ((i + 1) / (playlist.length + 1)) * 100
-        if (xPercent > nodeX) {
-          newDropIndex = i + 1
-        }
-      }
-
-      // Don't show drop indicator at current position
-      if (newDropIndex === draggedIndex || newDropIndex === draggedIndex + 1) {
-        setDropTargetIndex(null)
-      } else {
-        setDropTargetIndex(newDropIndex)
-      }
-    } else {
-      // Vertical drag - BPM adjustment
-      const y = ((e.clientY - rect.top) / rect.height) * 100
-      const clampedY = Math.max(10, Math.min(90, y))
-
-      // Convert Y to BPM
-      const newBpm = Math.round(200 - (clampedY / 100) * 140)
-
-      // Update the track's target BPM
-      const newPlaylist = [...playlist]
-      newPlaylist[draggedIndex] = {
-        ...newPlaylist[draggedIndex],
-        targetBpm: newBpm
-      }
-      updatePlaylist(newPlaylist)
-    }
-  }, [draggedIndex, dragStartX, isDraggingHorizontal, playlist, updatePlaylist])
-
-  const handleNodeDragEnd = useCallback(() => {
-    if (draggedIndex !== null && dropTargetIndex !== null && isDraggingHorizontal) {
-      // Reorder the playlist
-      const newPlaylist = [...playlist]
-      const [removed] = newPlaylist.splice(draggedIndex, 1)
-      const insertIndex = dropTargetIndex > draggedIndex ? dropTargetIndex - 1 : dropTargetIndex
-      newPlaylist.splice(insertIndex, 0, removed)
-      updatePlaylist(newPlaylist)
-      setSelectedNodeIndex(insertIndex)
-    }
-
-    setDraggedIndex(null)
-    setDropTargetIndex(null)
-    setIsDraggingHorizontal(false)
-  }, [draggedIndex, dropTargetIndex, isDraggingHorizontal, playlist, updatePlaylist])
 
   const handleLockToggle = (index: number) => {
     const newPlaylist = [...playlist]
@@ -303,9 +316,6 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
         <main
           ref={canvasRef}
           className="flex-1 relative flex flex-col bg-[#070815] overflow-hidden select-none"
-          onMouseMove={handleNodeDrag}
-          onMouseUp={handleNodeDragEnd}
-          onMouseLeave={handleNodeDragEnd}
         >
           {/* Canvas Toolbar */}
           <div className="h-10 border-b border-white/5 flex items-center justify-between px-6 bg-black/30 z-20">
@@ -360,7 +370,9 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                   d={curvePath}
                   fill="none"
                   stroke="url(#curveGradient)"
-                  strokeWidth="0.5"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                   className="drop-shadow-[0_0_8px_rgba(0,242,255,0.5)]"
                 />
               )}
@@ -602,7 +614,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                       AI Selection Logic
                     </h4>
                     <p className="text-xs text-gray-300 leading-relaxed italic">
-                      {selectedNode.track.aiReasoning.join(' ')}
+                      {selectedNode.track.aiReasoning}
                     </p>
                   </div>
                 )}

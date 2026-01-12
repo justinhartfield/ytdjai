@@ -27,7 +27,7 @@ export interface Track {
   energy?: number // 0-1
   key?: string
   isExplicit?: boolean
-  aiReasoning?: string[]
+  aiReasoning?: string
 }
 
 export interface Transition {

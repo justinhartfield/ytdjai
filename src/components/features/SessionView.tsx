@@ -441,7 +441,7 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
                       Why AI Chose This
                     </div>
                     <p className="text-xs text-gray-300 leading-relaxed italic">
-                      {selectedTrack.aiReasoning.join(' ')}
+                      {selectedTrack.aiReasoning}
                     </p>
                     <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
                       <div className="flex justify-between items-center text-[9px] font-bold">
