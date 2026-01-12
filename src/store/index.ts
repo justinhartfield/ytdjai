@@ -104,6 +104,7 @@ export const useYTDJStore = create<YTDJState>()(
       partialize: (state) => ({
         sets: state.sets,
         aiProvider: state.aiProvider,
+        currentSet: state.currentSet,
       }),
     }
   )

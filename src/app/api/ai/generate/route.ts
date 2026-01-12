@@ -423,6 +423,14 @@ export async function POST(request: NextRequest) {
     const body: GeneratePlaylistRequest = await request.json()
     const { prompt, constraints, provider = 'openai' } = body
 
+    console.log('[Generate API] Request received:', { provider, prompt: prompt?.substring(0, 50) })
+    console.log('[Generate API] API Keys present:', {
+      openai: !!process.env.OPENAI_API_KEY,
+      anthropic: !!process.env.ANTHROPIC_API_KEY,
+      google: !!process.env.GOOGLE_AI_API_KEY,
+      youtube: !!process.env.YOUTUBE_API_KEY
+    })
+
     if (!prompt) {
       return NextResponse.json(
         { success: false, error: 'Prompt is required' },
@@ -431,6 +439,7 @@ export async function POST(request: NextRequest) {
     }
 
     let playlist: PlaylistNode[]
+    let usedMock = false
 
     switch (provider) {
       case 'claude':
@@ -445,6 +454,15 @@ export async function POST(request: NextRequest) {
         break
     }
 
+    // Check if we got mock data (mock tracks have specific IDs)
+    if (playlist.length > 0 && playlist[0].track.youtubeId?.startsWith('yt-')) {
+      usedMock = true
+      console.log('[Generate API] WARNING: Returned mock/placeholder data - AI generation may have failed')
+    }
+
+    console.log('[Generate API] Generated', playlist.length, 'tracks, usedMock:', usedMock)
+    console.log('[Generate API] First track:', playlist[0]?.track.title, '-', playlist[0]?.track.artist)
+
     return NextResponse.json({
       success: true,
       playlist,
@@ -452,11 +470,12 @@ export async function POST(request: NextRequest) {
         provider,
         generatedAt: new Date().toISOString(),
         trackCount: playlist.length,
-        totalDuration: playlist.reduce((acc, node) => acc + node.track.duration, 0)
+        totalDuration: playlist.reduce((acc, node) => acc + node.track.duration, 0),
+        usedMockData: usedMock
       }
     })
   } catch (error) {
-    console.error('Generate playlist error:', error)
+    console.error('[Generate API] Error:', error)
     return NextResponse.json(
       { success: false, error: 'Failed to generate playlist' },
       { status: 500 }
