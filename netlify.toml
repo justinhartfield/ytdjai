@@ -9,13 +9,6 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Redirects for SPA
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-  conditions = {Role = ["admin"]}
-
 # Headers for security
 [[headers]]
   for = "/*"
