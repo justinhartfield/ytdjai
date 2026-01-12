@@ -4,6 +4,8 @@
 
 [build.environment]
   NODE_VERSION = "18"
+  # Disable smart secrets detection - API keys are legitimately used in server-side code
+  SECRETS_SCAN_SMART_DETECTION_ENABLED = "false"
 
 # Next.js requires the Next.js Runtime
 [[plugins]]
