@@ -1,163 +1,330 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { AIProvider, SwapTrackRequest, Track } from '@/types'
 
-// Alternative tracks database for swapping
-const ALTERNATIVE_TRACKS: Track[] = [
-  {
-    id: 'alt-1',
-    youtubeId: 'alt-yt-1',
-    title: 'One More Time',
-    artist: 'Daft Punk',
-    duration: 320,
-    bpm: 122,
-    key: 'A♭ major',
-    genre: 'French House',
-    energy: 0.85,
-    thumbnail: 'https://picsum.photos/seed/alt1/200/200'
-  },
-  {
-    id: 'alt-2',
-    youtubeId: 'alt-yt-2',
-    title: 'Satisfaction',
-    artist: 'Benny Benassi',
-    duration: 280,
-    bpm: 130,
-    key: 'F minor',
-    genre: 'Electro House',
-    energy: 0.9,
-    thumbnail: 'https://picsum.photos/seed/alt2/200/200'
-  },
-  {
-    id: 'alt-3',
-    youtubeId: 'alt-yt-3',
-    title: 'Around the World',
-    artist: 'Daft Punk',
-    duration: 420,
-    bpm: 121,
-    key: 'G minor',
-    genre: 'French House',
-    energy: 0.8,
-    thumbnail: 'https://picsum.photos/seed/alt3/200/200'
-  },
-  {
-    id: 'alt-4',
-    youtubeId: 'alt-yt-4',
-    title: 'Children',
-    artist: 'Robert Miles',
-    duration: 360,
-    bpm: 138,
-    key: 'B minor',
-    genre: 'Dream Trance',
-    energy: 0.7,
-    thumbnail: 'https://picsum.photos/seed/alt4/200/200'
-  },
-  {
-    id: 'alt-5',
-    youtubeId: 'alt-yt-5',
-    title: 'Sandstorm',
-    artist: 'Darude',
-    duration: 230,
-    bpm: 136,
-    key: 'B minor',
-    genre: 'Trance',
-    energy: 0.95,
-    thumbnail: 'https://picsum.photos/seed/alt5/200/200'
-  },
-  {
-    id: 'alt-6',
-    youtubeId: 'alt-yt-6',
-    title: 'Finally',
-    artist: 'CeCe Peniston',
-    duration: 280,
-    bpm: 124,
-    key: 'A♭ major',
-    genre: 'House',
-    energy: 0.85,
-    thumbnail: 'https://picsum.photos/seed/alt6/200/200'
-  },
-  {
-    id: 'alt-7',
-    youtubeId: 'alt-yt-7',
-    title: 'Show Me Love',
-    artist: 'Robin S',
-    duration: 320,
-    bpm: 122,
-    key: 'C minor',
-    genre: 'House',
-    energy: 0.8,
-    thumbnail: 'https://picsum.photos/seed/alt7/200/200'
-  },
-  {
-    id: 'alt-8',
-    youtubeId: 'alt-yt-8',
-    title: 'Blue (Da Ba Dee)',
-    artist: 'Eiffel 65',
-    duration: 270,
-    bpm: 128,
-    key: 'E minor',
-    genre: 'Eurodance',
-    energy: 0.85,
-    thumbnail: 'https://picsum.photos/seed/alt8/200/200'
-  }
-]
+// YouTube Data API search
+interface YouTubeSearchResult {
+  videoId: string
+  title: string
+  thumbnail: string
+  channelTitle: string
+  duration?: number
+}
 
-async function findAlternativeWithAI(
-  currentTrack: Track,
-  previousTrack?: Track,
-  nextTrack?: Track,
-  provider: AIProvider = 'openai'
-): Promise<Track> {
-  // Calculate ideal BPM based on surrounding tracks
-  let targetBpm = currentTrack.bpm || 128
-  if (previousTrack?.bpm && nextTrack?.bpm) {
-    targetBpm = Math.round((previousTrack.bpm + nextTrack.bpm) / 2)
-  } else if (previousTrack?.bpm) {
-    targetBpm = previousTrack.bpm + 2
-  } else if (nextTrack?.bpm) {
-    targetBpm = nextTrack.bpm - 2
+async function searchYouTube(query: string): Promise<YouTubeSearchResult | null> {
+  const apiKey = process.env.YOUTUBE_API_KEY || process.env.GOOGLE_AI_API_KEY
+
+  if (!apiKey) {
+    console.log('[Swap API] No YouTube API key available')
+    return null
   }
 
-  // Find best matching alternative
-  const scoredTracks = ALTERNATIVE_TRACKS
-    .filter(t => t.id !== currentTrack.id)
-    .map(track => {
-      let score = 0
+  try {
+    const searchResponse = await fetch(
+      `https://www.googleapis.com/youtube/v3/search?` +
+      `part=snippet&type=video&maxResults=1&q=${encodeURIComponent(query)}&key=${apiKey}`
+    )
 
-      // BPM compatibility (most important)
-      if (track.bpm) {
-        const bpmDiff = Math.abs(track.bpm - targetBpm)
-        score += Math.max(0, 30 - bpmDiff * 3)
+    if (!searchResponse.ok) {
+      console.error('[Swap API] YouTube search failed:', searchResponse.status)
+      return null
+    }
+
+    const searchData = await searchResponse.json()
+
+    if (!searchData.items?.[0]) {
+      return null
+    }
+
+    const item = searchData.items[0]
+    const videoId = item.id.videoId
+
+    // Get video details for duration
+    const detailsResponse = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?` +
+      `part=contentDetails&id=${videoId}&key=${apiKey}`
+    )
+
+    let duration: number | undefined
+    if (detailsResponse.ok) {
+      const detailsData = await detailsResponse.json()
+      if (detailsData.items?.[0]?.contentDetails?.duration) {
+        duration = parseISO8601Duration(detailsData.items[0].contentDetails.duration)
       }
+    }
 
-      // Energy similarity
-      if (track.energy && currentTrack.energy) {
-        const energyDiff = Math.abs(track.energy - currentTrack.energy)
-        score += Math.max(0, 20 - energyDiff * 20)
-      }
+    return {
+      videoId,
+      title: item.snippet.title,
+      thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url,
+      channelTitle: item.snippet.channelTitle,
+      duration
+    }
+  } catch (error) {
+    console.error('[Swap API] YouTube search error:', error)
+    return null
+  }
+}
 
-      // Genre variety bonus (slightly different genre is good)
-      if (track.genre !== currentTrack.genre) {
-        score += 10
-      }
+function parseISO8601Duration(duration: string): number {
+  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
+  if (!match) return 240
 
-      return { track, score }
+  const hours = parseInt(match[1] || '0', 10)
+  const minutes = parseInt(match[2] || '0', 10)
+  const seconds = parseInt(match[3] || '0', 10)
+
+  return hours * 3600 + minutes * 60 + seconds
+}
+
+async function suggestTrackWithOpenAI(
+  targetBpm: number,
+  genre: string,
+  mood: string,
+  excludeArtists: string[]
+): Promise<Partial<Track> | null> {
+  const apiKey = process.env.OPENAI_API_KEY
+
+  if (!apiKey) {
+    console.error('[Swap API] No OpenAI API key configured')
+    throw new Error('OpenAI API key not configured')
+  }
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4-turbo-preview',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a professional DJ suggesting a single track for a DJ set.
+            Return ONLY valid JSON with these fields:
+            - title: string (track name)
+            - artist: string (artist name)
+            - bpm: number (must be within ±3 of the target BPM)
+            - key: string (musical key)
+            - genre: string
+            - energy: number (0-1)
+            - aiReasoning: string (why this track fits)
+
+            No markdown, no explanation, just the JSON object.`
+          },
+          {
+            role: 'user',
+            content: `Suggest ONE track at approximately ${targetBpm} BPM.
+            Style: ${genre || 'electronic dance music'}
+            Mood: ${mood || 'energetic'}
+            ${excludeArtists.length > 0 ? `Exclude these artists: ${excludeArtists.join(', ')}` : ''}
+
+            Return only the JSON object.`
+          }
+        ],
+        temperature: 0.9,
+        max_tokens: 500
+      })
     })
-    .sort((a, b) => b.score - a.score)
 
-  // Return the best match with updated ID
-  const bestMatch = scoredTracks[0]?.track || ALTERNATIVE_TRACKS[0]
+    const data = await response.json()
+
+    if (data.choices?.[0]?.message?.content) {
+      const content = data.choices[0].message.content.trim()
+      // Try to parse JSON, handling potential markdown wrapping
+      let jsonStr = content
+      if (content.includes('```')) {
+        const match = content.match(/```(?:json)?\s*([\s\S]*?)```/)
+        if (match) jsonStr = match[1].trim()
+      }
+      const track = JSON.parse(jsonStr)
+      console.log('[Swap API] OpenAI suggested:', track.artist, '-', track.title)
+      return track
+    }
+
+    return null
+  } catch (error) {
+    console.error('[Swap API] OpenAI error:', error)
+    throw error
+  }
+}
+
+async function suggestTrackWithClaude(
+  targetBpm: number,
+  genre: string,
+  mood: string,
+  excludeArtists: string[]
+): Promise<Partial<Track> | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+
+  if (!apiKey) {
+    console.error('[Swap API] No Anthropic API key configured')
+    throw new Error('Anthropic API key not configured')
+  }
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-sonnet-20240229',
+        max_tokens: 500,
+        messages: [
+          {
+            role: 'user',
+            content: `You are a professional DJ. Suggest ONE track at approximately ${targetBpm} BPM.
+            Style: ${genre || 'electronic dance music'}
+            Mood: ${mood || 'energetic'}
+            ${excludeArtists.length > 0 ? `Exclude these artists: ${excludeArtists.join(', ')}` : ''}
+
+            Return ONLY a JSON object with these fields:
+            - title: string (track name)
+            - artist: string (artist name)
+            - bpm: number (must be within ±3 of ${targetBpm})
+            - key: string (musical key)
+            - genre: string
+            - energy: number (0-1)
+            - aiReasoning: string (why this track fits)
+
+            No markdown, no explanation, just the JSON object.`
+          }
+        ]
+      })
+    })
+
+    const data = await response.json()
+
+    if (data.content?.[0]?.text) {
+      const content = data.content[0].text.trim()
+      const jsonMatch = content.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        const track = JSON.parse(jsonMatch[0])
+        console.log('[Swap API] Claude suggested:', track.artist, '-', track.title)
+        return track
+      }
+    }
+
+    return null
+  } catch (error) {
+    console.error('[Swap API] Claude error:', error)
+    throw error
+  }
+}
+
+async function suggestTrackWithGemini(
+  targetBpm: number,
+  genre: string,
+  mood: string,
+  excludeArtists: string[]
+): Promise<Partial<Track> | null> {
+  const apiKey = process.env.GOOGLE_AI_API_KEY
+
+  if (!apiKey) {
+    console.error('[Swap API] No Google AI API key configured')
+    throw new Error('Google AI API key not configured')
+  }
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: `You are a professional DJ. Suggest ONE track at approximately ${targetBpm} BPM.
+                  Style: ${genre || 'electronic dance music'}
+                  Mood: ${mood || 'energetic'}
+                  ${excludeArtists.length > 0 ? `Exclude these artists: ${excludeArtists.join(', ')}` : ''}
+
+                  Return ONLY a JSON object with these fields:
+                  - title: string (track name)
+                  - artist: string (artist name)
+                  - bpm: number (must be within ±3 of ${targetBpm})
+                  - key: string (musical key)
+                  - genre: string
+                  - energy: number (0-1)
+                  - aiReasoning: string (why this track fits)
+
+                  No markdown, no explanation, just the JSON object.`
+                }
+              ]
+            }
+          ],
+          generationConfig: {
+            temperature: 0.9,
+            maxOutputTokens: 500
+          }
+        })
+      }
+    )
+
+    const data = await response.json()
+
+    if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+      const content = data.candidates[0].content.parts[0].text.trim()
+      const jsonMatch = content.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        const track = JSON.parse(jsonMatch[0])
+        console.log('[Swap API] Gemini suggested:', track.artist, '-', track.title)
+        return track
+      }
+    }
+
+    return null
+  } catch (error) {
+    console.error('[Swap API] Gemini error:', error)
+    throw error
+  }
+}
+
+async function enrichTrackWithYouTube(track: Partial<Track>): Promise<Track> {
+  const query = `${track.artist} - ${track.title} official audio`
+  const result = await searchYouTube(query)
 
   return {
-    ...bestMatch,
     id: `track-${Date.now()}`,
-    youtubeId: `yt-${Date.now()}`
+    youtubeId: result?.videoId || `yt-${Date.now()}`,
+    title: track.title || 'Unknown Track',
+    artist: track.artist || 'Unknown Artist',
+    duration: result?.duration || track.duration || 240,
+    bpm: track.bpm,
+    key: track.key,
+    genre: track.genre,
+    energy: track.energy,
+    thumbnail: result?.thumbnail || `https://picsum.photos/seed/${Date.now()}/200/200`,
+    aiReasoning: track.aiReasoning
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: SwapTrackRequest = await request.json()
-    const { currentTrack, previousTrack, nextTrack, constraints, provider = 'openai' } = body
+    const {
+      currentTrack,
+      previousTrack,
+      nextTrack,
+      targetBpm,
+      constraints,
+      provider = 'openai'
+    } = body
+
+    console.log('[Swap API] Request received:', {
+      provider,
+      targetBpm,
+      currentTrack: currentTrack?.title,
+      currentBpm: currentTrack?.bpm
+    })
 
     if (!currentTrack) {
       return NextResponse.json(
@@ -166,14 +333,49 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const newTrack = await findAlternativeWithAI(
-      currentTrack,
-      previousTrack,
-      nextTrack,
-      provider
-    )
+    // Calculate target BPM if not provided
+    let finalTargetBpm = targetBpm
+    if (!finalTargetBpm) {
+      if (previousTrack?.bpm && nextTrack?.bpm) {
+        finalTargetBpm = Math.round((previousTrack.bpm + nextTrack.bpm) / 2)
+      } else if (previousTrack?.bpm) {
+        finalTargetBpm = previousTrack.bpm + 2
+      } else if (nextTrack?.bpm) {
+        finalTargetBpm = nextTrack.bpm - 2
+      } else {
+        finalTargetBpm = currentTrack.bpm || 128
+      }
+    }
 
-    // Calculate transition quality to adjacent tracks
+    const genre = currentTrack.genre || 'electronic dance music'
+    const mood = currentTrack.energy && currentTrack.energy > 0.7 ? 'high energy' : 'groovy'
+    const excludeArtists = [currentTrack.artist, previousTrack?.artist, nextTrack?.artist].filter(Boolean) as string[]
+
+    console.log('[Swap API] Searching for track at', finalTargetBpm, 'BPM, genre:', genre)
+
+    let suggestedTrack: Partial<Track> | null = null
+
+    switch (provider) {
+      case 'claude':
+        suggestedTrack = await suggestTrackWithClaude(finalTargetBpm, genre, mood, excludeArtists)
+        break
+      case 'gemini':
+        suggestedTrack = await suggestTrackWithGemini(finalTargetBpm, genre, mood, excludeArtists)
+        break
+      case 'openai':
+      default:
+        suggestedTrack = await suggestTrackWithOpenAI(finalTargetBpm, genre, mood, excludeArtists)
+        break
+    }
+
+    if (!suggestedTrack) {
+      throw new Error('AI failed to suggest a track')
+    }
+
+    // Enrich with YouTube data
+    const newTrack = await enrichTrackWithYouTube(suggestedTrack)
+
+    // Calculate transition quality
     let transitionQuality: 'excellent' | 'good' | 'fair' | 'poor' = 'good'
     if (previousTrack?.bpm && newTrack.bpm) {
       const bpmDiff = Math.abs(previousTrack.bpm - newTrack.bpm)
@@ -183,20 +385,24 @@ export async function POST(request: NextRequest) {
       else transitionQuality = 'poor'
     }
 
+    console.log('[Swap API] Returning track:', newTrack.artist, '-', newTrack.title, 'at', newTrack.bpm, 'BPM')
+
     return NextResponse.json({
       success: true,
       newTrack,
       transitionQuality,
-      reasoning: `Selected "${newTrack.title}" by ${newTrack.artist} (${newTrack.bpm} BPM) as an alternative that maintains flow with surrounding tracks.`,
+      reasoning: newTrack.aiReasoning || `Selected "${newTrack.title}" by ${newTrack.artist} (${newTrack.bpm} BPM) as an alternative that maintains flow with surrounding tracks.`,
       metadata: {
         provider,
+        targetBpm: finalTargetBpm,
         generatedAt: new Date().toISOString()
       }
     })
   } catch (error) {
-    console.error('Swap track error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('[Swap API] Error:', errorMessage)
     return NextResponse.json(
-      { success: false, error: 'Failed to find alternative track' },
+      { success: false, error: errorMessage },
       { status: 500 }
     )
   }

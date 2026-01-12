@@ -118,6 +118,7 @@ export interface SwapTrackRequest {
   currentTrack: Track
   previousTrack?: Track
   nextTrack?: Track
+  targetBpm?: number
   constraints?: AIConstraints
   provider: AIProvider
 }

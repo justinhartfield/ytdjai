@@ -4,11 +4,11 @@ import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Zap, Undo2, Redo2, Download, Play, Pause, SkipBack, SkipForward,
-  Lock, Unlock, Trash2, X, RefreshCw, Settings2, Sparkles
+  Lock, Unlock, Trash2, X, RefreshCw, Settings2, Sparkles, Loader2
 } from 'lucide-react'
 import { cn, formatDuration } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
-import { generatePlaylist } from '@/lib/ai-service'
+import { generatePlaylist, swapTrack } from '@/lib/ai-service'
 import type { PlaylistNode, Track, AIConstraints } from '@/types'
 
 const ARC_TEMPLATES = [
@@ -40,6 +40,9 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
   const [isDraggingHorizontal, setIsDraggingHorizontal] = useState(false)
   const [isDraggingVertical, setIsDraggingVertical] = useState(false)
   const [currentDragBpm, setCurrentDragBpm] = useState<number | null>(null)
+  const [swapPreview, setSwapPreview] = useState<Track | null>(null)
+  const [isLoadingSwap, setIsLoadingSwap] = useState(false)
+  const [lastFetchedBpm, setLastFetchedBpm] = useState<number | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [activeTrackIndex, setActiveTrackIndex] = useState(0)
   const [activeTemplate, setActiveTemplate] = useState('warmup')
@@ -47,6 +50,8 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
   const [showExport, setShowExport] = useState(false)
 
   const canvasRef = useRef<HTMLDivElement>(null)
+  const swapDebounceRef = useRef<NodeJS.Timeout | null>(null)
+  const lastDragY = useRef<number | null>(null)
 
   // Handle window events for drag (to capture events outside canvas)
   useEffect(() => {
@@ -93,17 +98,68 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
           setDropTargetIndex(newDropIndex)
         }
       } else if (isDraggingVertical) {
-        // Vertical drag - BPM adjustment (live preview)
+        // Vertical drag - BPM adjustment and track swap preview
         const y = ((e.clientY - rect.top) / rect.height) * 100
         const clampedY = Math.max(10, Math.min(90, y))
 
         // Convert Y to BPM (200 at top, 60 at bottom)
         const newBpm = Math.round(200 - (clampedY / 100) * 140)
         setCurrentDragBpm(newBpm)
+
+        // Check if Y position has stabilized (not moving much)
+        const deltaY = lastDragY.current !== null ? Math.abs(e.clientY - lastDragY.current) : 0
+        lastDragY.current = e.clientY
+
+        // Clear existing debounce timer
+        if (swapDebounceRef.current) {
+          clearTimeout(swapDebounceRef.current)
+        }
+
+        // Only fetch if BPM changed significantly and we're not already loading
+        const bpmChanged = lastFetchedBpm === null || Math.abs(newBpm - lastFetchedBpm) > 5
+
+        if (bpmChanged && !isLoadingSwap && deltaY < 5) {
+          // Start debounce timer - fetch after 800ms of pausing
+          swapDebounceRef.current = setTimeout(async () => {
+            const draggedNode = playlist[draggedIndex]
+            if (!draggedNode) return
+
+            setIsLoadingSwap(true)
+            setLastFetchedBpm(newBpm)
+
+            try {
+              const previousNode = draggedIndex > 0 ? playlist[draggedIndex - 1] : undefined
+              const nextNode = draggedIndex < playlist.length - 1 ? playlist[draggedIndex + 1] : undefined
+
+              const result = await swapTrack({
+                currentTrack: draggedNode.track,
+                previousTrack: previousNode?.track,
+                nextTrack: nextNode?.track,
+                targetBpm: newBpm,
+                provider: aiProvider
+              })
+
+              if (result.success && result.newTrack) {
+                setSwapPreview(result.newTrack)
+                console.log('[Swap] Preview track loaded:', result.newTrack.artist, '-', result.newTrack.title)
+              }
+            } catch (error) {
+              console.error('[Swap] Failed to fetch preview:', error)
+            } finally {
+              setIsLoadingSwap(false)
+            }
+          }, 800)
+        }
       }
     }
 
     const handleWindowMouseUp = () => {
+      // Clear debounce timer
+      if (swapDebounceRef.current) {
+        clearTimeout(swapDebounceRef.current)
+        swapDebounceRef.current = null
+      }
+
       if (draggedIndex !== null) {
         if (isDraggingHorizontal && dropTargetIndex !== null) {
           // Reorder the playlist
@@ -113,22 +169,39 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
           newPlaylist.splice(insertIndex, 0, removed)
           updatePlaylist(newPlaylist)
           setSelectedNodeIndex(insertIndex)
-        } else if (isDraggingVertical && currentDragBpm !== null) {
-          // Commit the BPM change
-          const newPlaylist = [...playlist]
-          newPlaylist[draggedIndex] = {
-            ...newPlaylist[draggedIndex],
-            targetBpm: currentDragBpm
+        } else if (isDraggingVertical) {
+          if (swapPreview) {
+            // Commit the actual track swap with the preview track
+            const newPlaylist = [...playlist]
+            newPlaylist[draggedIndex] = {
+              ...newPlaylist[draggedIndex],
+              track: swapPreview,
+              targetBpm: swapPreview.bpm
+            }
+            updatePlaylist(newPlaylist)
+            console.log('[Swap] Committed track swap:', swapPreview.artist, '-', swapPreview.title)
+          } else if (currentDragBpm !== null) {
+            // Just update the target BPM if no swap preview available
+            const newPlaylist = [...playlist]
+            newPlaylist[draggedIndex] = {
+              ...newPlaylist[draggedIndex],
+              targetBpm: currentDragBpm
+            }
+            updatePlaylist(newPlaylist)
           }
-          updatePlaylist(newPlaylist)
         }
       }
 
+      // Reset all drag state
       setDraggedIndex(null)
       setDropTargetIndex(null)
       setIsDraggingHorizontal(false)
       setIsDraggingVertical(false)
       setCurrentDragBpm(null)
+      setSwapPreview(null)
+      setIsLoadingSwap(false)
+      setLastFetchedBpm(null)
+      lastDragY.current = null
     }
 
     window.addEventListener('mousemove', handleWindowMouseMove)
@@ -137,8 +210,12 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
     return () => {
       window.removeEventListener('mousemove', handleWindowMouseMove)
       window.removeEventListener('mouseup', handleWindowMouseUp)
+      // Clear debounce timer on cleanup
+      if (swapDebounceRef.current) {
+        clearTimeout(swapDebounceRef.current)
+      }
     }
-  }, [draggedIndex, dragStartX, dragStartY, isDraggingHorizontal, isDraggingVertical, currentDragBpm, playlist, dropTargetIndex, updatePlaylist])
+  }, [draggedIndex, dragStartX, dragStartY, isDraggingHorizontal, isDraggingVertical, currentDragBpm, playlist, dropTargetIndex, updatePlaylist, isLoadingSwap, lastFetchedBpm, aiProvider, swapPreview])
 
   // Calculate node positions based on BPM (use targetBpm if set, otherwise track.bpm)
   const nodePositions = useMemo(() => {
@@ -686,7 +763,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
               )}
             </AnimatePresence>
 
-            {/* Ghost Preview - follows cursor when dragging vertically (BPM adjustment) */}
+            {/* Ghost Preview - follows cursor when dragging vertically (BPM adjustment/Track swap) */}
             <AnimatePresence>
               {draggedIndex !== null && isDraggingVertical && canvasRef.current && (
                 <motion.div
@@ -700,28 +777,67 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                     transform: 'translate(-50%, -50%)'
                   }}
                 >
-                  <div className="w-16 h-16 rounded-full border-2 border-pink-500 bg-[#05060f] shadow-[0_0_30px_rgba(255,0,229,0.6)] flex items-center justify-center">
-                    <div className="w-14 h-14 rounded-full overflow-hidden">
-                      <img
-                        src={playlist[draggedIndex]?.track.thumbnail || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100&h=100&fit=crop'}
-                        alt=""
-                        className="w-full h-full object-cover"
-                        draggable={false}
-                      />
+                  {/* Show swap preview track or original track */}
+                  <div className={cn(
+                    "w-16 h-16 rounded-full border-2 bg-[#05060f] shadow-[0_0_30px] flex items-center justify-center transition-all duration-300",
+                    swapPreview
+                      ? "border-green-500 shadow-green-500/60"
+                      : "border-pink-500 shadow-pink-500/60"
+                  )}>
+                    <div className="w-14 h-14 rounded-full overflow-hidden relative">
+                      {isLoadingSwap ? (
+                        <div className="w-full h-full flex items-center justify-center bg-black/80">
+                          <Loader2 className="w-6 h-6 text-cyan-400 animate-spin" />
+                        </div>
+                      ) : (
+                        <img
+                          src={swapPreview?.thumbnail || playlist[draggedIndex]?.track.thumbnail || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100&h=100&fit=crop'}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          draggable={false}
+                        />
+                      )}
                     </div>
                   </div>
+
                   {/* BPM indicator */}
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="absolute -top-12 left-1/2 -translate-x-1/2 bg-pink-500 text-white px-3 py-1.5 rounded-lg font-black text-lg shadow-2xl whitespace-nowrap"
+                    className={cn(
+                      "absolute -top-12 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-lg font-black text-lg shadow-2xl whitespace-nowrap transition-colors",
+                      swapPreview ? "bg-green-500 text-black" : "bg-pink-500 text-white"
+                    )}
                   >
-                    {currentDragBpm}<span className="text-[10px] ml-1 font-bold">BPM</span>
+                    {swapPreview?.bpm || currentDragBpm}<span className="text-[10px] ml-1 font-bold">BPM</span>
                   </motion.div>
+
+                  {/* Track info */}
                   <div className="absolute top-18 left-1/2 -translate-x-1/2 whitespace-nowrap text-center mt-2">
-                    <div className="text-[10px] font-extrabold text-white uppercase tracking-tighter bg-black/80 px-2 py-1 rounded">
-                      {playlist[draggedIndex]?.track.title}
-                    </div>
+                    {isLoadingSwap ? (
+                      <div className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider bg-black/80 px-3 py-1.5 rounded flex items-center gap-2">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Finding track...
+                      </div>
+                    ) : swapPreview ? (
+                      <div className="bg-green-500/20 border border-green-500/30 px-3 py-1.5 rounded">
+                        <div className="text-[10px] font-extrabold text-white uppercase tracking-tighter">
+                          {swapPreview.title}
+                        </div>
+                        <div className="text-[8px] font-bold text-green-400 uppercase">
+                          {swapPreview.artist}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-black/80 px-2 py-1 rounded">
+                        <div className="text-[10px] font-extrabold text-white uppercase tracking-tighter">
+                          {playlist[draggedIndex]?.track.title}
+                        </div>
+                        <div className="text-[8px] font-bold text-pink-400 uppercase">
+                          Pause to find track
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}
