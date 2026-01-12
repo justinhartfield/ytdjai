@@ -109,7 +109,7 @@ async function suggestTrackWithOpenAI(
             - key: string (musical key)
             - genre: string
             - energy: number (0-1)
-            - aiReasoning: string (why this track fits)
+            - aiReasoning: string (IMPORTANT: explain how this track fits the set's style/mood AND how it transitions well from surrounding tracks. Reference the genre/mood directly.)
 
             No markdown, no explanation, just the JSON object.`
           },
@@ -119,6 +119,8 @@ async function suggestTrackWithOpenAI(
             Style: ${genre || 'electronic dance music'}
             Mood: ${mood || 'energetic'}
             ${excludeArtists.length > 0 ? `Exclude these artists: ${excludeArtists.join(', ')}` : ''}
+
+            The aiReasoning should explain why this track fits the "${genre}" style and "${mood}" mood.
 
             Return only the JSON object.`
           }
@@ -189,7 +191,7 @@ async function suggestTrackWithClaude(
             - key: string (musical key)
             - genre: string
             - energy: number (0-1)
-            - aiReasoning: string (why this track fits)
+            - aiReasoning: string (IMPORTANT: explain how this track fits the "${genre}" style and "${mood}" mood, and how it transitions well from surrounding tracks)
 
             No markdown, no explanation, just the JSON object.`
           }
@@ -254,7 +256,7 @@ async function suggestTrackWithGemini(
                   - key: string (musical key)
                   - genre: string
                   - energy: number (0-1)
-                  - aiReasoning: string (why this track fits)
+                  - aiReasoning: string (IMPORTANT: explain how this track fits the "${genre}" style and "${mood}" mood, and how it transitions well from surrounding tracks)
 
                   No markdown, no explanation, just the JSON object.`
                 }

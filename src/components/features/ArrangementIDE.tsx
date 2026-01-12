@@ -4,12 +4,18 @@ import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Zap, Undo2, Redo2, Download, Play, Pause, SkipBack, SkipForward,
-  Lock, Unlock, Trash2, X, RefreshCw, Settings2, Sparkles, Loader2
+  Lock, Unlock, Trash2, X, RefreshCw, Settings2, Sparkles, Loader2,
+  Volume2, VolumeX, Plus
 } from 'lucide-react'
 import { cn, formatDuration } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
 import { generatePlaylist, swapTrack } from '@/lib/ai-service'
-import type { PlaylistNode, Track, AIConstraints } from '@/types'
+import { YouTubePlayer, formatTime } from './YouTubePlayer'
+import { IconSidebar } from './IconSidebar'
+import { AIConstraintsDrawer } from './AIConstraintsDrawer'
+import { SetsDashboard } from './SetsDashboard'
+import { ExportFlow } from './ExportFlow'
+import type { PlaylistNode, Track, AIConstraints, Set } from '@/types'
 
 const ARC_TEMPLATES = [
   { id: 'warmup', name: 'Warm-up Peak', svg: 'M0,25 Q50,5 100,25' },
@@ -24,7 +30,24 @@ interface ArrangementIDEProps {
 }
 
 export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProps) {
-  const { currentSet, updatePlaylist, updateSetWithPrompt, aiProvider, isGenerating, setIsGenerating } = useYTDJStore()
+  const {
+    currentSet,
+    updatePlaylist,
+    updateSetWithPrompt,
+    aiProvider,
+    isGenerating,
+    setIsGenerating,
+    player,
+    playTrack,
+    pauseTrack,
+    skipNext,
+    skipPrevious,
+    setPlayerState,
+    ui,
+    setLeftSidebarPanel,
+    setCurrentSet,
+    constraints
+  } = useYTDJStore()
   const playlist = currentSet?.playlist || []
   const [editingPrompt, setEditingPrompt] = useState(currentSet?.prompt || '')
   const [isPromptEditing, setIsPromptEditing] = useState(false)
@@ -43,11 +66,14 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
   const [swapPreview, setSwapPreview] = useState<Track | null>(null)
   const [isLoadingSwap, setIsLoadingSwap] = useState(false)
   const [lastFetchedBpm, setLastFetchedBpm] = useState<number | null>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [activeTrackIndex, setActiveTrackIndex] = useState(0)
   const [activeTemplate, setActiveTemplate] = useState('warmup')
   const [bpmTolerance, setBpmTolerance] = useState(5)
   const [showExport, setShowExport] = useState(false)
+  const [targetTrackCount, setTargetTrackCount] = useState(8)
+
+  // Player state from store
+  const { isPlaying, playingNodeIndex, currentTime, duration, volume } = player
+  const activeTrackIndex = playingNodeIndex ?? 0
 
   const canvasRef = useRef<HTMLDivElement>(null)
   const swapDebounceRef = useRef<NodeJS.Timeout | null>(null)
@@ -302,6 +328,44 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
     }
   }, [editingPrompt, isGenerating, playlist.length, aiProvider, updateSetWithPrompt, setIsGenerating])
 
+  const handleRegenerateWithCount = useCallback(async (mode: 'replace' | 'append') => {
+    if (!editingPrompt.trim() || isGenerating) return
+
+    setIsGenerating(true)
+    try {
+      const countToGenerate = mode === 'append'
+        ? Math.min(targetTrackCount, 20 - playlist.length)
+        : targetTrackCount
+
+      const result = await generatePlaylist({
+        prompt: editingPrompt,
+        constraints: {
+          trackCount: countToGenerate,
+          bpmRange: { min: 80, max: 160 },
+          bpmTolerance: constraints.bpmTolerance,
+          artistDiversity: constraints.diversity,
+          novelty: constraints.discovery
+        } as AIConstraints,
+        provider: aiProvider
+      })
+
+      if (result.success && result.playlist) {
+        if (mode === 'append') {
+          // Append new tracks to existing playlist
+          const newPlaylist = [...playlist, ...result.playlist]
+          updateSetWithPrompt(newPlaylist, editingPrompt)
+        } else {
+          // Replace entire playlist
+          updateSetWithPrompt(result.playlist, editingPrompt)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to regenerate playlist:', error)
+    } finally {
+      setIsGenerating(false)
+    }
+  }, [editingPrompt, isGenerating, targetTrackCount, playlist, aiProvider, constraints, updateSetWithPrompt, setIsGenerating])
+
   const handleArcChange = useCallback((arcId: string) => {
     if (arcId === activeTemplate) return
     setPendingArcChange(arcId)
@@ -403,8 +467,32 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar: AI Controls */}
-        <aside className="w-80 bg-[#0a0c1c]/80 backdrop-blur-xl border-r border-white/5 flex flex-col overflow-hidden">
+        {/* Icon Sidebar */}
+        <IconSidebar />
+
+        {/* AI Constraints Drawer */}
+        <AIConstraintsDrawer
+          isOpen={ui.leftSidebarPanel === 'constraints'}
+          onClose={() => setLeftSidebarPanel(null)}
+          onRegenerate={handleRegenerate}
+        />
+
+        {/* Sets Dashboard Drawer */}
+        <SetsDashboard
+          isOpen={ui.leftSidebarPanel === 'sets'}
+          onClose={() => setLeftSidebarPanel(null)}
+          onSelectSet={(set: Set) => {
+            setCurrentSet(set)
+            setEditingPrompt(set.prompt || '')
+            setLeftSidebarPanel(null)
+          }}
+        />
+
+        {/* Left Sidebar: AI Controls (shown when arrangement panel is active or no panel) */}
+        <aside className={cn(
+          "w-80 bg-[#0a0c1c]/80 backdrop-blur-xl border-r border-white/5 flex flex-col overflow-hidden transition-all",
+          ui.leftSidebarPanel === 'constraints' || ui.leftSidebarPanel === 'sets' ? 'hidden' : ''
+        )}>
           <div className="p-6 space-y-8 flex-1 overflow-y-auto custom-scrollbar">
             {/* Prompt Display/Edit */}
             <div className="space-y-4">
@@ -519,15 +607,60 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
               />
             </div>
 
-            {/* Track Count */}
-            <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold text-gray-500 uppercase">Total Tracks</span>
-                <span className="text-lg font-black text-white">{playlist.length}</span>
+            {/* Track Count & Duration Controls */}
+            <div className="space-y-4">
+              <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-widest">Set Configuration</label>
+
+              {/* Track Count Slider */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-end">
+                  <span className="text-xs font-bold text-gray-400">Track Count</span>
+                  <span className="text-sm font-mono text-cyan-400">{targetTrackCount} tracks</span>
+                </div>
+                <input
+                  type="range"
+                  min="4"
+                  max="20"
+                  value={targetTrackCount}
+                  onChange={(e) => setTargetTrackCount(parseInt(e.target.value))}
+                  className="w-full accent-cyan-500"
+                />
+                <div className="flex justify-between text-[9px] font-bold text-gray-600 uppercase">
+                  <span>4</span>
+                  <span>20</span>
+                </div>
               </div>
-              <div className="flex justify-between items-center mt-2">
-                <span className="text-[10px] font-bold text-gray-500 uppercase">Duration</span>
-                <span className="text-sm font-bold text-cyan-400">{Math.floor(totalDuration / 60)} min</span>
+
+              {/* Current Stats */}
+              <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase">Current Tracks</span>
+                  <span className="text-lg font-black text-white">{playlist.length}</span>
+                </div>
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase">Duration</span>
+                  <span className="text-sm font-bold text-cyan-400">{Math.floor(totalDuration / 60)} min</span>
+                </div>
+              </div>
+
+              {/* Regenerate Options */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleRegenerateWithCount('replace')}
+                  disabled={isGenerating || !editingPrompt.trim()}
+                  className="py-3 px-2 bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 font-bold text-[10px] uppercase tracking-wider rounded-lg hover:bg-cyan-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Replace All
+                </button>
+                <button
+                  onClick={() => handleRegenerateWithCount('append')}
+                  disabled={isGenerating || !editingPrompt.trim() || playlist.length >= 20}
+                  className="py-3 px-2 bg-pink-500/20 border border-pink-500/30 text-pink-400 font-bold text-[10px] uppercase tracking-wider rounded-lg hover:bg-pink-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add More
+                </button>
               </div>
             </div>
           </div>
@@ -845,21 +978,41 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
           </div>
 
           {/* Transport Bar */}
-          <footer className="h-24 bg-[#0a0c1c]/80 backdrop-blur-xl border-t border-white/5 flex items-center px-8 gap-12">
+          <footer className="h-24 bg-[#0a0c1c]/80 backdrop-blur-xl border-t border-white/5 flex items-center px-8 gap-12 relative">
             <div className="absolute top-0 left-0 w-1 h-full bg-cyan-500" />
+
+            {/* YouTube Player (hidden) */}
+            <YouTubePlayer />
 
             {/* Playback Controls */}
             <div className="flex items-center gap-6">
-              <button className="text-gray-500 hover:text-white transition-colors">
+              <button
+                onClick={skipPrevious}
+                disabled={playingNodeIndex === null || playingNodeIndex <= 0}
+                className="text-gray-500 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
                 <SkipBack className="w-6 h-6" />
               </button>
               <button
-                onClick={() => setIsPlaying(!isPlaying)}
-                className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-xl"
+                onClick={() => {
+                  if (isPlaying) {
+                    pauseTrack()
+                  } else if (playingNodeIndex !== null) {
+                    playTrack(playingNodeIndex)
+                  } else if (playlist.length > 0) {
+                    playTrack(0)
+                  }
+                }}
+                disabled={playlist.length === 0}
+                className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isPlaying ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8 ml-1" />}
               </button>
-              <button className="text-gray-500 hover:text-white transition-colors">
+              <button
+                onClick={skipNext}
+                disabled={playingNodeIndex === null || playingNodeIndex >= playlist.length - 1}
+                className="text-gray-500 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
                 <SkipForward className="w-6 h-6" />
               </button>
             </div>
@@ -869,18 +1022,56 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
               <div className="flex justify-between items-center text-[10px] font-mono tracking-widest text-gray-500">
                 <div className="flex items-center gap-4">
                   <span className="text-cyan-400 font-black">
-                    PLAYING: {playlist[activeTrackIndex]?.track.title || 'No track'}
+                    {isPlaying || playingNodeIndex !== null ? (
+                      <>PLAYING: {playlist[activeTrackIndex]?.track.title || 'No track'}</>
+                    ) : (
+                      'Ready to play'
+                    )}
                   </span>
-                  <span>•</span>
-                  <span>{playlist[activeTrackIndex]?.track.bpm || 120} BPM</span>
+                  {(isPlaying || playingNodeIndex !== null) && (
+                    <>
+                      <span>•</span>
+                      <span>{playlist[activeTrackIndex]?.track.bpm || 120} BPM</span>
+                    </>
+                  )}
                 </div>
                 <div className="flex gap-2">
-                  <span className="text-white">00:00</span> / <span>{formatDuration(totalDuration)}</span>
+                  <span className="text-white">{formatTime(currentTime)}</span> / <span>{duration > 0 ? formatTime(duration) : formatDuration(totalDuration)}</span>
                 </div>
               </div>
-              <div className="h-1 bg-white/5 rounded-full relative overflow-hidden group cursor-pointer">
-                <div className="absolute top-0 left-0 bottom-0 bg-gradient-to-r from-cyan-400 to-pink-500 w-[0%] shadow-[0_0_15px_rgba(0,242,255,0.5)]" />
+              <div
+                className="h-1 bg-white/5 rounded-full relative overflow-hidden group cursor-pointer"
+                onClick={(e) => {
+                  if (duration > 0) {
+                    const rect = e.currentTarget.getBoundingClientRect()
+                    const percent = (e.clientX - rect.left) / rect.width
+                    setPlayerState({ currentTime: percent * duration })
+                  }
+                }}
+              >
+                <div
+                  className="absolute top-0 left-0 bottom-0 bg-gradient-to-r from-cyan-400 to-pink-500 shadow-[0_0_15px_rgba(0,242,255,0.5)] transition-all"
+                  style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
+                />
               </div>
+            </div>
+
+            {/* Volume Control */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setPlayerState({ volume: volume > 0 ? 0 : 80 })}
+                className="text-gray-500 hover:text-white transition-colors"
+              >
+                {volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={volume}
+                onChange={(e) => setPlayerState({ volume: parseInt(e.target.value) })}
+                className="w-20 accent-cyan-500"
+              />
             </div>
           </footer>
         </main>
@@ -910,8 +1101,26 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                       alt={selectedNode.track.title}
                       className="w-full aspect-square rounded-2xl object-cover shadow-2xl border border-white/10"
                     />
-                    <button className="absolute bottom-4 right-4 w-10 h-10 bg-white text-black rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform">
-                      <Play className="w-5 h-5" />
+                    <button
+                      onClick={() => {
+                        if (isPlaying && playingNodeIndex === selectedNodeIndex) {
+                          pauseTrack()
+                        } else if (selectedNodeIndex !== null) {
+                          playTrack(selectedNodeIndex)
+                        }
+                      }}
+                      className={cn(
+                        "absolute bottom-4 right-4 w-10 h-10 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform",
+                        isPlaying && playingNodeIndex === selectedNodeIndex
+                          ? "bg-cyan-500 text-black"
+                          : "bg-white text-black"
+                      )}
+                    >
+                      {isPlaying && playingNodeIndex === selectedNodeIndex ? (
+                        <Pause className="w-5 h-5" />
+                      ) : (
+                        <Play className="w-5 h-5 ml-0.5" />
+                      )}
                     </button>
                   </div>
                   <div>
@@ -1033,58 +1242,8 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
         )}
       </AnimatePresence>
 
-      {/* Export Modal */}
-      <AnimatePresence>
-        {showExport && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-6"
-          >
-            <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={() => setShowExport(false)} />
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="relative bg-[#0a0c1c] border border-white/10 max-w-lg w-full p-10 rounded-3xl overflow-hidden"
-            >
-              <div className="absolute -top-24 -right-24 w-64 h-64 bg-cyan-500/10 blur-[100px]" />
-
-              <h2 className="text-4xl font-black tracking-tighter mb-4 uppercase">Finalize Set</h2>
-              <p className="text-gray-400 text-sm mb-8">
-                Ready to export your {playlist.length} track set to YouTube Music?
-              </p>
-
-              <div className="space-y-6">
-                <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Playlist Name</div>
-                    <div className="px-2 py-0.5 bg-green-500/20 text-green-400 text-[8px] font-bold rounded">READY</div>
-                  </div>
-                  <input
-                    type="text"
-                    value={currentSet?.name || 'My DJ Set'}
-                    className="w-full bg-black/40 border border-white/5 rounded-xl p-4 text-white font-bold outline-none focus:border-cyan-500/50"
-                  />
-                </div>
-
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => setShowExport(false)}
-                    className="flex-1 py-4 rounded-xl text-xs font-black uppercase tracking-widest text-white bg-white/5 hover:bg-white/10 transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button className="flex-[2] py-4 rounded-xl text-xs font-black uppercase tracking-widest text-black bg-cyan-500 hover:bg-cyan-400 transition-all shadow-2xl">
-                    Create YT Playlist
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Export Flow */}
+      <ExportFlow isOpen={showExport} onClose={() => setShowExport(false)} />
     </div>
   )
 }

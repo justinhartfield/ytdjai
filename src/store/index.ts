@@ -13,6 +13,33 @@ import type {
   NodeState
 } from '@/types'
 
+// Player State
+interface PlayerState {
+  currentVideoId: string | null
+  isPlaying: boolean
+  currentTime: number
+  duration: number
+  volume: number
+  playingNodeIndex: number | null
+}
+
+// UI State
+interface UIState {
+  leftSidebarPanel: 'arrangement' | 'constraints' | 'sets' | null
+  showExportModal: boolean
+}
+
+// Extended AI Constraints (matching ai_engine_constraints.html)
+interface ExtendedConstraints {
+  bpmTolerance: number
+  syncopation: number
+  keyMatch: 'strict' | 'loose'
+  diversity: number
+  activeDecades: string[]
+  discovery: number
+  blacklist: string[]
+}
+
 // YTDJ Store Interface (simplified for main app)
 interface YTDJState {
   // AI Provider
@@ -33,6 +60,27 @@ interface YTDJState {
   updatePlaylist: (playlist: PlaylistNode[]) => void
   updateSetWithPrompt: (playlist: PlaylistNode[], prompt: string) => void
   updatePrompt: (prompt: string) => void
+
+  // Player State
+  player: PlayerState
+  setPlayerState: (state: Partial<PlayerState>) => void
+  playTrack: (nodeIndex: number) => void
+  pauseTrack: () => void
+  stopTrack: () => void
+  skipNext: () => void
+  skipPrevious: () => void
+
+  // UI State
+  ui: UIState
+  setLeftSidebarPanel: (panel: 'arrangement' | 'constraints' | 'sets' | null) => void
+  setShowExportModal: (show: boolean) => void
+
+  // Extended Constraints
+  constraints: ExtendedConstraints
+  setConstraints: (constraints: Partial<ExtendedConstraints>) => void
+  addToBlacklist: (item: string) => void
+  removeFromBlacklist: (index: number) => void
+  toggleDecade: (decade: string) => void
 
   // Loading States
   isGenerating: boolean
@@ -99,6 +147,129 @@ export const useYTDJStore = create<YTDJState>()(
         }
       }),
 
+      // Player State
+      player: {
+        currentVideoId: null,
+        isPlaying: false,
+        currentTime: 0,
+        duration: 0,
+        volume: 80,
+        playingNodeIndex: null
+      },
+      setPlayerState: (playerUpdates) => set((state) => ({
+        player: { ...state.player, ...playerUpdates }
+      })),
+      playTrack: (nodeIndex) => set((state) => {
+        const playlist = state.currentSet?.playlist || []
+        const node = playlist[nodeIndex]
+        if (!node?.track?.youtubeId) return state
+        return {
+          player: {
+            ...state.player,
+            currentVideoId: node.track.youtubeId,
+            isPlaying: true,
+            playingNodeIndex: nodeIndex,
+            currentTime: 0
+          }
+        }
+      }),
+      pauseTrack: () => set((state) => ({
+        player: { ...state.player, isPlaying: false }
+      })),
+      stopTrack: () => set((state) => ({
+        player: {
+          ...state.player,
+          isPlaying: false,
+          currentTime: 0,
+          currentVideoId: null,
+          playingNodeIndex: null
+        }
+      })),
+      skipNext: () => set((state) => {
+        const playlist = state.currentSet?.playlist || []
+        const currentIndex = state.player.playingNodeIndex
+        if (currentIndex === null || currentIndex >= playlist.length - 1) return state
+        const nextIndex = currentIndex + 1
+        const nextNode = playlist[nextIndex]
+        if (!nextNode?.track?.youtubeId) return state
+        return {
+          player: {
+            ...state.player,
+            currentVideoId: nextNode.track.youtubeId,
+            isPlaying: true,
+            playingNodeIndex: nextIndex,
+            currentTime: 0
+          }
+        }
+      }),
+      skipPrevious: () => set((state) => {
+        const playlist = state.currentSet?.playlist || []
+        const currentIndex = state.player.playingNodeIndex
+        if (currentIndex === null || currentIndex <= 0) return state
+        const prevIndex = currentIndex - 1
+        const prevNode = playlist[prevIndex]
+        if (!prevNode?.track?.youtubeId) return state
+        return {
+          player: {
+            ...state.player,
+            currentVideoId: prevNode.track.youtubeId,
+            isPlaying: true,
+            playingNodeIndex: prevIndex,
+            currentTime: 0
+          }
+        }
+      }),
+
+      // UI State
+      ui: {
+        leftSidebarPanel: 'arrangement',
+        showExportModal: false
+      },
+      setLeftSidebarPanel: (panel) => set((state) => ({
+        ui: { ...state.ui, leftSidebarPanel: panel }
+      })),
+      setShowExportModal: (show) => set((state) => ({
+        ui: { ...state.ui, showExportModal: show }
+      })),
+
+      // Extended Constraints
+      constraints: {
+        bpmTolerance: 5,
+        syncopation: 50,
+        keyMatch: 'loose',
+        diversity: 70,
+        activeDecades: ['80s', '90s', '00s', '10s', '20s'],
+        discovery: 30,
+        blacklist: []
+      },
+      setConstraints: (constraintUpdates) => set((state) => ({
+        constraints: { ...state.constraints, ...constraintUpdates }
+      })),
+      addToBlacklist: (item) => set((state) => ({
+        constraints: {
+          ...state.constraints,
+          blacklist: [...state.constraints.blacklist, item]
+        }
+      })),
+      removeFromBlacklist: (index) => set((state) => ({
+        constraints: {
+          ...state.constraints,
+          blacklist: state.constraints.blacklist.filter((_, i) => i !== index)
+        }
+      })),
+      toggleDecade: (decade) => set((state) => {
+        const activeDecades = state.constraints.activeDecades
+        const isActive = activeDecades.includes(decade)
+        return {
+          constraints: {
+            ...state.constraints,
+            activeDecades: isActive
+              ? activeDecades.filter(d => d !== decade)
+              : [...activeDecades, decade]
+          }
+        }
+      }),
+
       // Loading States
       isGenerating: false,
       setIsGenerating: (loading) => set({ isGenerating: loading }),
@@ -125,6 +296,7 @@ export const useYTDJStore = create<YTDJState>()(
         sets: state.sets,
         aiProvider: state.aiProvider,
         currentSet: state.currentSet,
+        constraints: state.constraints,
       }),
     }
   )
@@ -380,5 +552,19 @@ export const arcTemplates: ArcTemplate[] = [
     description: 'Wind down session',
     svgPath: 'M0,5 Q50,10 100,25',
     bpmProfile: [150, 140, 130, 120, 110, 100, 95, 90, 85, 80],
+  },
+  {
+    id: 'double-peak',
+    name: 'Double Peak',
+    description: 'Two energy climaxes',
+    svgPath: 'M0,20 Q12,10 25,5 Q38,15 50,20 Q62,10 75,5 Q88,15 100,20',
+    bpmProfile: [100, 120, 140, 130, 115, 120, 140, 145, 130, 110],
+  },
+  {
+    id: 'late-night',
+    name: 'Late Night',
+    description: 'Deep groove to sunrise build',
+    svgPath: 'M0,15 Q30,18 50,15 Q70,10 85,5 Q95,8 100,12',
+    bpmProfile: [118, 120, 122, 120, 122, 125, 130, 138, 135, 128],
   },
 ]

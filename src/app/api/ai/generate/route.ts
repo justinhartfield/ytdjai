@@ -129,9 +129,10 @@ async function generateWithOpenAI(prompt: string, constraints: GeneratePlaylistR
             - genre: string (music genre)
             - energy: number (0-1 scale)
             - duration: number (in seconds, typically 180-420)
-            - aiReasoning: string (1-2 sentences explaining why this track fits the set and transitions well)
+            - aiReasoning: string (IMPORTANT: 1-2 sentences explaining how this specific track fits the user's theme/vibe description AND how it transitions from the previous track. Reference the user's prompt directly, e.g. "Perfect for the beach party vibe with its tropical synths..." or "The driving bassline captures the late-night energy requested...")
 
             Consider transitions between tracks - adjacent tracks should have compatible BPMs and keys.
+            Each track's aiReasoning MUST reference the user's theme/description to explain why it was selected.
             The response should ONLY be valid JSON array, no additional text or markdown.`
           },
           {
@@ -204,9 +205,10 @@ async function generateWithClaude(prompt: string, constraints: GeneratePlaylistR
             - genre: string (music genre)
             - energy: number (0-1 scale)
             - duration: number (in seconds)
-            - aiReasoning: string (1-2 sentences explaining why this track fits the set and transitions well)
+            - aiReasoning: string (IMPORTANT: 1-2 sentences explaining how this specific track fits the user's theme "${prompt}" AND how it transitions from the previous track. Reference the theme directly in your reasoning.)
 
-            Consider transitions - adjacent tracks should have compatible BPMs and keys.`
+            Consider transitions - adjacent tracks should have compatible BPMs and keys.
+            Each track's aiReasoning MUST explicitly reference the user's theme to explain why it was selected.`
           }
         ]
       })
@@ -271,9 +273,10 @@ async function generateWithGemini(prompt: string, constraints: GeneratePlaylistR
                   - genre: string (music genre)
                   - energy: number (0-1 scale)
                   - duration: number (in seconds)
-                  - aiReasoning: string (1-2 sentences explaining why this track fits the set and transitions well)
+                  - aiReasoning: string (IMPORTANT: 1-2 sentences explaining how this specific track fits the user's theme "${prompt}" AND how it transitions from the previous track. Reference the theme directly in your reasoning.)
 
-                  Consider transitions - adjacent tracks should have compatible BPMs and keys.`
+                  Consider transitions - adjacent tracks should have compatible BPMs and keys.
+                  Each track's aiReasoning MUST explicitly reference the user's theme to explain why it was selected.`
                 }
               ]
             }

@@ -1,0 +1,134 @@
+'use client'
+
+import { useEffect, useRef, useCallback } from 'react'
+import YouTube, { YouTubeProps, YouTubePlayer as YTPlayer } from 'react-youtube'
+import { useYTDJStore } from '@/store'
+
+interface YouTubePlayerProps {
+  className?: string
+}
+
+export function YouTubePlayer({ className }: YouTubePlayerProps) {
+  const playerRef = useRef<YTPlayer | null>(null)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  const {
+    player,
+    setPlayerState,
+    skipNext,
+    currentSet
+  } = useYTDJStore()
+
+  const { currentVideoId, isPlaying, volume } = player
+
+  // Handle player ready
+  const onPlayerReady: YouTubeProps['onReady'] = (event) => {
+    playerRef.current = event.target
+    playerRef.current.setVolume(volume)
+  }
+
+  // Handle state changes
+  const onStateChange: YouTubeProps['onStateChange'] = (event) => {
+    const state = event.data
+
+    // YouTube states: -1 (unstarted), 0 (ended), 1 (playing), 2 (paused), 3 (buffering), 5 (cued)
+    if (state === 1) {
+      // Playing - start progress tracking
+      const duration = playerRef.current?.getDuration() || 0
+      setPlayerState({ duration, isPlaying: true })
+      startProgressTracking()
+    } else if (state === 2) {
+      // Paused
+      setPlayerState({ isPlaying: false })
+      stopProgressTracking()
+    } else if (state === 0) {
+      // Ended - play next track
+      stopProgressTracking()
+      skipNext()
+    }
+  }
+
+  // Start tracking progress
+  const startProgressTracking = useCallback(() => {
+    if (intervalRef.current) return
+
+    intervalRef.current = setInterval(() => {
+      if (playerRef.current) {
+        const currentTime = playerRef.current.getCurrentTime() || 0
+        setPlayerState({ currentTime })
+      }
+    }, 500)
+  }, [setPlayerState])
+
+  // Stop tracking progress
+  const stopProgressTracking = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+  }, [])
+
+  // Control playback based on state
+  useEffect(() => {
+    if (!playerRef.current) return
+
+    if (isPlaying) {
+      playerRef.current.playVideo()
+    } else {
+      playerRef.current.pauseVideo()
+    }
+  }, [isPlaying])
+
+  // Update volume
+  useEffect(() => {
+    if (playerRef.current) {
+      playerRef.current.setVolume(volume)
+    }
+  }, [volume])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopProgressTracking()
+    }
+  }, [stopProgressTracking])
+
+  // Player options - hidden player for audio only
+  const opts: YouTubeProps['opts'] = {
+    height: '0',
+    width: '0',
+    playerVars: {
+      autoplay: 1,
+      controls: 0,
+      disablekb: 1,
+      fs: 0,
+      modestbranding: 1,
+      rel: 0,
+      showinfo: 0,
+      origin: typeof window !== 'undefined' ? window.location.origin : ''
+    },
+  }
+
+  if (!currentVideoId) {
+    return null
+  }
+
+  return (
+    <div className={className} style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}>
+      <YouTube
+        videoId={currentVideoId}
+        opts={opts}
+        onReady={onPlayerReady}
+        onStateChange={onStateChange}
+        onError={(e) => console.error('[YouTubePlayer] Error:', e.data)}
+      />
+    </div>
+  )
+}
+
+// Format time helper (exported for use in transport bar)
+export function formatTime(seconds: number): string {
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins}:${secs.toString().padStart(2, '0')}`
+}
