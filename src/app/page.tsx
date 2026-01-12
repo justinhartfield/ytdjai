@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Header, Sidebar, WorkspacePanel } from '@/components/layout'
-import { LaunchPad } from '@/components/features'
+import { LaunchPad, ArrangementIDE, SessionView } from '@/components/features'
 import { useYTDJStore } from '@/store'
+
+type IDEView = 'arrangement' | 'session'
 
 export default function Home() {
   const { initializeStore, currentSet } = useYTDJStore()
   const [showLaunchPad, setShowLaunchPad] = useState(true)
+  const [currentView, setCurrentView] = useState<IDEView>('arrangement')
 
   useEffect(() => {
     // Initialize store on mount
@@ -24,6 +26,10 @@ export default function Home() {
 
   const handleLaunchPadComplete = () => {
     setShowLaunchPad(false)
+  }
+
+  const handleViewChange = (view: IDEView) => {
+    setCurrentView(view)
   }
 
   return (
@@ -44,23 +50,19 @@ export default function Home() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
-          className="h-screen flex flex-col bg-[#05060f] overflow-hidden"
+          className="h-screen bg-[#05060f] overflow-hidden"
         >
-          {/* Header */}
-          <Header />
-
-          {/* Main Content */}
-          <div className="flex-1 flex overflow-hidden">
-            {/* Sidebar */}
-            <div className="relative">
-              <Sidebar />
-            </div>
-
-            {/* Workspace */}
-            <main className="flex-1 overflow-hidden bg-[#0a0c1c]">
-              <WorkspacePanel />
-            </main>
-          </div>
+          {currentView === 'arrangement' ? (
+            <ArrangementIDE
+              onViewChange={handleViewChange}
+              currentView={currentView}
+            />
+          ) : (
+            <SessionView
+              onViewChange={handleViewChange}
+              currentView={currentView}
+            />
+          )}
         </motion.div>
       )}
     </AnimatePresence>
