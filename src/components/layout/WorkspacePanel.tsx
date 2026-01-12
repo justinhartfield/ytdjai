@@ -50,6 +50,8 @@ export function WorkspacePanel() {
 
       if (result.success && result.playlist) {
         updatePlaylist(result.playlist)
+        // Switch to playlist tab to show the generated tracks
+        setActiveTab('playlist')
       }
     } catch (error) {
       console.error('Failed to generate playlist:', error)
