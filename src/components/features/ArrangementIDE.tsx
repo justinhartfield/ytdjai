@@ -28,6 +28,10 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
 
   const [selectedNodeIndex, setSelectedNodeIndex] = useState<number | null>(0)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [dragStartX, setDragStartX] = useState<number>(0)
+  const [dragCurrentX, setDragCurrentX] = useState<number>(0)
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null)
+  const [isDraggingHorizontal, setIsDraggingHorizontal] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [activeTrackIndex, setActiveTrackIndex] = useState(0)
   const [activeTemplate, setActiveTemplate] = useState('warmup')
@@ -60,24 +64,80 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
     return d
   }, [nodePositions])
 
-  const handleNodeDrag = useCallback((e: React.MouseEvent, index: number) => {
-    if (!canvasRef.current || draggedIndex !== index) return
+  const handleNodeDragStart = useCallback((e: React.MouseEvent, index: number) => {
+    setDraggedIndex(index)
+    setSelectedNodeIndex(index)
+    setDragStartX(e.clientX)
+    setDragCurrentX(e.clientX)
+    setIsDraggingHorizontal(false)
+  }, [])
+
+  const handleNodeDrag = useCallback((e: React.MouseEvent) => {
+    if (!canvasRef.current || draggedIndex === null) return
 
     const rect = canvasRef.current.getBoundingClientRect()
-    const y = ((e.clientY - rect.top) / rect.height) * 100
-    const clampedY = Math.max(10, Math.min(90, y))
+    const deltaX = Math.abs(e.clientX - dragStartX)
+    const deltaY = Math.abs(e.clientY - (rect.top + rect.height / 2))
 
-    // Convert Y to BPM
-    const newBpm = Math.round(200 - (clampedY / 100) * 140)
-
-    // Update the track's target BPM
-    const newPlaylist = [...playlist]
-    newPlaylist[index] = {
-      ...newPlaylist[index],
-      targetBpm: newBpm
+    // Determine drag direction - horizontal for reorder, vertical for BPM
+    if (!isDraggingHorizontal && deltaX > 20) {
+      setIsDraggingHorizontal(true)
     }
-    updatePlaylist(newPlaylist)
-  }, [draggedIndex, playlist, updatePlaylist])
+
+    if (isDraggingHorizontal) {
+      // Horizontal drag - reordering
+      setDragCurrentX(e.clientX)
+
+      // Calculate which position we're over
+      const xPercent = ((e.clientX - rect.left) / rect.width) * 100
+      let newDropIndex = 0
+
+      for (let i = 0; i < playlist.length; i++) {
+        const nodeX = ((i + 1) / (playlist.length + 1)) * 100
+        if (xPercent > nodeX) {
+          newDropIndex = i + 1
+        }
+      }
+
+      // Don't show drop indicator at current position
+      if (newDropIndex === draggedIndex || newDropIndex === draggedIndex + 1) {
+        setDropTargetIndex(null)
+      } else {
+        setDropTargetIndex(newDropIndex)
+      }
+    } else {
+      // Vertical drag - BPM adjustment
+      const y = ((e.clientY - rect.top) / rect.height) * 100
+      const clampedY = Math.max(10, Math.min(90, y))
+
+      // Convert Y to BPM
+      const newBpm = Math.round(200 - (clampedY / 100) * 140)
+
+      // Update the track's target BPM
+      const newPlaylist = [...playlist]
+      newPlaylist[draggedIndex] = {
+        ...newPlaylist[draggedIndex],
+        targetBpm: newBpm
+      }
+      updatePlaylist(newPlaylist)
+    }
+  }, [draggedIndex, dragStartX, isDraggingHorizontal, playlist, updatePlaylist])
+
+  const handleNodeDragEnd = useCallback(() => {
+    if (draggedIndex !== null && dropTargetIndex !== null && isDraggingHorizontal) {
+      // Reorder the playlist
+      const newPlaylist = [...playlist]
+      const [removed] = newPlaylist.splice(draggedIndex, 1)
+      const insertIndex = dropTargetIndex > draggedIndex ? dropTargetIndex - 1 : dropTargetIndex
+      newPlaylist.splice(insertIndex, 0, removed)
+      updatePlaylist(newPlaylist)
+      setSelectedNodeIndex(insertIndex)
+    }
+
+    setDraggedIndex(null)
+    setDropTargetIndex(null)
+    setIsDraggingHorizontal(false)
+  }, [draggedIndex, dropTargetIndex, isDraggingHorizontal, playlist, updatePlaylist])
 
   const handleLockToggle = (index: number) => {
     const newPlaylist = [...playlist]
@@ -242,10 +302,10 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
         {/* Center Canvas */}
         <main
           ref={canvasRef}
-          className="flex-1 relative flex flex-col bg-[#070815] overflow-hidden"
-          onMouseMove={(e) => draggedIndex !== null && handleNodeDrag(e, draggedIndex)}
-          onMouseUp={() => setDraggedIndex(null)}
-          onMouseLeave={() => setDraggedIndex(null)}
+          className="flex-1 relative flex flex-col bg-[#070815] overflow-hidden select-none"
+          onMouseMove={handleNodeDrag}
+          onMouseUp={handleNodeDragEnd}
+          onMouseLeave={handleNodeDragEnd}
         >
           {/* Canvas Toolbar */}
           <div className="h-10 border-b border-white/5 flex items-center justify-between px-6 bg-black/30 z-20">
@@ -306,28 +366,54 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
               )}
             </svg>
 
+            {/* Drop Indicators */}
+            {dropTargetIndex !== null && isDraggingHorizontal && (
+              <motion.div
+                initial={{ opacity: 0, scaleY: 0 }}
+                animate={{ opacity: 1, scaleY: 1 }}
+                className="absolute top-0 bottom-0 w-1 bg-cyan-400 z-50 shadow-[0_0_20px_rgba(0,242,255,0.8)]"
+                style={{
+                  left: `${((dropTargetIndex) / (playlist.length + 1)) * 100}%`,
+                  transform: 'translateX(-50%)'
+                }}
+              />
+            )}
+
             {/* Track Nodes */}
             {playlist.map((node, index) => {
               const pos = nodePositions[index]
+              const isDragging = draggedIndex === index
+              const isBeingReordered = isDragging && isDraggingHorizontal
+
               return (
                 <motion.div
                   key={node.id}
-                  className="absolute z-40"
+                  className={cn(
+                    "absolute z-40",
+                    isBeingReordered && "z-50"
+                  )}
                   style={{
                     left: `${pos.x}%`,
                     top: `${pos.y}%`,
                     transform: 'translate(-50%, -50%)'
                   }}
-                  animate={{ scale: draggedIndex === index ? 1.1 : 1 }}
+                  animate={{
+                    scale: isDragging ? 1.15 : 1,
+                    opacity: isBeingReordered ? 0.5 : 1
+                  }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 25 }}
                 >
                   <div
-                    className="relative group cursor-grab active:cursor-grabbing"
-                    onMouseDown={() => { setDraggedIndex(index); setSelectedNodeIndex(index); }}
-                    onClick={() => setSelectedNodeIndex(index)}
+                    className={cn(
+                      "relative group cursor-grab active:cursor-grabbing",
+                      isDragging && "cursor-grabbing"
+                    )}
+                    onMouseDown={(e) => handleNodeDragStart(e, index)}
+                    onClick={() => !isDragging && setSelectedNodeIndex(index)}
                   >
-                    {/* Drag BPM HUD */}
+                    {/* Drag BPM HUD - only show when dragging vertically */}
                     <AnimatePresence>
-                      {draggedIndex === index && (
+                      {isDragging && !isDraggingHorizontal && (
                         <motion.div
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -339,17 +425,33 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                       )}
                     </AnimatePresence>
 
+                    {/* Reorder indicator - show when dragging horizontally */}
+                    <AnimatePresence>
+                      {isBeingReordered && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.8 }}
+                          className="absolute -top-10 left-1/2 -translate-x-1/2 bg-pink-500 text-white px-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider shadow-lg z-50 whitespace-nowrap"
+                        >
+                          Drag to reorder
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
                     {/* Node Circle */}
                     <div className={cn(
                       'w-14 h-14 rounded-full border-2 flex items-center justify-center transition-all bg-[#05060f]',
                       selectedNodeIndex === index ? 'border-cyan-400 shadow-[0_0_15px_rgba(0,242,255,0.4)]' : 'border-white/20 group-hover:border-white/40',
-                      isPlaying && activeTrackIndex === index && 'animate-pulse'
+                      isPlaying && activeTrackIndex === index && 'animate-pulse',
+                      isBeingReordered && 'border-pink-500 shadow-[0_0_20px_rgba(255,0,229,0.5)]'
                     )}>
                       <div className="w-12 h-12 rounded-full overflow-hidden relative">
                         <img
                           src={node.track.thumbnail || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100&h=100&fit=crop'}
                           alt={node.track.title}
                           className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity"
+                          draggable={false}
                         />
                         {node.isLocked && (
                           <div className="absolute inset-0 flex items-center justify-center bg-black/50">
@@ -360,7 +462,10 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                     </div>
 
                     {/* Floating Label */}
-                    <div className="absolute top-16 left-1/2 -translate-x-1/2 whitespace-nowrap text-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className={cn(
+                      "absolute top-16 left-1/2 -translate-x-1/2 whitespace-nowrap text-center transition-opacity",
+                      isDragging ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                    )}>
                       <div className="text-[10px] font-extrabold text-white uppercase tracking-tighter">{node.track.title}</div>
                       <div className="text-[8px] font-bold text-gray-500 uppercase">{node.track.artist}</div>
                     </div>
@@ -368,6 +473,39 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                 </motion.div>
               )
             })}
+
+            {/* Ghost Preview - follows cursor when dragging horizontally */}
+            <AnimatePresence>
+              {draggedIndex !== null && isDraggingHorizontal && canvasRef.current && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 0.8, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  className="fixed z-[100] pointer-events-none"
+                  style={{
+                    left: dragCurrentX,
+                    top: canvasRef.current.getBoundingClientRect().top + canvasRef.current.getBoundingClientRect().height / 2,
+                    transform: 'translate(-50%, -50%)'
+                  }}
+                >
+                  <div className="w-16 h-16 rounded-full border-2 border-cyan-400 bg-[#05060f] shadow-[0_0_30px_rgba(0,242,255,0.6)] flex items-center justify-center">
+                    <div className="w-14 h-14 rounded-full overflow-hidden">
+                      <img
+                        src={playlist[draggedIndex]?.track.thumbnail || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100&h=100&fit=crop'}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        draggable={false}
+                      />
+                    </div>
+                  </div>
+                  <div className="absolute top-18 left-1/2 -translate-x-1/2 whitespace-nowrap text-center mt-2">
+                    <div className="text-[10px] font-extrabold text-white uppercase tracking-tighter bg-black/80 px-2 py-1 rounded">
+                      {playlist[draggedIndex]?.track.title}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Transport Bar */}
