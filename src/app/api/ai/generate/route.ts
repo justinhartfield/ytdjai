@@ -1,6 +1,105 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { AIProvider, GeneratePlaylistRequest, PlaylistNode, Track } from '@/types'
 
+// YouTube Data API search
+interface YouTubeSearchResult {
+  videoId: string
+  title: string
+  thumbnail: string
+  channelTitle: string
+  duration?: number
+}
+
+async function searchYouTube(query: string): Promise<YouTubeSearchResult | null> {
+  const apiKey = process.env.YOUTUBE_API_KEY || process.env.GOOGLE_AI_API_KEY
+
+  if (!apiKey) {
+    console.log('No YouTube API key available')
+    return null
+  }
+
+  try {
+    // Search for the video
+    const searchResponse = await fetch(
+      `https://www.googleapis.com/youtube/v3/search?` +
+      `part=snippet&type=video&maxResults=1&q=${encodeURIComponent(query)}&key=${apiKey}`
+    )
+
+    if (!searchResponse.ok) {
+      console.error('YouTube search failed:', searchResponse.status)
+      return null
+    }
+
+    const searchData = await searchResponse.json()
+
+    if (!searchData.items?.[0]) {
+      return null
+    }
+
+    const item = searchData.items[0]
+    const videoId = item.id.videoId
+
+    // Get video details for duration
+    const detailsResponse = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?` +
+      `part=contentDetails&id=${videoId}&key=${apiKey}`
+    )
+
+    let duration: number | undefined
+    if (detailsResponse.ok) {
+      const detailsData = await detailsResponse.json()
+      if (detailsData.items?.[0]?.contentDetails?.duration) {
+        // Parse ISO 8601 duration (PT4M33S -> 273 seconds)
+        duration = parseISO8601Duration(detailsData.items[0].contentDetails.duration)
+      }
+    }
+
+    return {
+      videoId,
+      title: item.snippet.title,
+      thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url,
+      channelTitle: item.snippet.channelTitle,
+      duration
+    }
+  } catch (error) {
+    console.error('YouTube search error:', error)
+    return null
+  }
+}
+
+function parseISO8601Duration(duration: string): number {
+  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
+  if (!match) return 240 // default 4 min
+
+  const hours = parseInt(match[1] || '0', 10)
+  const minutes = parseInt(match[2] || '0', 10)
+  const seconds = parseInt(match[3] || '0', 10)
+
+  return hours * 3600 + minutes * 60 + seconds
+}
+
+async function enrichTracksWithYouTube(tracks: Partial<Track>[]): Promise<Partial<Track>[]> {
+  const enrichedTracks = await Promise.all(
+    tracks.map(async (track) => {
+      const query = `${track.artist} - ${track.title} official audio`
+      const result = await searchYouTube(query)
+
+      if (result) {
+        return {
+          ...track,
+          youtubeId: result.videoId,
+          thumbnail: result.thumbnail,
+          duration: result.duration || track.duration || 240
+        }
+      }
+
+      return track
+    })
+  )
+
+  return enrichedTracks
+}
+
 // Mock track database
 const MOCK_TRACKS: Track[] = [
   {
@@ -144,7 +243,7 @@ async function generateWithOpenAI(prompt: string, constraints: GeneratePlaylistR
 
     if (data.choices?.[0]?.message?.content) {
       const tracks = JSON.parse(data.choices[0].message.content)
-      return tracksToPlaylistNodes(tracks)
+      return await tracksToPlaylistNodes(tracks)
     }
   } catch (error) {
     console.error('OpenAI API error:', error)
@@ -196,7 +295,7 @@ async function generateWithClaude(prompt: string, constraints: GeneratePlaylistR
       const jsonMatch = data.content[0].text.match(/\[[\s\S]*\]/)
       if (jsonMatch) {
         const tracks = JSON.parse(jsonMatch[0])
-        return tracksToPlaylistNodes(tracks)
+        return await tracksToPlaylistNodes(tracks)
       }
     }
   } catch (error) {
@@ -255,7 +354,7 @@ async function generateWithGemini(prompt: string, constraints: GeneratePlaylistR
       const jsonMatch = text.match(/\[[\s\S]*\]/)
       if (jsonMatch) {
         const tracks = JSON.parse(jsonMatch[0])
-        return tracksToPlaylistNodes(tracks)
+        return await tracksToPlaylistNodes(tracks)
       }
     }
   } catch (error) {
@@ -265,12 +364,15 @@ async function generateWithGemini(prompt: string, constraints: GeneratePlaylistR
   return generateMockPlaylist(constraints?.trackCount || 8)
 }
 
-function tracksToPlaylistNodes(tracks: Partial<Track>[]): PlaylistNode[] {
-  return tracks.map((track, index) => ({
+async function tracksToPlaylistNodes(tracks: Partial<Track>[]): Promise<PlaylistNode[]> {
+  // Enrich tracks with real YouTube data
+  const enrichedTracks = await enrichTracksWithYouTube(tracks)
+
+  return enrichedTracks.map((track, index) => ({
     id: `node-${Date.now()}-${index}`,
     track: {
       id: `track-${Date.now()}-${index}`,
-      youtubeId: `yt-${Date.now()}-${index}`,
+      youtubeId: track.youtubeId || `yt-${Date.now()}-${index}`,
       title: track.title || 'Unknown Track',
       artist: track.artist || 'Unknown Artist',
       duration: track.duration || 240,
@@ -278,11 +380,11 @@ function tracksToPlaylistNodes(tracks: Partial<Track>[]): PlaylistNode[] {
       key: track.key,
       genre: track.genre,
       energy: track.energy,
-      thumbnail: `https://picsum.photos/seed/${Date.now() + index}/200/200`
+      thumbnail: track.thumbnail || `https://picsum.photos/seed/${Date.now() + index}/200/200`
     },
     position: index,
-    transitionToNext: index < tracks.length - 1 ? {
-      quality: calculateTransitionQuality(track, tracks[index + 1]),
+    transitionToNext: index < enrichedTracks.length - 1 ? {
+      quality: calculateTransitionQuality(track, enrichedTracks[index + 1]),
       type: 'blend',
       duration: 16
     } : undefined
