@@ -123,6 +123,38 @@ src/
 - **AI Providers**: OpenAI, Anthropic, Google AI
 - **Drag & Drop**: Framer Motion Reorder
 - **Icons**: Lucide React
+- **Deployment**: Netlify
+
+## Deploy to Netlify
+
+### One-Click Deploy
+
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/yourusername/ytdjai)
+
+### Manual Deployment
+
+1. Push your code to GitHub
+2. Go to [Netlify](https://app.netlify.com)
+3. Click "Add new site" → "Import an existing project"
+4. Connect your GitHub repository
+5. Configure build settings (auto-detected from `netlify.toml`):
+   - Build command: `npm run build`
+   - Publish directory: `.next`
+6. Add environment variables in Netlify dashboard:
+   - `OPENAI_API_KEY`
+   - `ANTHROPIC_API_KEY`
+   - `GOOGLE_AI_API_KEY`
+7. Click "Deploy site"
+
+### Environment Variables on Netlify
+
+Go to **Site settings** → **Environment variables** and add:
+
+| Variable | Description |
+|----------|-------------|
+| `OPENAI_API_KEY` | Your OpenAI API key |
+| `ANTHROPIC_API_KEY` | Your Anthropic/Claude API key |
+| `GOOGLE_AI_API_KEY` | Your Google AI/Gemini API key |
 
 ## Contributing
 
