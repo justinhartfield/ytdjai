@@ -100,112 +100,12 @@ async function enrichTracksWithYouTube(tracks: Partial<Track>[]): Promise<Partia
   return enrichedTracks
 }
 
-// Mock track database
-const MOCK_TRACKS: Track[] = [
-  {
-    id: '1',
-    youtubeId: 'dQw4w9WgXcQ',
-    title: 'Strobe',
-    artist: 'deadmau5',
-    duration: 637,
-    bpm: 128,
-    key: 'F minor',
-    genre: 'Progressive House',
-    energy: 0.7,
-    thumbnail: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg'
-  },
-  {
-    id: '2',
-    youtubeId: 'abc123',
-    title: 'Opus',
-    artist: 'Eric Prydz',
-    duration: 540,
-    bpm: 126,
-    key: 'A minor',
-    genre: 'Progressive House',
-    energy: 0.8,
-    thumbnail: 'https://i.ytimg.com/vi/abc123/hqdefault.jpg'
-  },
-  {
-    id: '3',
-    youtubeId: 'def456',
-    title: 'Gecko (Overdrive)',
-    artist: 'Oliver Heldens',
-    duration: 210,
-    bpm: 125,
-    key: 'G minor',
-    genre: 'Future House',
-    energy: 0.85,
-    thumbnail: 'https://i.ytimg.com/vi/def456/hqdefault.jpg'
-  },
-  {
-    id: '4',
-    youtubeId: 'ghi789',
-    title: 'Insomnia',
-    artist: 'Faithless',
-    duration: 420,
-    bpm: 130,
-    key: 'D minor',
-    genre: 'Trance',
-    energy: 0.9,
-    thumbnail: 'https://i.ytimg.com/vi/ghi789/hqdefault.jpg'
-  },
-  {
-    id: '5',
-    youtubeId: 'jkl012',
-    title: 'Adagio for Strings',
-    artist: 'Tiësto',
-    duration: 480,
-    bpm: 138,
-    key: 'B♭ minor',
-    genre: 'Trance',
-    energy: 0.95,
-    thumbnail: 'https://i.ytimg.com/vi/jkl012/hqdefault.jpg'
-  },
-  {
-    id: '6',
-    youtubeId: 'mno345',
-    title: 'Ghosts n Stuff',
-    artist: 'deadmau5 ft. Rob Swire',
-    duration: 360,
-    bpm: 127,
-    key: 'E minor',
-    genre: 'Electro House',
-    energy: 0.8,
-    thumbnail: 'https://i.ytimg.com/vi/mno345/hqdefault.jpg'
-  },
-  {
-    id: '7',
-    youtubeId: 'pqr678',
-    title: 'Levels',
-    artist: 'Avicii',
-    duration: 210,
-    bpm: 126,
-    key: 'F♯ minor',
-    genre: 'Progressive House',
-    energy: 0.9,
-    thumbnail: 'https://i.ytimg.com/vi/pqr678/hqdefault.jpg'
-  },
-  {
-    id: '8',
-    youtubeId: 'stu901',
-    title: 'Cafe Del Mar',
-    artist: 'Energy 52',
-    duration: 450,
-    bpm: 132,
-    key: 'C minor',
-    genre: 'Trance',
-    energy: 0.75,
-    thumbnail: 'https://i.ytimg.com/vi/stu901/hqdefault.jpg'
-  }
-]
-
 async function generateWithOpenAI(prompt: string, constraints: GeneratePlaylistRequest['constraints']): Promise<PlaylistNode[]> {
   const apiKey = process.env.OPENAI_API_KEY
 
   if (!apiKey) {
-    // Return mock data if no API key
-    return generateMockPlaylist(constraints?.trackCount || 8)
+    console.error('[OpenAI] No API key configured')
+    throw new Error('OpenAI API key not configured')
   }
 
   try {
@@ -251,21 +151,27 @@ async function generateWithOpenAI(prompt: string, constraints: GeneratePlaylistR
     const data = await response.json()
 
     if (data.choices?.[0]?.message?.content) {
-      const tracks = JSON.parse(data.choices[0].message.content)
+      const content = data.choices[0].message.content
+      console.log('[OpenAI] Raw response:', content.substring(0, 200))
+      const tracks = JSON.parse(content)
+      console.log('[OpenAI] Parsed', tracks.length, 'tracks')
       return await tracksToPlaylistNodes(tracks)
     }
-  } catch (error) {
-    console.error('OpenAI API error:', error)
-  }
 
-  return generateMockPlaylist(constraints?.trackCount || 8)
+    console.error('[OpenAI] No valid response content:', data)
+    throw new Error('OpenAI returned no valid content')
+  } catch (error) {
+    console.error('[OpenAI] API error:', error)
+    throw error
+  }
 }
 
 async function generateWithClaude(prompt: string, constraints: GeneratePlaylistRequest['constraints']): Promise<PlaylistNode[]> {
   const apiKey = process.env.ANTHROPIC_API_KEY
 
   if (!apiKey) {
-    return generateMockPlaylist(constraints?.trackCount || 8)
+    console.error('[Claude] No API key configured')
+    throw new Error('Anthropic API key not configured')
   }
 
   try {
@@ -310,24 +216,30 @@ async function generateWithClaude(prompt: string, constraints: GeneratePlaylistR
 
     if (data.content?.[0]?.text) {
       // Extract JSON from response
-      const jsonMatch = data.content[0].text.match(/\[[\s\S]*\]/)
+      const text = data.content[0].text
+      console.log('[Claude] Raw response:', text.substring(0, 200))
+      const jsonMatch = text.match(/\[[\s\S]*\]/)
       if (jsonMatch) {
         const tracks = JSON.parse(jsonMatch[0])
+        console.log('[Claude] Parsed', tracks.length, 'tracks')
         return await tracksToPlaylistNodes(tracks)
       }
     }
-  } catch (error) {
-    console.error('Claude API error:', error)
-  }
 
-  return generateMockPlaylist(constraints?.trackCount || 8)
+    console.error('[Claude] No valid response content:', data)
+    throw new Error('Claude returned no valid content')
+  } catch (error) {
+    console.error('[Claude] API error:', error)
+    throw error
+  }
 }
 
 async function generateWithGemini(prompt: string, constraints: GeneratePlaylistRequest['constraints']): Promise<PlaylistNode[]> {
   const apiKey = process.env.GOOGLE_AI_API_KEY
 
   if (!apiKey) {
-    return generateMockPlaylist(constraints?.trackCount || 8)
+    console.error('[Gemini] No API key configured')
+    throw new Error('Google AI API key not configured')
   }
 
   try {
@@ -378,17 +290,21 @@ async function generateWithGemini(prompt: string, constraints: GeneratePlaylistR
 
     if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
       const text = data.candidates[0].content.parts[0].text
+      console.log('[Gemini] Raw response:', text.substring(0, 200))
       const jsonMatch = text.match(/\[[\s\S]*\]/)
       if (jsonMatch) {
         const tracks = JSON.parse(jsonMatch[0])
+        console.log('[Gemini] Parsed', tracks.length, 'tracks')
         return await tracksToPlaylistNodes(tracks)
       }
     }
-  } catch (error) {
-    console.error('Gemini API error:', error)
-  }
 
-  return generateMockPlaylist(constraints?.trackCount || 8)
+    console.error('[Gemini] No valid response content:', data)
+    throw new Error('Gemini returned no valid content')
+  } catch (error) {
+    console.error('[Gemini] API error:', error)
+    throw error
+  }
 }
 
 async function tracksToPlaylistNodes(tracks: Partial<Track>[]): Promise<PlaylistNode[]> {
@@ -430,22 +346,6 @@ function calculateTransitionQuality(track1: Partial<Track>, track2: Partial<Trac
   return 'poor'
 }
 
-function generateMockPlaylist(trackCount: number): PlaylistNode[] {
-  const shuffled = [...MOCK_TRACKS].sort(() => Math.random() - 0.5)
-  const selected = shuffled.slice(0, Math.min(trackCount, MOCK_TRACKS.length))
-
-  return selected.map((track, index) => ({
-    id: `node-${Date.now()}-${index}`,
-    track: { ...track, id: `track-${Date.now()}-${index}` },
-    position: index,
-    transitionToNext: index < selected.length - 1 ? {
-      quality: calculateTransitionQuality(track, selected[index + 1]),
-      type: 'blend',
-      duration: 16
-    } : undefined
-  }))
-}
-
 export async function POST(request: NextRequest) {
   try {
     const body: GeneratePlaylistRequest = await request.json()
@@ -467,7 +367,6 @@ export async function POST(request: NextRequest) {
     }
 
     let playlist: PlaylistNode[]
-    let usedMock = false
 
     switch (provider) {
       case 'claude':
@@ -482,13 +381,7 @@ export async function POST(request: NextRequest) {
         break
     }
 
-    // Check if we got mock data (mock tracks have specific IDs)
-    if (playlist.length > 0 && playlist[0].track.youtubeId?.startsWith('yt-')) {
-      usedMock = true
-      console.log('[Generate API] WARNING: Returned mock/placeholder data - AI generation may have failed')
-    }
-
-    console.log('[Generate API] Generated', playlist.length, 'tracks, usedMock:', usedMock)
+    console.log('[Generate API] Generated', playlist.length, 'tracks')
     console.log('[Generate API] First track:', playlist[0]?.track.title, '-', playlist[0]?.track.artist)
 
     return NextResponse.json({
@@ -498,14 +391,14 @@ export async function POST(request: NextRequest) {
         provider,
         generatedAt: new Date().toISOString(),
         trackCount: playlist.length,
-        totalDuration: playlist.reduce((acc, node) => acc + node.track.duration, 0),
-        usedMockData: usedMock
+        totalDuration: playlist.reduce((acc, node) => acc + node.track.duration, 0)
       }
     })
   } catch (error) {
-    console.error('[Generate API] Error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('[Generate API] Error:', errorMessage)
     return NextResponse.json(
-      { success: false, error: 'Failed to generate playlist' },
+      { success: false, error: errorMessage },
       { status: 500 }
     )
   }
