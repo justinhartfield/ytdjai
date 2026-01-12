@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import type { TransitionQuality, PlaylistNode } from '@/types'
+import type { TransitionQuality, TransitionQualityDetail, PlaylistNode } from '@/types'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -26,9 +26,9 @@ export function formatTotalDuration(nodes: PlaylistNode[]): string {
 export function calculateTransitionQuality(
   fromNode: PlaylistNode,
   toNode: PlaylistNode
-): TransitionQuality {
-  const bpmDelta = Math.abs(fromNode.track.bpm - toNode.track.bpm)
-  const energyDelta = Math.abs(fromNode.track.energy - toNode.track.energy)
+): TransitionQualityDetail {
+  const bpmDelta = Math.abs((fromNode.track.bpm ?? 120) - (toNode.track.bpm ?? 120))
+  const energyDelta = Math.abs((fromNode.track.energy ?? 0.5) - (toNode.track.energy ?? 0.5))
 
   let score: 'smooth' | 'ok' | 'jarring'
   if (bpmDelta <= 5 && energyDelta <= 20) {
@@ -100,6 +100,36 @@ export function getTransitionColor(quality: 'smooth' | 'ok' | 'jarring'): string
       return '#ef4444' // red-500
     default:
       return '#6b7280' // gray-500
+  }
+}
+
+export function getTransitionQualityColor(quality: TransitionQuality): string {
+  switch (quality) {
+    case 'excellent':
+      return '#22c55e' // green-500
+    case 'good':
+      return '#84cc16' // lime-500
+    case 'fair':
+      return '#eab308' // yellow-500
+    case 'poor':
+      return '#ef4444' // red-500
+    default:
+      return '#6b7280' // gray-500
+  }
+}
+
+export function getTransitionQualityLabel(quality: TransitionQuality): string {
+  switch (quality) {
+    case 'excellent':
+      return 'Excellent Transition'
+    case 'good':
+      return 'Good Transition'
+    case 'fair':
+      return 'Fair Transition'
+    case 'poor':
+      return 'Poor Transition'
+    default:
+      return 'Unknown'
   }
 }
 

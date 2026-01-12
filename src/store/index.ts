@@ -9,7 +9,8 @@ import type {
   Track,
   AIConstraints,
   ArcTemplate,
-  User
+  User,
+  NodeState
 } from '@/types'
 
 // YTDJ Store Interface (simplified for main app)
@@ -212,7 +213,7 @@ export const useAppStore = create<AppState>()(
 
       // Nodes
       updateNode: (nodeId, updates) => set((state) => {
-        if (!state.currentSet) return state
+        if (!state.currentSet || !state.currentSet.nodes) return state
         const updatedNodes = state.currentSet.nodes.map((n) =>
           n.id === nodeId ? { ...n, ...updates } : n
         )
@@ -221,7 +222,7 @@ export const useAppStore = create<AppState>()(
         }
       }),
       swapTrack: (nodeId, newTrack) => set((state) => {
-        if (!state.currentSet) return state
+        if (!state.currentSet || !state.currentSet.nodes) return state
         const updatedNodes = state.currentSet.nodes.map((n) =>
           n.id === nodeId ? { ...n, track: newTrack, targetBpm: newTrack.bpm } : n
         )
@@ -230,18 +231,18 @@ export const useAppStore = create<AppState>()(
         }
       }),
       lockNode: (nodeId, locked) => set((state) => {
-        if (!state.currentSet) return state
+        if (!state.currentSet || !state.currentSet.nodes) return state
         const updatedNodes = state.currentSet.nodes.map((n) =>
-          n.id === nodeId ? { ...n, isLocked: locked, state: locked ? 'user-locked' : 'ai-selected' } : n
+          n.id === nodeId ? { ...n, isLocked: locked, state: (locked ? 'user-locked' : 'ai-selected') as NodeState } : n
         )
         return {
           currentSet: { ...state.currentSet, nodes: updatedNodes },
         }
       }),
       lockBpm: (nodeId, locked) => set((state) => {
-        if (!state.currentSet) return state
+        if (!state.currentSet || !state.currentSet.nodes) return state
         const updatedNodes = state.currentSet.nodes.map((n) =>
-          n.id === nodeId ? { ...n, isBpmLocked: locked, state: locked ? 'bpm-locked' : 'ai-selected' } : n
+          n.id === nodeId ? { ...n, isBpmLocked: locked, state: (locked ? 'bpm-locked' : 'ai-selected') as NodeState } : n
         )
         return {
           currentSet: { ...state.currentSet, nodes: updatedNodes },

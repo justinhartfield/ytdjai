@@ -88,10 +88,12 @@ export function TrackCard({
         className
       )}
       draggable={draggable}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
+      {...{
+        onDragStart: handleDragStart,
+        onDragEnd: handleDragEnd,
+        onDragOver: onDragOver,
+        onDrop: onDrop,
+      } as any}
     >
       {/* Drag Handle */}
       {draggable && (
