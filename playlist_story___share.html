@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YTDJ.AI | Share Your Mix - Neon Night Drive</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Syne', sans-serif;
+            background-color: #05060f;
+            color: #e0e0e0;
+            overflow-x: hidden;
+        }
+
+        .neon-glow-cyan {
+            text-shadow: 0 0 10px rgba(0, 242, 255, 0.5), 0 0 20px rgba(0, 242, 255, 0.3);
+        }
+
+        .neon-border-magenta {
+            border-color: rgba(255, 0, 229, 0.4);
+            box-shadow: 0 0 15px rgba(255, 0, 229, 0.2);
+        }
+
+        .glass-panel {
+            background: rgba(15, 17, 35, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .grid-bg {
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        .curve-gradient {
+            stroke: url(#lineGradient);
+            filter: drop-shadow(0 0 12px rgba(0, 242, 255, 0.6));
+        }
+
+        .dna-card {
+            background: radial-gradient(circle at top right, rgba(0, 242, 255, 0.05), transparent);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.2);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+        }
+
+        [x-cloak] { display: none !important; }
+
+        .scanline {
+            width: 100%;
+            height: 100px;
+            z-index: 5;
+            background: linear-gradient(0deg, rgba(0, 242, 255, 0) 0%, rgba(0, 242, 255, 0.05) 50%, rgba(0, 242, 255, 0) 100%);
+            opacity: 0.1;
+            position: absolute;
+            pointer-events: none;
+            animation: scanline 8s linear infinite;
+        }
+
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100vh); }
+        }
+
+        .dna-animate {
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+            animation: draw 3s ease-out forwards;
+        }
+
+        @keyframes draw {
+            to { stroke-dashoffset: 0; }
+        }
+
+        .share-badge {
+            background: linear-gradient(90deg, #00f2ff1a, #ff00e51a);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-cyan-500/30 overflow-x-hidden" x-data="shareState()">
+
+    <!-- Animated Scanline -->
+    <div class="scanline"></div>
+
+    <!-- Top Navigation -->
+    <header class="h-16 glass-panel border-b border-white/5 flex items-center justify-between px-6 lg:px-12 z-50 sticky top-0">
+        <div class="flex items-center gap-6">
+            <div class="flex items-center gap-2 cursor-pointer">
+                <div class="w-7 h-7 bg-gradient-to-br from-cyan-400 to-magenta-500 rounded-sm"></div>
+                <span class="font-bold tracking-tighter text-xl">YTDJ.AI</span>
+            </div>
+            <div class="h-6 w-px bg-white/10 hidden md:block"></div>
+            <span class="text-[10px] uppercase tracking-widest text-gray-500 font-bold hidden md:block">Mix Showcase</span>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <a href="#" class="text-xs font-bold text-gray-400 hover:text-white transition-colors mr-4">BACK TO IDE</a>
+            <button @click="copyLink()" class="px-5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold rounded-full transition-all flex items-center gap-2">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                <span x-text="copyText">SHARE LINK</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow flex flex-col grid-bg relative">
+        
+        <!-- Hero: The DNA Curve Section -->
+        <section class="relative py-12 px-6 lg:px-12 overflow-hidden">
+            <div class="absolute inset-0 bg-gradient-to-b from-cyan-500/5 via-transparent to-transparent pointer-events-none"></div>
+            
+            <div class="max-w-7xl mx-auto flex flex-col items-center text-center">
+                <div class="inline-flex items-center gap-2 px-3 py-1 mb-8 rounded-full share-badge">
+                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                    <span class="text-[9px] font-bold text-cyan-400 uppercase tracking-widest">Tempo DNA Profile</span>
+                </div>
+
+                <h1 class="text-4xl md:text-6xl font-extrabold tracking-tighter mb-4">
+                    <span class="text-white">The</span> 
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-magenta-500">Neon Night Drive</span> 
+                    <span class="text-white">Set</span>
+                </h1>
+                
+                <p class="text-lg text-gray-400 max-w-2xl mb-12">
+                    "Driving through a rain-soaked Tokyo in 2077. Melodic synthwave, punchy drums, high energy transitions."
+                </p>
+
+                <!-- Visual DNA Curve Graph -->
+                <div class="w-full h-48 md:h-64 relative mb-16">
+                    <svg class="w-full h-full" preserveAspectRatio="none" viewBox="0 0 1000 200">
+                        <defs>
+                            <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#00f2ff" />
+                                <stop offset="50%" stop-color="#7000ff" />
+                                <stop offset="100%" stop-color="#ff00e5" />
+                            </linearGradient>
+                        </defs>
+                        <!-- Grid Lines -->
+                        <line x1="0" y1="50" x2="1000" y2="50" stroke="rgba(255,255,255,0.05)" stroke-width="1" />
+                        <line x1="0" y1="100" x2="1000" y2="100" stroke="rgba(255,255,255,0.05)" stroke-width="1" />
+                        <line x1="0" y1="150" x2="1000" y2="150" stroke="rgba(255,255,255,0.05)" stroke-width="1" />
+                        
+                        <!-- The DNA Path -->
+                        <path d="M0,150 Q100,140 200,100 T400,60 T600,40 T800,120 T1000,140" fill="none" stroke-width="4" stroke-linecap="round" class="curve-gradient dna-animate" />
+                        
+                        <!-- Pulse Nodes -->
+                        <circle cx="200" cy="100" r="4" fill="white" class="animate-pulse" />
+                        <circle cx="600" cy="40" r="4" fill="white" class="animate-pulse" />
+                        <circle cx="1000" cy="140" r="4" fill="white" />
+                    </svg>
+
+                    <!-- BPM Markers -->
+                    <div class="absolute -left-2 top-0 bottom-0 flex flex-col justify-between text-[9px] font-mono text-gray-600 pointer-events-none uppercase">
+                        <span>160</span><span>120</span><span>80</span>
+                    </div>
+                </div>
+
+                <!-- Stats Bar -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl">
+                    <div class="dna-card rounded-2xl p-6 text-left">
+                        <div class="text-[10px] font-bold text-gray-500 uppercase mb-2">Total Duration</div>
+                        <div class="text-2xl font-bold">54:12</div>
+                    </div>
+                    <div class="dna-card rounded-2xl p-6 text-left">
+                        <div class="text-[10px] font-bold text-gray-500 uppercase mb-2">BPM Range</div>
+                        <div class="text-2xl font-bold text-cyan-400">82 — 145</div>
+                    </div>
+                    <div class="dna-card rounded-2xl p-6 text-left">
+                        <div class="text-[10px] font-bold text-gray-500 uppercase mb-2">Energy Peak</div>
+                        <div class="text-2xl font-bold text-magenta-500">Node #4</div>
+                    </div>
+                    <div class="dna-card rounded-2xl p-6 text-left">
+                        <div class="text-[10px] font-bold text-gray-500 uppercase mb-2">Track Count</div>
+                        <div class="text-2xl font-bold">14 Mixes</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Content Split Section -->
+        <section class="flex-grow py-12 px-6 lg:px-12 bg-black/20">
+            <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12">
+                
+                <!-- Left: Tracklist -->
+                <div class="lg:col-span-8 space-y-6">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-xl font-bold tracking-tight">The Arrangement</h2>
+                        <span class="text-xs font-bold text-cyan-400 uppercase tracking-widest">Chronological Order</span>
+                    </div>
+
+                    <div class="space-y-3">
+                        <template x-for="(track, index) in tracks" :key="index">
+                            <div class="glass-panel hover:bg-white/5 rounded-2xl p-4 flex items-center gap-4 group transition-all">
+                                <div class="w-10 text-xs font-mono text-gray-600" x-text="'#' + (index + 1).toString().padStart(2, '0')"></div>
+                                <div class="w-12 h-12 rounded-lg overflow-hidden bg-gray-800 border border-white/5 relative flex-shrink-0">
+                                    <img :src="track.cover" class="w-full h-full object-cover">
+                                    <div class="absolute inset-0 bg-black/40 group-hover:bg-transparent transition-all flex items-center justify-center">
+                                        <svg class="w-5 h-5 fill-white opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                    </div>
+                                </div>
+                                <div class="flex-grow overflow-hidden">
+                                    <div class="text-sm font-bold text-white truncate" x-text="track.title"></div>
+                                    <div class="text-xs text-gray-400 truncate" x-text="track.artist"></div>
+                                </div>
+                                <div class="flex items-center gap-6">
+                                    <div class="text-right hidden sm:block">
+                                        <div class="text-[10px] font-bold text-cyan-400 uppercase">Tempo</div>
+                                        <div class="text-sm font-mono" x-text="track.bpm + ' BPM'"></div>
+                                    </div>
+                                    <div class="h-8 w-px bg-white/5 hidden sm:block"></div>
+                                    <button class="p-2 hover:text-cyan-400 transition-colors">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Right: Call to Actions -->
+                <div class="lg:col-span-4 space-y-8">
+                    <!-- CTA: Generate Your Own -->
+                    <div class="glass-panel p-8 rounded-3xl border border-cyan-500/20 relative overflow-hidden group">
+                        <div class="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 blur-[60px] pointer-events-none group-hover:bg-cyan-500/20 transition-all"></div>
+                        
+                        <h3 class="text-2xl font-bold mb-4 tracking-tighter">Love this vibe?</h3>
+                        <p class="text-sm text-gray-400 mb-8 leading-relaxed">
+                            Use the same prompt or tempo curve to generate your own personalized version in seconds.
+                        </p>
+                        
+                        <button class="w-full py-4 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-2xl transition-all shadow-[0_0_20px_rgba(0,242,255,0.3)] mb-4 flex items-center justify-center gap-2">
+                            <span>REMIX THIS SET</span>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        </button>
+                        
+                        <button class="w-full py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all flex items-center justify-center gap-2">
+                            OPEN IN YT MUSIC
+                        </button>
+                    </div>
+
+                    <!-- AI Insights Panel -->
+                    <div class="space-y-4">
+                        <h4 class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">AI Curation Breakdown</h4>
+                        <div class="glass-panel p-6 rounded-2xl space-y-4">
+                            <div class="flex items-start gap-4">
+                                <div class="w-8 h-8 rounded-lg bg-magenta-500/20 flex items-center justify-center flex-shrink-0">
+                                    <svg class="w-4 h-4 text-magenta-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
+                                </div>
+                                <div>
+                                    <div class="text-xs font-bold mb-1 uppercase">Genre Fluidity</div>
+                                    <p class="text-[11px] text-gray-400">92% cohesion across Synthwave & Cyberpunk subgenres.</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-4">
+                                <div class="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center flex-shrink-0">
+                                    <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                                </div>
+                                <div>
+                                    <div class="text-xs font-bold mb-1 uppercase">BPM Scaling</div>
+                                    <p class="text-[11px] text-gray-400">Logarithmic tempo climb optimized for "Warm-up Peak" arc.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Global Footer -->
+    <footer class="glass-panel border-t border-white/5 py-12 px-6 lg:px-12 text-center">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
+            <div class="text-left">
+                <div class="flex items-center gap-2 mb-2">
+                    <div class="w-5 h-5 bg-gradient-to-br from-cyan-400 to-magenta-500 rounded-sm"></div>
+                    <span class="font-bold tracking-tighter text-lg">YTDJ.AI</span>
+                </div>
+                <p class="text-xs text-gray-500">The world's first Playlist IDE. Built with ❤️ for music enthusiasts.</p>
+            </div>
+            
+            <div class="flex gap-6">
+                <a href="#" class="text-xs font-bold text-gray-400 hover:text-white transition-colors uppercase">Twitter</a>
+                <a href="#" class="text-xs font-bold text-gray-400 hover:text-white transition-colors uppercase">Discord</a>
+                <a href="#" class="text-xs font-bold text-gray-400 hover:text-white transition-colors uppercase">YouTube</a>
+                <a href="#" class="text-xs font-bold text-gray-400 hover:text-white transition-colors uppercase">Privacy</a>
+            </div>
+        </div>
+        <div class="mt-8 pt-8 border-t border-white/5 text-[9px] text-gray-600 uppercase tracking-widest">
+            &copy; 2024 YTDJ.AI - All Rights Reserved. YouTube and YouTube Music are trademarks of Google LLC.
+        </div>
+    </footer>
+
+    <!-- Copy Link Notification -->
+    <div x-show="showToast" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 translate-y-4"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 translate-y-4"
+         class="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] bg-cyan-500 text-black px-6 py-3 rounded-full font-bold text-sm shadow-[0_0_30px_rgba(0,242,255,0.4)] flex items-center gap-3">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        Link copied to clipboard!
+    </div>
+
+    <script>
+        function shareState() {
+            return {
+                copyText: 'SHARE LINK',
+                showToast: false,
+                tracks: [
+                    { title: 'The Drive', artist: 'Lazerhawk', bpm: 82, cover: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=200&h=200&fit=crop' },
+                    { title: 'Midnight City', artist: 'M83', bpm: 105, cover: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200&h=200&fit=crop' },
+                    { title: 'Nightcall', artist: 'Kavinsky', bpm: 91, cover: 'https://images.unsplash.com/photo-1459749411177-042180ceea72?w=200&h=200&fit=crop' },
+                    { title: 'Turbo Killer', artist: 'Carpenter Brut', bpm: 142, cover: 'https://images.unsplash.com/photo-1493225255756-d9584f8606e9?w=200&h=200&fit=crop' },
+                    { title: 'Sentient', artist: 'Perturbator', bpm: 135, cover: 'https://images.unsplash.com/photo-1514525253344-46397092b34c?w=200&h=200&fit=crop' },
+                    { title: 'Running in the Night', artist: 'FM-84', bpm: 110, cover: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&h=200&fit=crop' },
+                    { title: 'Sunset', artist: 'The Midnight', bpm: 94, cover: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=200&h=200&fit=crop' }
+                ],
+                copyLink() {
+                    // Fake copy link behavior
+                    this.copyText = 'COPIED!';
+                    this.showToast = true;
+                    setTimeout(() => {
+                        this.copyText = 'SHARE LINK';
+                        this.showToast = false;
+                    }, 3000);
+                }
+            }
+        }
+    </script>
+</body>
+</html>

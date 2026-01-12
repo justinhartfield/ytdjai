@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YTDJ.AI | AI Engine Constraints</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Syne', sans-serif;
+            background-color: #05060f;
+            color: #e0e0e0;
+            overflow-x: hidden;
+        }
+
+        .neon-glow-cyan {
+            text-shadow: 0 0 10px rgba(0, 242, 255, 0.5), 0 0 20px rgba(0, 242, 255, 0.3);
+        }
+
+        .neon-border-cyan {
+            border: 1px solid rgba(0, 242, 255, 0.3);
+            box-shadow: 0 0 15px rgba(0, 242, 255, 0.1);
+        }
+
+        .neon-border-magenta {
+            border: 1px solid rgba(255, 0, 229, 0.3);
+            box-shadow: 0 0 15px rgba(255, 0, 229, 0.1);
+        }
+
+        .glass-panel {
+            background: rgba(15, 17, 35, 0.6);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .grid-bg {
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.2);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #00f2ff;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -6px;
+            box-shadow: 0 0 10px rgba(0, 242, 255, 0.8);
+        }
+
+        .scanline {
+            width: 100%;
+            height: 100px;
+            z-index: 5;
+            background: linear-gradient(0deg, rgba(0, 242, 255, 0) 0%, rgba(0, 242, 255, 0.03) 50%, rgba(0, 242, 255, 0) 100%);
+            opacity: 0.1;
+            position: absolute;
+            pointer-events: none;
+            animation: scanline 10s linear infinite;
+        }
+
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100vh); }
+        }
+
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-cyan-500/30 overflow-hidden" x-data="constraintsEngine()">
+
+    <!-- Main Editor Frame -->
+    <main class="flex-grow flex flex-col h-screen">
+        
+        <!-- Top Navigation (Chrome) -->
+        <header class="h-14 glass-panel border-b border-white/5 flex items-center justify-between px-6 z-50">
+            <div class="flex items-center gap-6">
+                <div class="flex items-center gap-2 cursor-pointer group">
+                    <div class="w-6 h-6 bg-gradient-to-br from-cyan-400 to-magenta-500 rounded-sm group-hover:rotate-45 transition-transform duration-500"></div>
+                    <span class="font-bold tracking-tighter text-lg">YTDJ.AI</span>
+                </div>
+                <div class="h-6 w-px bg-white/10"></div>
+                <div class="flex items-center gap-3">
+                    <span class="text-xs font-bold text-gray-500 uppercase tracking-widest">Project:</span>
+                    <span class="text-sm font-semibold text-gray-200">NEON_NIGHT_DRIVE_V1</span>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <div class="flex items-center bg-black/40 rounded-lg p-1 border border-white/5">
+                    <button class="px-4 py-1.5 rounded text-[10px] font-black tracking-widest text-gray-500 hover:text-white transition-all">ARRANGEMENT</button>
+                    <button class="px-4 py-1.5 rounded bg-cyan-500/10 text-cyan-400 text-[10px] font-black tracking-widest transition-all">ENGINE CONSTRAINTS</button>
+                </div>
+                <button class="px-6 py-2 bg-white text-black text-[10px] font-black tracking-widest rounded transition-all hover:bg-cyan-400 hover:scale-105 active:scale-95">
+                    PUSH TO YT MUSIC
+                </button>
+            </div>
+        </header>
+
+        <div class="flex-grow flex overflow-hidden relative">
+            <div class="scanline"></div>
+            <div class="absolute inset-0 grid-bg opacity-30 pointer-events-none"></div>
+
+            <!-- Left Sidebar: Perspective Selector -->
+            <aside class="w-20 glass-panel border-r border-white/5 flex flex-col items-center py-8 gap-8 z-40">
+                <div class="flex flex-col gap-6">
+                    <button class="p-3 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-[0_0_15px_rgba(0,242,255,0.1)]">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+                    </button>
+                    <button class="p-3 rounded-xl text-gray-600 hover:text-gray-300 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
+                    </button>
+                    <button class="p-3 rounded-xl text-gray-600 hover:text-gray-300 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                    </button>
+                </div>
+                <div class="mt-auto flex flex-col gap-6">
+                    <button class="p-3 rounded-xl text-gray-600 hover:text-gray-300 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Main Scrollable Content -->
+            <section class="flex-grow overflow-y-auto custom-scrollbar p-12 z-10 relative">
+                
+                <div class="max-w-5xl mx-auto space-y-12 pb-24">
+                    
+                    <!-- Header Section -->
+                    <div class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                        <div class="space-y-2">
+                            <h1 class="text-5xl font-extrabold tracking-tighter neon-glow-cyan">AI ENGINE CONSTRAINTS</h1>
+                            <p class="text-gray-400 max-w-xl text-lg">Fine-tune the neural matching engine. These parameters define the boundaries of your playlist's sonic identity.</p>
+                        </div>
+                        <div class="flex gap-4">
+                            <button @click="resetConstraints()" class="px-6 py-2 border border-white/10 rounded text-[10px] font-black tracking-widest hover:bg-white/5 transition-all">RESET DEFAULTS</button>
+                            <button class="px-6 py-2 border border-cyan-500/40 text-cyan-400 rounded text-[10px] font-black tracking-widest hover:bg-cyan-500/10 transition-all">SAVE PRESET</button>
+                        </div>
+                    </div>
+
+                    <!-- 3-Column Settings Grid -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        
+                        <!-- Col 1: Rhythm & Tempo -->
+                        <div class="space-y-8">
+                            <div class="glass-panel rounded-3xl p-8 space-y-8 neon-border-cyan">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-2 h-2 rounded-full bg-cyan-400"></div>
+                                    <h2 class="text-xs font-black tracking-[0.2em] text-white">RHYTHM METRICS</h2>
+                                </div>
+
+                                <!-- BPM Tolerance -->
+                                <div class="space-y-4">
+                                    <div class="flex justify-between items-center">
+                                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">BPM Tolerance</label>
+                                        <span class="text-sm font-bold text-cyan-400" x-text="'±' + settings.bpmTolerance + ' BPM'"></span>
+                                    </div>
+                                    <input type="range" min="1" max="20" x-model="settings.bpmTolerance" class="w-full">
+                                    <p class="text-[9px] text-gray-500 italic">Determines how strictly the AI follows the tempo curve line.</p>
+                                </div>
+
+                                <!-- Syncopation -->
+                                <div class="space-y-4">
+                                    <div class="flex justify-between items-center">
+                                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Beat Complexity</label>
+                                        <span class="text-sm font-bold text-cyan-400" x-text="settings.syncopation + '%'"></span>
+                                    </div>
+                                    <input type="range" min="0" max="100" x-model="settings.syncopation" class="w-full">
+                                    <div class="flex justify-between text-[8px] text-gray-600 font-bold uppercase">
+                                        <span>4/4 Floor</span>
+                                        <span>Experimental</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel rounded-3xl p-8 space-y-6 border-white/5">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-2 h-2 rounded-full bg-purple-500"></div>
+                                    <h2 class="text-xs font-black tracking-[0.2em] text-white">HARMONIC BIAS</h2>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[10px] font-bold text-gray-500 uppercase">Key Compatibility</span>
+                                    <div class="flex bg-black/40 rounded p-1 border border-white/5">
+                                        <button @click="settings.keyMatch = 'strict'" :class="settings.keyMatch === 'strict' ? 'bg-cyan-500 text-black' : 'text-gray-500'" class="px-3 py-1 text-[9px] font-black rounded transition-all">STRICT</button>
+                                        <button @click="settings.keyMatch = 'loose'" :class="settings.keyMatch === 'loose' ? 'bg-cyan-500 text-black' : 'text-gray-500'" class="px-3 py-1 text-[9px] font-black rounded transition-all">LOOSE</button>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[10px] font-bold text-gray-500 uppercase">Scale Preference</span>
+                                    <span class="text-[10px] text-magenta-400 font-bold">MINOR BIAS</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Col 2: Curation Logic -->
+                        <div class="space-y-8">
+                            <div class="glass-panel rounded-3xl p-8 space-y-8 neon-border-magenta">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-2 h-2 rounded-full bg-magenta-500"></div>
+                                    <h2 class="text-xs font-black tracking-[0.2em] text-white">CURATION LOGIC</h2>
+                                </div>
+
+                                <!-- Artist Diversity -->
+                                <div class="space-y-4">
+                                    <div class="flex justify-between items-center">
+                                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Artist Diversity</label>
+                                        <span class="text-sm font-bold text-magenta-400" x-text="settings.diversity + '/10'"></span>
+                                    </div>
+                                    <input type="range" min="1" max="10" x-model="settings.diversity" class="w-full !accent-magenta-500">
+                                    <p class="text-[9px] text-gray-500">Lower values allow multiple tracks from the same artist.</p>
+                                </div>
+
+                                <!-- Decade Spread -->
+                                <div class="space-y-4">
+                                    <div class="flex justify-between items-center">
+                                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Decade Spread</label>
+                                        <span class="text-sm font-bold text-magenta-400" x-text="settings.decades"></span>
+                                    </div>
+                                    <div class="grid grid-cols-4 gap-2">
+                                        <template x-for="dec in ['80s', '90s', '00s', '10s', '20s']">
+                                            <button @click="toggleDecade(dec)" 
+                                                    :class="settings.activeDecades.includes(dec) ? 'bg-magenta-500/20 text-magenta-400 border-magenta-500/50' : 'bg-white/5 text-gray-600 border-white/5'"
+                                                    class="py-2 rounded border text-[10px] font-black transition-all" x-text="dec"></button>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <!-- Deep Cut vs Popularity -->
+                                <div class="space-y-4">
+                                    <div class="flex justify-between items-center">
+                                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Discovery Bias</label>
+                                        <span class="text-sm font-bold text-magenta-400" x-text="settings.discovery + '%'"></span>
+                                    </div>
+                                    <input type="range" min="0" max="100" x-model="settings.discovery" class="w-full !accent-magenta-500">
+                                    <div class="flex justify-between text-[8px] text-gray-600 font-bold uppercase">
+                                        <span>Chart Hits</span>
+                                        <span>Underground</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Col 3: Exclusion (Blacklist) -->
+                        <div class="space-y-8">
+                            <div class="glass-panel rounded-3xl p-8 space-y-6 border-red-500/20">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-2 h-2 rounded-full bg-red-500"></div>
+                                    <h2 class="text-xs font-black tracking-[0.2em] text-white">BLACKLIST MANAGER</h2>
+                                </div>
+
+                                <div class="space-y-4">
+                                    <p class="text-[10px] text-gray-400 uppercase font-bold leading-relaxed">Exclude specific entities from being matched by the engine.</p>
+                                    
+                                    <div class="relative">
+                                        <input type="text" x-model="newBlacklistTag" @keyup.enter="addTag()" placeholder="Add artist or genre..." class="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-red-500/50 outline-none transition-all">
+                                        <button @click="addTag()" class="absolute right-2 top-2 p-1.5 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/40 transition-all">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                                        </button>
+                                    </div>
+
+                                    <div class="flex flex-wrap gap-2 h-[280px] overflow-y-auto custom-scrollbar content-start">
+                                        <template x-for="(tag, index) in settings.blacklist" :key="index">
+                                            <div class="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/20 rounded-full text-[10px] font-bold text-red-400">
+                                                <span x-text="tag"></span>
+                                                <button @click="removeTag(index)" class="hover:text-white transition-colors">
+                                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                                                </button>
+                                            </div>
+                                        </template>
+                                        <div x-show="settings.blacklist.length === 0" class="w-full h-full flex flex-col items-center justify-center text-gray-700 space-y-2 opacity-50">
+                                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+                                            <span class="text-[10px] font-bold tracking-widest">NO EXCLUSIONS</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Bottom Action Area -->
+                    <div class="p-8 glass-panel rounded-[40px] border border-cyan-500/10 flex flex-col md:flex-row items-center justify-between gap-8 bg-gradient-to-r from-cyan-900/10 to-magenta-900/10">
+                        <div class="flex items-center gap-6">
+                            <div class="w-16 h-16 rounded-full bg-cyan-400 flex items-center justify-center text-black font-black text-2xl shadow-[0_0_30px_rgba(0,242,255,0.3)]">AI</div>
+                            <div>
+                                <h3 class="text-xl font-bold">Apply constraints to session?</h3>
+                                <p class="text-sm text-gray-400">This will immediately re-evaluate all unlocked tracks in your arrangement.</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-4 w-full md:w-auto">
+                            <button class="flex-grow md:flex-none px-12 py-4 bg-white text-black font-black text-xs tracking-[0.2em] rounded-full hover:scale-105 transition-all shadow-xl">REFRESH SET</button>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+        </div>
+
+        <!-- Footer / Transport Bar (Chrome) -->
+        <footer class="h-16 glass-panel border-t border-white/5 flex items-center px-8 z-50">
+            <div class="flex items-center gap-6">
+                <div class="flex items-center gap-4">
+                    <button class="text-gray-500 hover:text-white"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18V6h2v12H6zm3.5-6L19 6v12l-9.5-6z"/></svg></button>
+                    <button class="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center hover:scale-110 transition-all shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+                        <svg class="w-5 h-5 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    </button>
+                    <button class="text-gray-500 hover:text-white"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6v12l9.5-6L6 6zm10 12h2V6h-2v12z"/></svg></button>
+                </div>
+            </div>
+            
+            <div class="flex-grow flex justify-center">
+                <div class="flex items-center gap-3">
+                    <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                    <span class="text-[10px] font-black tracking-widest text-gray-500 uppercase">Engine Status: Optimized</span>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-6">
+                <div class="flex flex-col items-end">
+                    <span class="text-[10px] font-bold text-white uppercase tracking-tighter">Latency: 42ms</span>
+                    <span class="text-[8px] text-gray-600 font-bold uppercase">YT-API Connection: Stable</span>
+                </div>
+                <div class="w-px h-8 bg-white/10"></div>
+                <div class="text-right">
+                    <div class="text-[10px] font-black text-cyan-400">V1.0.4-PROD</div>
+                    <div class="text-[8px] text-gray-600 font-bold">STABLE BUILD</div>
+                </div>
+            </div>
+        </footer>
+    </main>
+
+    <!-- Global Notifications -->
+    <div x-show="notification" x-cloak 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 translate-y-4"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         class="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] glass-panel px-6 py-3 rounded-full border border-cyan-500/30 flex items-center gap-4 shadow-2xl">
+        <div class="w-2 h-2 rounded-full bg-cyan-400"></div>
+        <span class="text-xs font-bold tracking-widest" x-text="notification"></span>
+    </div>
+
+    <script>
+        function constraintsEngine() {
+            return {
+                notification: '',
+                newBlacklistTag: '',
+                settings: {
+                    bpmTolerance: 5,
+                    syncopation: 15,
+                    keyMatch: 'strict',
+                    diversity: 7,
+                    activeDecades: ['80s', '10s', '20s'],
+                    discovery: 65,
+                    blacklist: ['Trap', 'K-Pop', 'Taylor Swift', 'Heavy Metal', 'Jazz Fusion', 'Drake']
+                },
+
+                init() {
+                    console.log("Constraints Engine Loaded");
+                },
+
+                get decades() {
+                    return this.settings.activeDecades.join(', ') || 'NONE';
+                },
+
+                toggleDecade(dec) {
+                    if (this.settings.activeDecades.includes(dec)) {
+                        this.settings.activeDecades = this.settings.activeDecades.filter(d => d !== dec);
+                    } else {
+                        this.settings.activeDecades.push(dec);
+                    }
+                    this.showNotification(`Decade filter updated: ${dec}`);
+                },
+
+                addTag() {
+                    if (this.newBlacklistTag.trim()) {
+                        this.settings.blacklist.unshift(this.newBlacklistTag.trim());
+                        this.showNotification(`Added to blacklist: ${this.newBlacklistTag}`);
+                        this.newBlacklistTag = '';
+                    }
+                },
+
+                removeTag(index) {
+                    const tag = this.settings.blacklist[index];
+                    this.settings.blacklist.splice(index, 1);
+                    this.showNotification(`Removed from blacklist: ${tag}`);
+                },
+
+                resetConstraints() {
+                    this.settings = {
+                        bpmTolerance: 5,
+                        syncopation: 15,
+                        keyMatch: 'strict',
+                        diversity: 7,
+                        activeDecades: ['10s', '20s'],
+                        discovery: 50,
+                        blacklist: []
+                    };
+                    this.showNotification("Engine constraints reset to factory defaults");
+                },
+
+                showNotification(msg) {
+                    this.notification = msg;
+                    setTimeout(() => {
+                        this.notification = '';
+                    }, 3000);
+                }
+            }
+        }
+    </script>
+</body>
+</html>

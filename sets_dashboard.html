@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YTDJ.AI | Sets Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Syne', sans-serif;
+            background-color: #05060f;
+            color: #e0e0e0;
+            overflow-x: hidden;
+        }
+
+        .neon-glow-cyan {
+            text-shadow: 0 0 10px rgba(0, 242, 255, 0.5), 0 0 20px rgba(0, 242, 255, 0.3);
+        }
+
+        .neon-border-magenta {
+            border-color: rgba(255, 0, 229, 0.4);
+            box-shadow: 0 0 15px rgba(255, 0, 229, 0.2);
+        }
+
+        .glass-panel {
+            background: rgba(15, 17, 35, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .grid-bg {
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            background-size: 60px 60px;
+        }
+
+        .card-hover:hover {
+            transform: translateY(-4px);
+            border-color: rgba(0, 242, 255, 0.3);
+            background: rgba(25, 28, 55, 0.8);
+            box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+        }
+
+        .curve-preview {
+            filter: drop-shadow(0 0 4px rgba(0, 242, 255, 0.4));
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.2);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+        }
+
+        [x-cloak] { display: none !important; }
+
+        .shimmer {
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 3s infinite linear;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        .scanline {
+            width: 100%;
+            height: 100px;
+            z-index: 5;
+            background: linear-gradient(0deg, rgba(0, 242, 255, 0) 0%, rgba(0, 242, 255, 0.02) 50%, rgba(0, 242, 255, 0) 100%);
+            opacity: 0.1;
+            position: fixed;
+            pointer-events: none;
+            animation: scanline 12s linear infinite;
+        }
+
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100vh); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-cyan-500/30 grid-bg" x-data="dashboardState()">
+
+    <div class="scanline"></div>
+
+    <!-- Top Navigation -->
+    <header class="h-16 glass-panel border-b border-white/5 flex items-center justify-between px-6 sticky top-0 z-50">
+        <div class="flex items-center gap-8">
+            <div class="flex items-center gap-2 cursor-pointer group">
+                <div class="w-8 h-8 bg-gradient-to-br from-cyan-400 to-magenta-500 rounded-lg group-hover:rotate-12 transition-transform duration-300"></div>
+                <span class="font-black tracking-tighter text-2xl">YTDJ<span class="text-cyan-400">.AI</span></span>
+            </div>
+            
+            <nav class="hidden md:flex items-center gap-6">
+                <a href="#" class="text-sm font-bold text-white border-b-2 border-cyan-400 pb-1">DASHBOARD</a>
+                <a href="#" class="text-sm font-bold text-gray-500 hover:text-white transition-colors">TEMPLATES</a>
+                <a href="#" class="text-sm font-bold text-gray-500 hover:text-white transition-colors">EXPLORE</a>
+                <a href="#" class="text-sm font-bold text-gray-500 hover:text-white transition-colors">LIBRARY</a>
+            </nav>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <!-- Global Search -->
+            <div class="relative group hidden sm:block">
+                <input type="text" x-model="searchQuery" placeholder="Search sets..." class="bg-black/40 border border-white/10 rounded-full py-2 pl-10 pr-4 text-xs focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50 w-64 transition-all">
+                <svg class="absolute left-3 top-2.5 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            </div>
+
+            <button class="p-2 hover:bg-white/5 rounded-full text-gray-400 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+            </button>
+            
+            <div class="h-8 w-8 rounded-full bg-gradient-to-tr from-gray-700 to-gray-600 border border-white/10 overflow-hidden cursor-pointer">
+                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User">
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow p-6 md:p-10 max-w-7xl mx-auto w-full">
+        
+        <!-- Welcome Header -->
+        <div class="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
+            <div>
+                <h1 class="text-4xl font-extrabold tracking-tighter mb-2">Welcome back, <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-magenta-400">Maestro</span></h1>
+                <p class="text-gray-500 font-medium">You have 12 active sets and 3 draft arrangements.</p>
+            </div>
+            <button @click="showNewSetModal = true" class="group relative px-8 py-4 bg-white text-black font-bold text-sm rounded-2xl overflow-hidden transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+                <span class="relative z-10 flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    START NEW SET
+                </span>
+                <div class="absolute inset-0 bg-gradient-to-r from-cyan-400 to-magenta-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            </button>
+        </div>
+
+        <!-- Dashboard Navigation -->
+        <div class="flex flex-wrap items-center gap-4 mb-8">
+            <template x-for="filter in ['Recent', 'Favorites', 'Templates', 'Archived']">
+                <button @click="activeFilter = filter" 
+                        :class="activeFilter === filter ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30' : 'bg-white/5 text-gray-500 border-white/5 hover:border-white/20'"
+                        class="px-5 py-2 border rounded-full text-xs font-bold tracking-widest uppercase transition-all" 
+                        x-text="filter">
+                </button>
+            </template>
+            <div class="flex-grow"></div>
+            <div class="flex items-center bg-black/40 rounded-lg p-1 border border-white/10">
+                <button class="p-1.5 bg-white/10 rounded text-white"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M4 11h5V5H4v6zm0 7h5v-6H4v6zm7 0h5v-6h-5v6zm0-13v6h5V5h-5z"/></svg></button>
+                <button class="p-1.5 text-gray-500 hover:text-white"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M4 15h16v-2H4v2zm0 4h16v-2H4v2zm0-8h16V9H4v2zm0-6v2h16V5H4z"/></svg></button>
+            </div>
+        </div>
+
+        <!-- Grid of Recent Sets -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            
+            <template x-for="set in filteredSets()" :key="set.id">
+                <div class="glass-panel rounded-3xl overflow-hidden flex flex-col group card-hover transition-all duration-300 border border-white/5">
+                    <!-- Curve Preview Thumbnail -->
+                    <div class="h-40 bg-black/40 relative overflow-hidden flex items-center justify-center p-6 cursor-pointer">
+                        <div class="shimmer absolute inset-0 opacity-20 group-hover:opacity-40 transition-opacity"></div>
+                        <svg class="w-full h-full curve-preview" viewBox="0 0 400 100">
+                            <defs>
+                                <linearGradient :id="'grad-' + set.id" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" stop-color="#00f2ff" />
+                                    <stop offset="100%" stop-color="#ff00e5" />
+                                </linearGradient>
+                            </defs>
+                            <path :d="set.path" fill="none" :stroke="'url(#grad-' + set.id + ')'" stroke-width="3" stroke-linecap="round" />
+                            <template x-for="point in set.points">
+                                <circle :cx="point.x" :cy="point.y" r="3" fill="white" class="opacity-50" />
+                            </template>
+                        </svg>
+                        
+                        <!-- Overlay Actions -->
+                        <div class="absolute inset-0 bg-cyan-900/40 opacity-0 group-hover:opacity-100 backdrop-blur-[2px] transition-all flex items-center justify-center gap-3">
+                            <button class="w-12 h-12 bg-white text-black rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-transform shadow-xl">
+                                <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                            </button>
+                            <button class="px-4 py-2 bg-black/60 rounded-full text-xs font-bold border border-white/20 hover:bg-black transition-colors">OPEN EDITOR</button>
+                        </div>
+
+                        <!-- Track Count Badge -->
+                        <div class="absolute top-4 left-4 px-2 py-1 bg-black/60 border border-white/10 rounded text-[9px] font-black tracking-widest uppercase">
+                            <span x-text="set.tracks"></span> TRACKS
+                        </div>
+                    </div>
+
+                    <!-- Set Meta Information -->
+                    <div class="p-6">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold tracking-tight mb-1 group-hover:text-cyan-400 transition-colors" x-text="set.title"></h3>
+                                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest" x-text="'Edited ' + set.lastEdited"></p>
+                            </div>
+                            <button @click="set.favorite = !set.favorite" class="text-gray-600 hover:text-magenta-500 transition-colors">
+                                <svg class="w-5 h-5" :fill="set.favorite ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24" :class="set.favorite ? 'text-magenta-500' : ''">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div class="flex items-center gap-3 mb-6">
+                            <template x-for="tag in set.tags">
+                                <span class="px-2 py-0.5 bg-white/5 border border-white/5 rounded text-[9px] text-gray-400 font-bold" x-text="tag"></span>
+                            </template>
+                        </div>
+
+                        <!-- Mini Stats -->
+                        <div class="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
+                            <div class="flex flex-col">
+                                <span class="text-[9px] text-gray-600 font-bold uppercase tracking-widest">BPM Range</span>
+                                <span class="text-sm font-bold text-cyan-400" x-text="set.bpmRange"></span>
+                            </div>
+                            <div class="flex flex-col">
+                                <span class="text-[9px] text-gray-600 font-bold uppercase tracking-widest">Duration</span>
+                                <span class="text-sm font-bold text-gray-300" x-text="set.duration"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Skeleton Card for "Create New" -->
+            <button @click="showNewSetModal = true" class="h-full min-h-[340px] border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center gap-4 hover:border-cyan-500/30 hover:bg-cyan-500/5 transition-all group">
+                <div class="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center group-hover:scale-110 group-hover:bg-cyan-500/10 transition-all">
+                    <svg class="w-8 h-8 text-gray-500 group-hover:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                </div>
+                <div class="text-center">
+                    <p class="font-bold text-white mb-1">Create New Set</p>
+                    <p class="text-xs text-gray-500">Transform a prompt into an arc.</p>
+                </div>
+            </button>
+
+        </div>
+    </main>
+
+    <!-- New Set Modal (Prompt Entry) -->
+    <div x-show="showNewSetModal" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center p-6">
+        <div class="absolute inset-0 bg-black/90 backdrop-blur-xl" @click="showNewSetModal = false" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"></div>
+        
+        <div class="relative glass-panel w-full max-w-2xl rounded-[40px] p-10 border border-white/10 shadow-2xl overflow-hidden" 
+             x-transition:enter="ease-out duration-300" x-transition:enter-start="scale-95 opacity-0" x-transition:enter-end="scale-100 opacity-100">
+            
+            <div class="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 blur-[120px] pointer-events-none"></div>
+            
+            <div class="flex justify-between items-center mb-10">
+                <h2 class="text-3xl font-extrabold tracking-tighter">New Set Architecture</h2>
+                <button @click="showNewSetModal = false" class="p-2 hover:bg-white/10 rounded-full transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <div class="space-y-8">
+                <div class="space-y-3">
+                    <label class="text-xs font-bold text-gray-500 uppercase tracking-widest">Describe the Atmosphere</label>
+                    <textarea x-model="newSetPrompt" class="w-full bg-black/40 border border-white/10 rounded-2xl p-6 text-lg focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 outline-none transition-all min-h-[140px]" placeholder="e.g. A neon-drenched night drive through Shibuya, high energy synthwave with hard-hitting basslines..."></textarea>
+                    <div class="flex gap-2">
+                        <template x-for="tag in ['Cyberpunk', 'Cinematic', 'Driving', 'Bass-Heavy']">
+                            <button class="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[10px] text-gray-400 hover:border-cyan-500/30 hover:text-cyan-400 transition-all font-bold uppercase" x-text="tag"></button>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+                    <label class="text-xs font-bold text-gray-500 uppercase tracking-widest">Select Arc Template</label>
+                    <div class="grid grid-cols-3 gap-3">
+                        <template x-for="arc in arcTemplates">
+                            <button @click="selectedArc = arc.id" :class="selectedArc === arc.id ? 'border-cyan-400 bg-cyan-500/10 text-white' : 'border-white/5 bg-black/40 text-gray-500 hover:border-white/20'" class="p-4 border rounded-2xl text-left transition-all group">
+                                <div class="text-[10px] font-bold mb-3 uppercase tracking-tighter" x-text="arc.name"></div>
+                                <svg class="w-full h-8" viewBox="0 0 100 20">
+                                    <path :d="arc.path" fill="none" stroke="currentColor" stroke-width="2" class="group-hover:text-cyan-400 transition-colors" />
+                                </svg>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="pt-6">
+                    <button class="w-full py-5 bg-white text-black font-black text-lg rounded-3xl overflow-hidden hover:scale-[1.02] active:scale-[0.98] transition-all shadow-[0_10px_30px_-10px_rgba(0,242,255,0.4)] relative group">
+                        <span class="relative z-10">GENERATE ARRANGEMENT</span>
+                        <div class="absolute inset-0 bg-gradient-to-r from-cyan-400 to-magenta-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    </button>
+                    <p class="text-center text-[10px] text-gray-600 mt-4 font-bold uppercase tracking-widest">AI will suggest 12 tracks matching your curve</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function dashboardState() {
+            return {
+                searchQuery: '',
+                activeFilter: 'Recent',
+                showNewSetModal: false,
+                newSetPrompt: '',
+                selectedArc: 'warmup',
+                
+                arcTemplates: [
+                    { id: 'warmup', name: 'Warm-up → Peak', path: 'M0,15 Q30,15 50,5 T100,10' },
+                    { id: 'slowburn', name: 'Slow Burn', path: 'M0,18 L100,2' },
+                    { id: 'chaos', name: 'High Intensity', path: 'M0,5 L20,15 L40,2 L60,18 L80,5 L100,10' }
+                ],
+
+                sets: [
+                    { 
+                        id: 1, 
+                        title: 'Neon Night Drive Vol. 1', 
+                        lastEdited: '2 HOURS AGO', 
+                        tracks: 16, 
+                        bpmRange: '80 - 142', 
+                        duration: '1h 12m', 
+                        tags: ['SYNTHWAVE', 'MELODIC'], 
+                        favorite: true,
+                        path: 'M0,80 Q50,20 100,40 T200,90 T300,50 T400,10',
+                        points: [{x:50, y:45}, {x:120, y:60}, {x:240, y:30}, {x:360, y:15}]
+                    },
+                    { 
+                        id: 2, 
+                        title: 'Tokyo Rain Alley', 
+                        lastEdited: '1 DAY AGO', 
+                        tracks: 12, 
+                        bpmRange: '90 - 120', 
+                        duration: '48m', 
+                        tags: ['AMBIENT', 'LO-FI'], 
+                        favorite: false,
+                        path: 'M0,50 Q100,50 200,50 T400,50',
+                        points: [{x:40, y:50}, {x:180, y:50}, {x:320, y:50}]
+                    },
+                    { 
+                        id: 3, 
+                        title: 'Glitch Horizon Peak', 
+                        lastEdited: '3 DAYS AGO', 
+                        tracks: 24, 
+                        bpmRange: '128 - 174', 
+                        duration: '2h 04m', 
+                        tags: ['INDUSTRIAL', 'TECHNO'], 
+                        favorite: true,
+                        path: 'M0,100 L50,80 L100,60 L150,40 L200,20 L300,10 L400,5',
+                        points: [{x:60, y:75}, {x:150, y:40}, {x:280, y:12}, {x:380, y:8}]
+                    },
+                    { 
+                        id: 4, 
+                        title: 'Morning Code Session', 
+                        lastEdited: '5 DAYS AGO', 
+                        tracks: 8, 
+                        bpmRange: '60 - 90', 
+                        duration: '35m', 
+                        tags: ['FOCUS', 'DEEP'], 
+                        favorite: false,
+                        path: 'M0,20 Q100,80 200,20 T400,80',
+                        points: [{x:80, y:60}, {x:220, y:30}]
+                    },
+                    { 
+                        id: 5, 
+                        title: 'Sunset Circuit 2077', 
+                        lastEdited: '1 WEEK AGO', 
+                        tracks: 14, 
+                        bpmRange: '100 - 130', 
+                        duration: '56m', 
+                        tags: ['CHILLWAVE', 'VAPOR'], 
+                        favorite: false,
+                        path: 'M0,60 C50,60 150,20 200,40 S350,80 400,60',
+                        points: [{x:100, y:40}, {x:200, y:40}, {x:300, y:70}]
+                    },
+                    { 
+                        id: 6, 
+                        title: 'Midnight Arcade', 
+                        lastEdited: '2 WEEKS AGO', 
+                        tracks: 20, 
+                        bpmRange: '110 - 155', 
+                        duration: '1h 32m', 
+                        tags: ['RETROWAVE', 'PUNCHY'], 
+                        favorite: true,
+                        path: 'M0,90 Q100,10 200,90 T400,10',
+                        points: [{x:50, y:45}, {x:150, y:45}, {x:250, y:45}, {x:350, y:45}]
+                    }
+                ],
+
+                filteredSets() {
+                    let filtered = this.sets;
+                    
+                    if (this.searchQuery) {
+                        filtered = filtered.filter(s => s.title.toLowerCase().includes(this.searchQuery.toLowerCase()));
+                    }
+
+                    if (this.activeFilter === 'Favorites') {
+                        filtered = filtered.filter(s => s.favorite);
+                    } else if (this.activeFilter === 'Templates') {
+                        return []; // Empty for demo
+                    }
+
+                    return filtered;
+                }
+            }
+        }
+    </script>
+</body>
+</html></html>
