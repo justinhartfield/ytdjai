@@ -69,7 +69,7 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
   const [bpmRange, setBpmRange] = useState({ min: 80, max: 165 })
   const [isGenerating, setIsGenerating] = useState(false)
 
-  const { aiProvider, updatePlaylist, setIsGenerating: setStoreGenerating } = useYTDJStore()
+  const { aiProvider, updateSetWithPrompt, setIsGenerating: setStoreGenerating } = useYTDJStore()
 
   const toggleTag = (tag: string) => {
     setSelectedTags(prev =>
@@ -117,7 +117,7 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
       })
 
       if (result.success && result.playlist) {
-        updatePlaylist(result.playlist)
+        updateSetWithPrompt(result.playlist, fullPrompt)
         onComplete()
       }
     } catch (error) {
@@ -126,7 +126,7 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
       setIsGenerating(false)
       setStoreGenerating(false)
     }
-  }, [prompt, selectedTags, selectedArc, duration, bpmRange, novelty, aiProvider, updatePlaylist, setStoreGenerating, onComplete])
+  }, [prompt, selectedTags, selectedArc, duration, bpmRange, novelty, aiProvider, updateSetWithPrompt, setStoreGenerating, onComplete])
 
   return (
     <div className="min-h-screen bg-[#05060f] text-white overflow-auto">

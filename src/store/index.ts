@@ -31,6 +31,8 @@ interface YTDJState {
 
   // Playlist
   updatePlaylist: (playlist: PlaylistNode[]) => void
+  updateSetWithPrompt: (playlist: PlaylistNode[], prompt: string) => void
+  updatePrompt: (prompt: string) => void
 
   // Loading States
   isGenerating: boolean
@@ -76,6 +78,24 @@ export const useYTDJStore = create<YTDJState>()(
         }
         return {
           currentSet: { ...currentSet, playlist, updatedAt: new Date() }
+        }
+      }),
+      updateSetWithPrompt: (playlist, prompt) => set((state) => {
+        const currentSet = state.currentSet || {
+          id: `set-${Date.now()}`,
+          name: 'Untitled Set',
+          playlist: [],
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+        return {
+          currentSet: { ...currentSet, playlist, prompt, updatedAt: new Date() }
+        }
+      }),
+      updatePrompt: (prompt) => set((state) => {
+        if (!state.currentSet) return state
+        return {
+          currentSet: { ...state.currentSet, prompt, updatedAt: new Date() }
         }
       }),
 

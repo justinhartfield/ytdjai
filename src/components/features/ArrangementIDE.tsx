@@ -8,7 +8,8 @@ import {
 } from 'lucide-react'
 import { cn, formatDuration } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
-import type { PlaylistNode, Track } from '@/types'
+import { generatePlaylist } from '@/lib/ai-service'
+import type { PlaylistNode, Track, AIConstraints } from '@/types'
 
 const ARC_TEMPLATES = [
   { id: 'warmup', name: 'Warm-up Peak', svg: 'M0,25 Q50,5 100,25' },
@@ -23,8 +24,10 @@ interface ArrangementIDEProps {
 }
 
 export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProps) {
-  const { currentSet, updatePlaylist } = useYTDJStore()
+  const { currentSet, updatePlaylist, updateSetWithPrompt, aiProvider, isGenerating, setIsGenerating } = useYTDJStore()
   const playlist = currentSet?.playlist || []
+  const [editingPrompt, setEditingPrompt] = useState(currentSet?.prompt || '')
+  const [isPromptEditing, setIsPromptEditing] = useState(false)
 
   const [selectedNodeIndex, setSelectedNodeIndex] = useState<number | null>(0)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
@@ -188,6 +191,39 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
     setSelectedNodeIndex(null)
   }
 
+  // Sync editing prompt when currentSet.prompt changes
+  useEffect(() => {
+    if (currentSet?.prompt && !isPromptEditing) {
+      setEditingPrompt(currentSet.prompt)
+    }
+  }, [currentSet?.prompt, isPromptEditing])
+
+  const handleRegenerate = useCallback(async () => {
+    if (!editingPrompt.trim() || isGenerating) return
+
+    setIsGenerating(true)
+    try {
+      const trackCount = playlist.length || 8
+      const result = await generatePlaylist({
+        prompt: editingPrompt,
+        constraints: {
+          trackCount,
+          bpmRange: { min: 80, max: 160 }
+        } as AIConstraints,
+        provider: aiProvider
+      })
+
+      if (result.success && result.playlist) {
+        updateSetWithPrompt(result.playlist, editingPrompt)
+      }
+    } catch (error) {
+      console.error('Failed to regenerate playlist:', error)
+    } finally {
+      setIsGenerating(false)
+      setIsPromptEditing(false)
+    }
+  }, [editingPrompt, isGenerating, playlist.length, aiProvider, updateSetWithPrompt, setIsGenerating])
+
   const selectedNode = selectedNodeIndex !== null ? playlist[selectedNodeIndex] : null
   const totalDuration = playlist.reduce((acc, node) => acc + node.track.duration, 0)
 
@@ -251,14 +287,66 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
         {/* Left Sidebar: AI Controls */}
         <aside className="w-80 bg-[#0a0c1c]/80 backdrop-blur-xl border-r border-white/5 flex flex-col overflow-hidden">
           <div className="p-6 space-y-8 flex-1 overflow-y-auto custom-scrollbar">
-            {/* Prompt Display */}
+            {/* Prompt Display/Edit */}
             <div className="space-y-4">
-              <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500" /> Current Prompt
-              </label>
-              <div className="p-4 bg-black/50 border border-white/5 rounded-xl text-sm text-gray-300 italic">
-                {currentSet?.prompt || 'AI-generated set based on your preferences'}
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-500" /> Current Prompt
+                </label>
+                {!isPromptEditing && (
+                  <button
+                    onClick={() => setIsPromptEditing(true)}
+                    className="text-[9px] font-bold text-cyan-400 hover:text-cyan-300 uppercase tracking-wider"
+                  >
+                    Edit
+                  </button>
+                )}
               </div>
+              {isPromptEditing ? (
+                <div className="space-y-3">
+                  <textarea
+                    value={editingPrompt}
+                    onChange={(e) => setEditingPrompt(e.target.value)}
+                    placeholder="Describe your ideal DJ set..."
+                    className="w-full h-32 p-4 bg-black/50 border border-cyan-500/30 rounded-xl text-sm text-white resize-none focus:outline-none focus:border-cyan-500/60 placeholder-gray-600"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setIsPromptEditing(false)
+                        setEditingPrompt(currentSet?.prompt || '')
+                      }}
+                      className="flex-1 py-2 text-[10px] font-bold text-gray-400 hover:text-white uppercase tracking-wider border border-white/10 rounded-lg hover:border-white/20 transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleRegenerate}
+                      disabled={isGenerating || !editingPrompt.trim()}
+                      className="flex-1 py-2 text-[10px] font-bold text-black uppercase tracking-wider bg-cyan-500 rounded-lg hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                    >
+                      {isGenerating ? (
+                        <>
+                          <RefreshCw className="w-3 h-3 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="w-3 h-3" />
+                          Regenerate
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="p-4 bg-black/50 border border-white/5 rounded-xl text-sm text-gray-300 italic cursor-pointer hover:border-white/10 transition-all"
+                  onClick={() => setIsPromptEditing(true)}
+                >
+                  {currentSet?.prompt || 'Click to add a prompt...'}
+                </div>
+              )}
             </div>
 
             {/* Arc Template Selector */}
@@ -326,9 +414,22 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
 
           {/* Regenerate Footer */}
           <div className="p-6 border-t border-white/5 bg-black/20">
-            <button className="w-full py-4 bg-cyan-500 text-black font-black text-xs uppercase tracking-widest rounded-lg hover:bg-cyan-400 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2">
-              <Zap className="w-4 h-4" />
-              Regenerate Set
+            <button
+              onClick={handleRegenerate}
+              disabled={isGenerating || !editingPrompt.trim()}
+              className="w-full py-4 bg-cyan-500 text-black font-black text-xs uppercase tracking-widest rounded-lg hover:bg-cyan-400 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+            >
+              {isGenerating ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4" />
+                  Regenerate Set
+                </>
+              )}
             </button>
           </div>
         </aside>
