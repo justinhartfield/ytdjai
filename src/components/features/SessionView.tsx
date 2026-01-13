@@ -13,6 +13,7 @@ import { IconSidebar } from './IconSidebar'
 import { AIConstraintsDrawer } from './AIConstraintsDrawer'
 import { SetsDashboard } from './SetsDashboard'
 import { ExportFlow } from './ExportFlow'
+import { AIControlsSidebar } from './AIControlsSidebar'
 import type { PlaylistNode, Track, Set, AIConstraints } from '@/types'
 
 // Local ARC_TEMPLATES that matches the store format
@@ -67,6 +68,8 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [isSmoothing, setIsSmoothing] = useState(false)
   const [addingTrackAtIndex, setAddingTrackAtIndex] = useState<number | null>(null)
+  const [bpmTolerance, setBpmTolerance] = useState(5)
+  const [targetTrackCount, setTargetTrackCount] = useState(8)
 
   // Player state from store
   const { isPlaying, playingNodeIndex, currentTime, duration } = player
@@ -349,65 +352,18 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
           }}
         />
 
-        {/* Left Sidebar: Set Info (shown when no drawer is open) */}
-        <aside className={cn(
-          "w-80 bg-[#0a0c1c]/80 backdrop-blur-xl border-r border-white/5 flex flex-col overflow-hidden transition-all",
-          ui.leftSidebarPanel === 'constraints' || ui.leftSidebarPanel === 'sets' ? 'hidden' : ''
-        )}>
-          <div className="p-4 border-b border-white/5 flex items-center justify-between bg-black/20">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400">Set Constraints</h2>
-            <Zap className="w-4 h-4 text-cyan-400" />
-          </div>
-
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-8">
-            {/* Prompt Card */}
-            <div className="space-y-3">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Atmosphere</label>
-              <div className="p-3 rounded-xl bg-black/40 border border-white/5 text-sm italic text-gray-300">
-                {currentSet?.prompt || 'AI-generated set based on your preferences'}
-              </div>
-            </div>
-
-            {/* Current Arc - Now shows real arc from store */}
-            <div className="space-y-3">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Current Arc</label>
-              <div className="p-3 border border-cyan-500/30 bg-cyan-500/5 rounded-xl">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-bold text-cyan-400 uppercase">{currentArc.name}</span>
-                  <span className="text-[9px] text-cyan-400">
-                    {playlist[0]?.track.bpm || 80} → {playlist[playlist.length - 1]?.track.bpm || 145} BPM
-                  </span>
-                </div>
-                <svg className="w-full h-8" viewBox="0 0 100 30">
-                  <path d={currentArc.svg} fill="none" stroke="#00f2ff" strokeWidth="2" />
-                </svg>
-              </div>
-            </div>
-
-            {/* Track Stats */}
-            <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold text-gray-500 uppercase">Total Tracks</span>
-                <span className="text-lg font-black text-white">{playlist.length}</span>
-              </div>
-              <div className="flex justify-between items-center mt-2">
-                <span className="text-[10px] font-bold text-gray-500 uppercase">Duration</span>
-                <span className="text-sm font-bold text-cyan-400">{Math.floor(totalDuration / 60)} min</span>
-              </div>
-              <div className="flex justify-between items-center mt-2">
-                <span className="text-[10px] font-bold text-gray-500 uppercase">Locked</span>
-                <span className="text-sm font-bold text-pink-400">{playlist.filter(n => n.isLocked).length}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 border-t border-white/5 bg-black/40">
-            <div className="flex items-center gap-3 text-gray-500 text-[10px] font-bold uppercase">
-              <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-              AI Engine Active
-            </div>
-          </div>
-        </aside>
+        {/* Left Sidebar: AI Controls */}
+        <AIControlsSidebar
+          onRegenerate={() => handleRegenerateGrid()}
+          onAutoSmooth={handleAutoSmooth}
+          onRandomizeUnlocked={handleRandomizeUnlocked}
+          isGenerating={isRegenerating}
+          isSmoothing={isSmoothing}
+          bpmTolerance={bpmTolerance}
+          onBpmToleranceChange={setBpmTolerance}
+          targetTrackCount={targetTrackCount}
+          onTargetTrackCountChange={setTargetTrackCount}
+        />
 
         {/* Center Canvas: Session Grid */}
         <section className="flex-1 relative flex flex-col overflow-hidden bg-[#070815]" style={{
@@ -598,65 +554,6 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
             </div>
           </div>
 
-          {/* Global Action Bar - Now functional */}
-          <div className="h-12 border-t border-white/5 bg-black/40 flex items-center px-6 gap-6 z-20">
-            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Global Ops</span>
-            <div className="h-4 w-px bg-white/10" />
-            <button
-              onClick={handleRegenerateGrid}
-              disabled={isRegenerating || !currentSet?.prompt}
-              className={cn(
-                "text-[9px] font-bold px-3 py-1 rounded-full border transition-all uppercase flex items-center gap-2",
-                isRegenerating
-                  ? "text-cyan-400/50 border-cyan-400/10 cursor-not-allowed"
-                  : "text-cyan-400 hover:bg-cyan-400/10 border-cyan-400/20"
-              )}
-            >
-              {isRegenerating ? (
-                <>
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Regenerating...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="w-3 h-3" />
-                  Regenerate Grid
-                </>
-              )}
-            </button>
-            <button
-              onClick={handleAutoSmooth}
-              disabled={isSmoothing || playlist.length < 2}
-              className={cn(
-                "text-[9px] font-bold px-3 py-1 rounded-full border transition-all uppercase flex items-center gap-2",
-                isSmoothing
-                  ? "text-pink-400/50 border-pink-400/10 cursor-not-allowed"
-                  : "text-pink-400 hover:bg-pink-400/10 border-pink-400/20"
-              )}
-            >
-              {isSmoothing ? (
-                <>
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Smoothing...
-                </>
-              ) : (
-                'Auto-Smooth Transitions'
-              )}
-            </button>
-            <button
-              onClick={handleRandomizeUnlocked}
-              disabled={playlist.filter(n => !n.isLocked).length < 2}
-              className={cn(
-                "text-[9px] font-bold px-3 py-1 rounded-full border transition-all uppercase flex items-center gap-2",
-                playlist.filter(n => !n.isLocked).length < 2
-                  ? "text-white/30 border-white/10 cursor-not-allowed"
-                  : "text-white hover:bg-white/10 border-white/20"
-              )}
-            >
-              <Shuffle className="w-3 h-3" />
-              Randomize Unlocked
-            </button>
-          </div>
         </section>
 
         {/* Right Sidebar: Inspector */}
