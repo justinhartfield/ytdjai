@@ -28,7 +28,10 @@ export function YouTubePlayer({ className }: YouTubePlayerProps) {
   const onPlayerReady: YouTubeProps['onReady'] = (event) => {
     console.log('[YouTubePlayer] Player ready, videoId:', currentVideoId, 'isPlaying:', isPlaying)
     playerRef.current = event.target
+    // Ensure player is unmuted and volume is set
+    playerRef.current.unMute()
     playerRef.current.setVolume(volume)
+    console.log('[YouTubePlayer] Volume set to:', volume, 'isMuted:', playerRef.current.isMuted())
     // Explicitly start playback when player is ready if isPlaying is true
     // This is needed because autoplay may be blocked by the browser
     if (isPlaying) {
@@ -104,10 +107,11 @@ export function YouTubePlayer({ className }: YouTubePlayerProps) {
     }
   }, [stopProgressTracking])
 
-  // Player options - hidden player for audio only
+  // Player options - small but visible player to avoid browser muting
+  // Browsers may mute videos with 0x0 dimensions
   const opts: YouTubeProps['opts'] = {
-    height: '0',
-    width: '0',
+    height: '1',
+    width: '1',
     playerVars: {
       autoplay: 1,
       controls: 0,
