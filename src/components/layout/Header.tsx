@@ -18,11 +18,15 @@ import { cn } from '@/lib/utils'
 import { Button, Badge, Dropdown } from '@/components/ui'
 import { useYTDJStore } from '@/store'
 import { AISettingsModal } from '@/components/features/AISettingsModal'
+import { SaveSetDialog } from '@/components/features/SaveSetDialog'
+import { BrowseSetsModal } from '@/components/features/BrowseSetsModal'
 
 export function Header() {
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showAISettings, setShowAISettings] = useState(false)
-  const { aiProvider, currentSet, sets } = useYTDJStore()
+  const [showSaveDialog, setShowSaveDialog] = useState(false)
+  const [showBrowseSets, setShowBrowseSets] = useState(false)
+  const { aiProvider, currentSet, sets, setCurrentSet } = useYTDJStore()
 
   const providerLabels = {
     openai: 'GPT-4',
@@ -52,7 +56,12 @@ export function Header() {
 
           {/* Project Selector */}
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="text-white/60">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-white/60"
+              onClick={() => setShowBrowseSets(true)}
+            >
               <FolderOpen className="w-4 h-4 mr-2" />
               {currentSet?.name || 'Untitled Set'}
               <ChevronDown className="w-4 h-4 ml-1" />
@@ -62,11 +71,29 @@ export function Header() {
 
         {/* Center: Quick Actions */}
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              const newSet = {
+                id: `set-${Date.now()}`,
+                name: 'New Set',
+                playlist: [],
+                createdAt: new Date(),
+                updatedAt: new Date()
+              }
+              setCurrentSet(newSet)
+            }}
+          >
             <Plus className="w-4 h-4 mr-1" />
             New Set
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowSaveDialog(true)}
+            disabled={!currentSet || currentSet.playlist.length === 0}
+          >
             <Save className="w-4 h-4 mr-1" />
             Save
           </Button>
@@ -157,6 +184,12 @@ export function Header() {
 
       {/* AI Settings Modal */}
       <AISettingsModal isOpen={showAISettings} onClose={() => setShowAISettings(false)} />
+
+      {/* Save Set Dialog */}
+      <SaveSetDialog isOpen={showSaveDialog} onClose={() => setShowSaveDialog(false)} />
+
+      {/* Browse Sets Modal */}
+      <BrowseSetsModal isOpen={showBrowseSets} onClose={() => setShowBrowseSets(false)} />
     </>
   )
 }
