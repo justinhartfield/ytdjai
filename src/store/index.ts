@@ -103,6 +103,14 @@ interface YTDJState {
 
   // Initialize
   initializeStore: () => void
+
+  // Cloud Sync
+  saveSetToCloud: (setId?: string) => Promise<{ success: boolean; error?: string }>
+  loadSetFromCloud: (setId: string) => Promise<{ success: boolean; error?: string }>
+  listCloudSets: () => Promise<{ success: boolean; sets?: any[]; error?: string }>
+  deleteSetFromCloud: (setId: string) => Promise<{ success: boolean; error?: string }>
+  isSyncing: boolean
+  setSyncing: (syncing: boolean) => void
 }
 
 export const useYTDJStore = create<YTDJState>()(
@@ -383,6 +391,118 @@ export const useYTDJStore = create<YTDJState>()(
               updatedAt: new Date()
             }
           })
+        }
+      },
+
+      // Cloud Sync
+      isSyncing: false,
+      setSyncing: (syncing) => set({ isSyncing: syncing }),
+
+      saveSetToCloud: async (setId) => {
+        const state = get()
+        const setToSave = setId
+          ? state.sets.find(s => s.id === setId) || state.currentSet
+          : state.currentSet
+
+        if (!setToSave) {
+          return { success: false, error: 'No set to save' }
+        }
+
+        try {
+          set({ isSyncing: true })
+          const response = await fetch('/api/sets/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ setData: setToSave })
+          })
+
+          const data = await response.json()
+          set({ isSyncing: false })
+
+          if (!response.ok) {
+            return { success: false, error: data.error || 'Failed to save set' }
+          }
+
+          return { success: true }
+        } catch (error) {
+          set({ isSyncing: false })
+          return { success: false, error: 'Network error' }
+        }
+      },
+
+      loadSetFromCloud: async (setId) => {
+        try {
+          set({ isSyncing: true })
+          const response = await fetch(`/api/sets/${setId}`)
+          const data = await response.json()
+          set({ isSyncing: false })
+
+          if (!response.ok) {
+            return { success: false, error: data.error || 'Failed to load set' }
+          }
+
+          // Load the set and make it the current set
+          const loadedSet = data.set
+          set((state) => {
+            const existingSetIndex = state.sets.findIndex(s => s.id === loadedSet.id)
+            const newSets = existingSetIndex >= 0
+              ? state.sets.map((s, i) => i === existingSetIndex ? loadedSet : s)
+              : [...state.sets, loadedSet]
+
+            return {
+              currentSet: loadedSet,
+              sets: newSets
+            }
+          })
+
+          return { success: true }
+        } catch (error) {
+          set({ isSyncing: false })
+          return { success: false, error: 'Network error' }
+        }
+      },
+
+      listCloudSets: async () => {
+        try {
+          set({ isSyncing: true })
+          const response = await fetch('/api/sets/list')
+          const data = await response.json()
+          set({ isSyncing: false })
+
+          if (!response.ok) {
+            return { success: false, error: data.error || 'Failed to list sets' }
+          }
+
+          return { success: true, sets: data.sets }
+        } catch (error) {
+          set({ isSyncing: false })
+          return { success: false, error: 'Network error' }
+        }
+      },
+
+      deleteSetFromCloud: async (setId) => {
+        try {
+          set({ isSyncing: true })
+          const response = await fetch(`/api/sets/${setId}`, {
+            method: 'DELETE'
+          })
+          const data = await response.json()
+          set({ isSyncing: false })
+
+          if (!response.ok) {
+            return { success: false, error: data.error || 'Failed to delete set' }
+          }
+
+          // Also remove from local state
+          set((state) => ({
+            sets: state.sets.filter(s => s.id !== setId),
+            currentSet: state.currentSet?.id === setId ? null : state.currentSet
+          }))
+
+          return { success: true }
+        } catch (error) {
+          set({ isSyncing: false })
+          return { success: false, error: 'Network error' }
         }
       }
     }),
