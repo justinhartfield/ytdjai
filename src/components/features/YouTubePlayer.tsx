@@ -21,15 +21,26 @@ export function YouTubePlayer({ className }: YouTubePlayerProps) {
 
   const { currentVideoId, isPlaying, volume } = player
 
+  // Debug logging
+  console.log('[YouTubePlayer] Render - videoId:', currentVideoId, 'isPlaying:', isPlaying)
+
   // Handle player ready
   const onPlayerReady: YouTubeProps['onReady'] = (event) => {
+    console.log('[YouTubePlayer] Player ready, videoId:', currentVideoId, 'isPlaying:', isPlaying)
     playerRef.current = event.target
     playerRef.current.setVolume(volume)
+    // Explicitly start playback when player is ready if isPlaying is true
+    // This is needed because autoplay may be blocked by the browser
+    if (isPlaying) {
+      console.log('[YouTubePlayer] Calling playVideo()')
+      playerRef.current.playVideo()
+    }
   }
 
   // Handle state changes
   const onStateChange: YouTubeProps['onStateChange'] = (event) => {
     const state = event.data
+    console.log('[YouTubePlayer] State change:', state, '(-1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued)')
 
     // YouTube states: -1 (unstarted), 0 (ended), 1 (playing), 2 (paused), 3 (buffering), 5 (cued)
     if (state === 1) {
@@ -77,7 +88,7 @@ export function YouTubePlayer({ className }: YouTubePlayerProps) {
     } else {
       playerRef.current.pauseVideo()
     }
-  }, [isPlaying])
+  }, [isPlaying, currentVideoId])
 
   // Update volume
   useEffect(() => {

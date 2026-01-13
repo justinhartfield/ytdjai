@@ -14,7 +14,8 @@ async function searchYouTube(query: string): Promise<YouTubeSearchResult | null>
   const apiKey = process.env.YOUTUBE_API_KEY || process.env.GOOGLE_AI_API_KEY
 
   if (!apiKey) {
-    console.log('No YouTube API key available')
+    console.error('[YouTube] ERROR: No YOUTUBE_API_KEY or GOOGLE_AI_API_KEY environment variable set!')
+    console.error('[YouTube] Please add YOUTUBE_API_KEY to your .env.local file')
     return null
   }
 
@@ -82,9 +83,11 @@ async function enrichTracksWithYouTube(tracks: Partial<Track>[]): Promise<Partia
   const enrichedTracks = await Promise.all(
     tracks.map(async (track) => {
       const query = `${track.artist} - ${track.title} official audio`
+      console.log(`[YouTube] Searching for: "${query}"`)
       const result = await searchYouTube(query)
 
       if (result) {
+        console.log(`[YouTube] Found video for "${track.artist} - ${track.title}": ${result.videoId}`)
         return {
           ...track,
           youtubeId: result.videoId,
@@ -93,6 +96,7 @@ async function enrichTracksWithYouTube(tracks: Partial<Track>[]): Promise<Partia
         }
       }
 
+      console.warn(`[YouTube] WARNING: No YouTube video found for "${track.artist} - ${track.title}" - track will have invalid youtubeId`)
       return track
     })
   )

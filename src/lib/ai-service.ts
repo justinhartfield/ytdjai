@@ -83,11 +83,12 @@ export async function swapTrack(request: SwapTrackRequest): Promise<SwapResponse
 
 /**
  * Mock track database for demo/fallback purposes
+ * Using real YouTube video IDs for actual playback
  */
 export const MOCK_TRACKS: Track[] = [
   {
     id: '1',
-    youtubeId: 'dQw4w9WgXcQ',
+    youtubeId: 'tKi9Z-f6qX4',  // deadmau5 - Strobe
     title: 'Strobe',
     artist: 'deadmau5',
     duration: 637,
@@ -95,11 +96,11 @@ export const MOCK_TRACKS: Track[] = [
     key: 'F minor',
     genre: 'Progressive House',
     energy: 0.7,
-    thumbnail: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg'
+    thumbnail: 'https://i.ytimg.com/vi/tKi9Z-f6qX4/hqdefault.jpg'
   },
   {
     id: '2',
-    youtubeId: 'abc123',
+    youtubeId: 'iRA82xLsb_w',  // Eric Prydz - Opus
     title: 'Opus',
     artist: 'Eric Prydz',
     duration: 540,
@@ -107,11 +108,11 @@ export const MOCK_TRACKS: Track[] = [
     key: 'A minor',
     genre: 'Progressive House',
     energy: 0.8,
-    thumbnail: 'https://i.ytimg.com/vi/abc123/hqdefault.jpg'
+    thumbnail: 'https://i.ytimg.com/vi/iRA82xLsb_w/hqdefault.jpg'
   },
   {
     id: '3',
-    youtubeId: 'def456',
+    youtubeId: 'ckDFjYcBzoc',  // Oliver Heldens - Gecko (Overdrive)
     title: 'Gecko (Overdrive)',
     artist: 'Oliver Heldens',
     duration: 210,
@@ -119,11 +120,11 @@ export const MOCK_TRACKS: Track[] = [
     key: 'G minor',
     genre: 'Future House',
     energy: 0.85,
-    thumbnail: 'https://i.ytimg.com/vi/def456/hqdefault.jpg'
+    thumbnail: 'https://i.ytimg.com/vi/ckDFjYcBzoc/hqdefault.jpg'
   },
   {
     id: '4',
-    youtubeId: 'ghi789',
+    youtubeId: 'P8JEm4d6Wu4',  // Faithless - Insomnia
     title: 'Insomnia',
     artist: 'Faithless',
     duration: 420,
@@ -131,11 +132,11 @@ export const MOCK_TRACKS: Track[] = [
     key: 'D minor',
     genre: 'Trance',
     energy: 0.9,
-    thumbnail: 'https://i.ytimg.com/vi/ghi789/hqdefault.jpg'
+    thumbnail: 'https://i.ytimg.com/vi/P8JEm4d6Wu4/hqdefault.jpg'
   },
   {
     id: '5',
-    youtubeId: 'jkl012',
+    youtubeId: '2EaE0_gQLw0',  // Tiësto - Adagio for Strings
     title: 'Adagio for Strings',
     artist: 'Tiësto',
     duration: 480,
@@ -143,11 +144,11 @@ export const MOCK_TRACKS: Track[] = [
     key: 'B♭ minor',
     genre: 'Trance',
     energy: 0.95,
-    thumbnail: 'https://i.ytimg.com/vi/jkl012/hqdefault.jpg'
+    thumbnail: 'https://i.ytimg.com/vi/2EaE0_gQLw0/hqdefault.jpg'
   },
   {
     id: '6',
-    youtubeId: 'mno345',
+    youtubeId: 'QV8eiSA4vqc',  // deadmau5 - Ghosts n Stuff
     title: 'Ghosts n Stuff',
     artist: 'deadmau5 ft. Rob Swire',
     duration: 360,
@@ -155,11 +156,11 @@ export const MOCK_TRACKS: Track[] = [
     key: 'E minor',
     genre: 'Electro House',
     energy: 0.8,
-    thumbnail: 'https://i.ytimg.com/vi/mno345/hqdefault.jpg'
+    thumbnail: 'https://i.ytimg.com/vi/QV8eiSA4vqc/hqdefault.jpg'
   },
   {
     id: '7',
-    youtubeId: 'pqr678',
+    youtubeId: '_ovdm2yX4MA',  // Avicii - Levels
     title: 'Levels',
     artist: 'Avicii',
     duration: 210,
@@ -167,11 +168,11 @@ export const MOCK_TRACKS: Track[] = [
     key: 'F♯ minor',
     genre: 'Progressive House',
     energy: 0.9,
-    thumbnail: 'https://i.ytimg.com/vi/pqr678/hqdefault.jpg'
+    thumbnail: 'https://i.ytimg.com/vi/_ovdm2yX4MA/hqdefault.jpg'
   },
   {
     id: '8',
-    youtubeId: 'stu901',
+    youtubeId: 'OOmRyyHhui8',  // Energy 52 - Cafe Del Mar
     title: 'Cafe Del Mar',
     artist: 'Energy 52',
     duration: 450,
@@ -179,7 +180,7 @@ export const MOCK_TRACKS: Track[] = [
     key: 'C minor',
     genre: 'Trance',
     energy: 0.75,
-    thumbnail: 'https://i.ytimg.com/vi/stu901/hqdefault.jpg'
+    thumbnail: 'https://i.ytimg.com/vi/OOmRyyHhui8/hqdefault.jpg'
   }
 ]
 
