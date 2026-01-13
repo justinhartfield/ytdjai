@@ -45,6 +45,7 @@ export interface PlaylistNode {
   isBpmLocked?: boolean
   state?: NodeState
   transitionToNext?: Transition
+  startTime?: number // Start playback at this time (in seconds) - useful for skipping intros
 }
 
 export type NodeState =

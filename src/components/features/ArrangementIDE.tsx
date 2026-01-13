@@ -5,12 +5,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Zap, Undo2, Redo2, Download, Play, Pause, SkipBack, SkipForward,
   Lock, Unlock, Trash2, X, RefreshCw, Settings2, Sparkles, Loader2,
-  Volume2, VolumeX, Plus
+  Volume2, VolumeX, Plus, Clock
 } from 'lucide-react'
 import { cn, formatDuration } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
 import { generatePlaylist, swapTrack } from '@/lib/ai-service'
-import { YouTubePlayer, formatTime } from './YouTubePlayer'
+import { formatTime } from './YouTubePlayer'
 import { IconSidebar } from './IconSidebar'
 import { AIConstraintsDrawer } from './AIConstraintsDrawer'
 import { SetsDashboard } from './SetsDashboard'
@@ -46,7 +46,8 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
     ui,
     setLeftSidebarPanel,
     setCurrentSet,
-    constraints
+    constraints,
+    updateNodeStartTime
   } = useYTDJStore()
   const playlist = currentSet?.playlist || []
   const [editingPrompt, setEditingPrompt] = useState(currentSet?.prompt || '')
@@ -981,9 +982,6 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
           <footer className="h-24 bg-[#0a0c1c]/80 backdrop-blur-xl border-t border-white/5 flex items-center px-8 gap-12 relative">
             <div className="absolute top-0 left-0 w-1 h-full bg-cyan-500" />
 
-            {/* YouTube Player (hidden) */}
-            <YouTubePlayer />
-
             {/* Playback Controls */}
             <div className="flex items-center gap-6">
               <button
@@ -1137,6 +1135,44 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                       <div className="text-lg font-black text-pink-500">{selectedNode.track.key || 'N/A'}</div>
                     </div>
                   </div>
+                </div>
+
+                {/* Start Time Control */}
+                <div className="bg-white/5 rounded-2xl p-4 border border-white/5 space-y-3">
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                    <Clock className="w-3 h-3" />
+                    Start Time
+                  </h4>
+                  <p className="text-[10px] text-gray-500">Skip intro and start playback at a specific time</p>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="0"
+                      max={selectedNode.track.duration || 300}
+                      value={selectedNode.startTime || 0}
+                      onChange={(e) => {
+                        if (selectedNodeIndex !== null) {
+                          updateNodeStartTime(selectedNodeIndex, parseInt(e.target.value))
+                        }
+                      }}
+                      className="flex-1 h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                    />
+                    <div className="text-sm font-mono text-white min-w-[50px] text-right">
+                      {formatTime(selectedNode.startTime || 0)}
+                    </div>
+                  </div>
+                  {(selectedNode.startTime || 0) > 0 && (
+                    <button
+                      onClick={() => {
+                        if (selectedNodeIndex !== null) {
+                          updateNodeStartTime(selectedNodeIndex, 0)
+                        }
+                      }}
+                      className="text-[10px] text-gray-500 hover:text-white transition-colors"
+                    >
+                      Reset to beginning
+                    </button>
+                  )}
                 </div>
 
                 {/* AI Reasoning */}

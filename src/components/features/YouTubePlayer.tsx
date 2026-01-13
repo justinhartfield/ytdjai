@@ -19,7 +19,7 @@ export function YouTubePlayer({ className }: YouTubePlayerProps) {
     currentSet
   } = useYTDJStore()
 
-  const { currentVideoId, isPlaying, volume } = player
+  const { currentVideoId, isPlaying, volume, startTime } = player
 
   // Handle player ready
   const onPlayerReady: YouTubeProps['onReady'] = (event) => {
@@ -27,6 +27,10 @@ export function YouTubePlayer({ className }: YouTubePlayerProps) {
     // Ensure player is unmuted and volume is set
     playerRef.current.unMute()
     playerRef.current.setVolume(volume)
+    // Seek to start time if specified (for skipping intros)
+    if (startTime > 0) {
+      playerRef.current.seekTo(startTime, true)
+    }
     // Explicitly start playback when player is ready if isPlaying is true
     // This is needed because autoplay may be blocked by the browser
     if (isPlaying) {

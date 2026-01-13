@@ -21,6 +21,7 @@ interface PlayerState {
   duration: number
   volume: number
   playingNodeIndex: number | null
+  startTime: number // Start time for current track (for skipping intros)
 }
 
 // UI State
@@ -60,6 +61,7 @@ interface YTDJState {
   updatePlaylist: (playlist: PlaylistNode[]) => void
   updateSetWithPrompt: (playlist: PlaylistNode[], prompt: string) => void
   updatePrompt: (prompt: string) => void
+  updateNodeStartTime: (nodeIndex: number, startTime: number) => void
 
   // Player State
   player: PlayerState
@@ -146,6 +148,15 @@ export const useYTDJStore = create<YTDJState>()(
           currentSet: { ...state.currentSet, prompt, updatedAt: new Date() }
         }
       }),
+      updateNodeStartTime: (nodeIndex, startTime) => set((state) => {
+        if (!state.currentSet) return state
+        const playlist = [...state.currentSet.playlist]
+        if (nodeIndex < 0 || nodeIndex >= playlist.length) return state
+        playlist[nodeIndex] = { ...playlist[nodeIndex], startTime }
+        return {
+          currentSet: { ...state.currentSet, playlist, updatedAt: new Date() }
+        }
+      }),
 
       // Player State
       player: {
@@ -154,7 +165,8 @@ export const useYTDJStore = create<YTDJState>()(
         currentTime: 0,
         duration: 0,
         volume: 80,
-        playingNodeIndex: null
+        playingNodeIndex: null,
+        startTime: 0
       },
       setPlayerState: (playerUpdates) => set((state) => ({
         player: { ...state.player, ...playerUpdates }
@@ -163,13 +175,15 @@ export const useYTDJStore = create<YTDJState>()(
         const playlist = state.currentSet?.playlist || []
         const node = playlist[nodeIndex]
         if (!node?.track?.youtubeId) return state
+        const startTime = node.startTime || 0
         return {
           player: {
             ...state.player,
             currentVideoId: node.track.youtubeId,
             isPlaying: true,
             playingNodeIndex: nodeIndex,
-            currentTime: 0
+            currentTime: startTime,
+            startTime
           }
         }
       }),
@@ -192,13 +206,15 @@ export const useYTDJStore = create<YTDJState>()(
         const nextIndex = currentIndex + 1
         const nextNode = playlist[nextIndex]
         if (!nextNode?.track?.youtubeId) return state
+        const startTime = nextNode.startTime || 0
         return {
           player: {
             ...state.player,
             currentVideoId: nextNode.track.youtubeId,
             isPlaying: true,
             playingNodeIndex: nextIndex,
-            currentTime: 0
+            currentTime: startTime,
+            startTime
           }
         }
       }),
@@ -209,13 +225,15 @@ export const useYTDJStore = create<YTDJState>()(
         const prevIndex = currentIndex - 1
         const prevNode = playlist[prevIndex]
         if (!prevNode?.track?.youtubeId) return state
+        const startTime = prevNode.startTime || 0
         return {
           player: {
             ...state.player,
             currentVideoId: prevNode.track.youtubeId,
             isPlaying: true,
             playingNodeIndex: prevIndex,
-            currentTime: 0
+            currentTime: startTime,
+            startTime
           }
         }
       }),

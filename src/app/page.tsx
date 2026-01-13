@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { LaunchPad, ArrangementIDE, SessionView } from '@/components/features'
+import { LaunchPad, ArrangementIDE, SessionView, YouTubePlayer } from '@/components/features'
 import { useYTDJStore } from '@/store'
 
 type IDEView = 'arrangement' | 'session'
@@ -52,6 +52,9 @@ export default function Home() {
           transition={{ duration: 0.3 }}
           className="h-screen bg-[#05060f] overflow-hidden"
         >
+          {/* YouTube Player - persists across view changes */}
+          <YouTubePlayer />
+
           {currentView === 'arrangement' ? (
             <ArrangementIDE
               onViewChange={handleViewChange}
