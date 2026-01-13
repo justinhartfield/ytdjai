@@ -144,11 +144,11 @@ export function TrackCard({
         <p className="text-sm text-white/50 truncate">{track.artist}</p>
       </div>
 
-      {/* BPM & Key */}
+      {/* Energy & Key */}
       <div className="hidden sm:flex items-center gap-2">
-        {track.bpm && (
+        {track.energy && (
           <Badge variant="default" className="text-xs">
-            {track.bpm} BPM
+            Energy: {track.energy}
           </Badge>
         )}
         {track.key && (

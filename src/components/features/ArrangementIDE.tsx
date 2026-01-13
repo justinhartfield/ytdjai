@@ -72,11 +72,11 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null)
   const [isDraggingHorizontal, setIsDraggingHorizontal] = useState(false)
   const [isDraggingVertical, setIsDraggingVertical] = useState(false)
-  const [currentDragBpm, setCurrentDragBpm] = useState<number | null>(null)
+  const [currentDragEnergy, setCurrentDragEnergy] = useState<number | null>(null)
   const [swapPreview, setSwapPreview] = useState<Track | null>(null)
   const [isLoadingSwap, setIsLoadingSwap] = useState(false)
-  const [lastFetchedBpm, setLastFetchedBpm] = useState<number | null>(null)
-  const [bpmTolerance, setBpmTolerance] = useState(5)
+  const [lastFetchedEnergy, setLastFetchedEnergy] = useState<number | null>(null)
+  const [energyTolerance, setEnergyTolerance] = useState(10)
   const [showExport, setShowExport] = useState(false)
   const [targetTrackCount, setTargetTrackCount] = useState(8)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
@@ -101,7 +101,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
       const deltaX = Math.abs(e.clientX - dragStartX)
       const deltaY = Math.abs(e.clientY - dragStartY)
 
-      // Determine drag direction - horizontal for reorder, vertical for BPM
+      // Determine drag direction - horizontal for reorder, vertical for Energy
       // Only lock in direction once we've moved enough
       if (!isDraggingHorizontal && !isDraggingVertical) {
         if (deltaX > 10 && deltaX > deltaY) {
@@ -135,13 +135,13 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
           setDropTargetIndex(newDropIndex)
         }
       } else if (isDraggingVertical) {
-        // Vertical drag - BPM adjustment and track swap preview
+        // Vertical drag - Energy adjustment and track swap preview
         const y = ((e.clientY - rect.top) / rect.height) * 100
         const clampedY = Math.max(10, Math.min(90, y))
 
-        // Convert Y to BPM (200 at top, 60 at bottom)
-        const newBpm = Math.round(200 - (clampedY / 100) * 140)
-        setCurrentDragBpm(newBpm)
+        // Convert Y to Energy (100 at top, 1 at bottom)
+        const newEnergy = Math.round(100 - (clampedY / 100) * 99)
+        setCurrentDragEnergy(newEnergy)
 
         // Check if Y position has stabilized (not moving much)
         const deltaY = lastDragY.current !== null ? Math.abs(e.clientY - lastDragY.current) : 0
@@ -152,17 +152,17 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
           clearTimeout(swapDebounceRef.current)
         }
 
-        // Only fetch if BPM changed significantly and we're not already loading
-        const bpmChanged = lastFetchedBpm === null || Math.abs(newBpm - lastFetchedBpm) > 5
+        // Only fetch if Energy changed significantly and we're not already loading
+        const energyChanged = lastFetchedEnergy === null || Math.abs(newEnergy - lastFetchedEnergy) > 5
 
-        if (bpmChanged && !isLoadingSwap && deltaY < 5) {
+        if (energyChanged && !isLoadingSwap && deltaY < 5) {
           // Start debounce timer - fetch after 800ms of pausing
           swapDebounceRef.current = setTimeout(async () => {
             const draggedNode = playlist[draggedIndex]
             if (!draggedNode) return
 
             setIsLoadingSwap(true)
-            setLastFetchedBpm(newBpm)
+            setLastFetchedEnergy(newEnergy)
 
             try {
               const previousNode = draggedIndex > 0 ? playlist[draggedIndex - 1] : undefined
@@ -172,7 +172,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                 currentTrack: draggedNode.track,
                 previousTrack: previousNode?.track,
                 nextTrack: nextNode?.track,
-                targetBpm: newBpm,
+                targetEnergy: newEnergy,
                 provider: aiProvider
               })
 
@@ -213,16 +213,16 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
             newPlaylist[draggedIndex] = {
               ...newPlaylist[draggedIndex],
               track: swapPreview,
-              targetBpm: swapPreview.bpm
+              targetEnergy: swapPreview.energy
             }
             updatePlaylist(newPlaylist)
             console.log('[Swap] Committed track swap:', swapPreview.artist, '-', swapPreview.title)
-          } else if (currentDragBpm !== null) {
-            // Just update the target BPM if no swap preview available
+          } else if (currentDragEnergy !== null) {
+            // Just update the target Energy if no swap preview available
             const newPlaylist = [...playlist]
             newPlaylist[draggedIndex] = {
               ...newPlaylist[draggedIndex],
-              targetBpm: currentDragBpm
+              targetEnergy: currentDragEnergy
             }
             updatePlaylist(newPlaylist)
           }
@@ -234,10 +234,10 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
       setDropTargetIndex(null)
       setIsDraggingHorizontal(false)
       setIsDraggingVertical(false)
-      setCurrentDragBpm(null)
+      setCurrentDragEnergy(null)
       setSwapPreview(null)
       setIsLoadingSwap(false)
-      setLastFetchedBpm(null)
+      setLastFetchedEnergy(null)
       lastDragY.current = null
     }
 
@@ -252,16 +252,16 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
         clearTimeout(swapDebounceRef.current)
       }
     }
-  }, [draggedIndex, dragStartX, dragStartY, isDraggingHorizontal, isDraggingVertical, currentDragBpm, playlist, dropTargetIndex, updatePlaylist, isLoadingSwap, lastFetchedBpm, aiProvider, swapPreview])
+  }, [draggedIndex, dragStartX, dragStartY, isDraggingHorizontal, isDraggingVertical, currentDragEnergy, playlist, dropTargetIndex, updatePlaylist, isLoadingSwap, lastFetchedEnergy, aiProvider, swapPreview])
 
-  // Calculate node positions based on BPM (use targetBpm if set, otherwise track.bpm)
+  // Calculate node positions based on Energy (use targetEnergy if set, otherwise track.energy)
   const nodePositions = useMemo(() => {
     return playlist.map((node, index) => {
       const x = ((index + 1) / (playlist.length + 1)) * 100
-      const bpm = node.targetBpm || node.track.bpm || 120
-      // Map BPM (60-200) to Y position (canvas height percentage)
-      const y = 100 - ((bpm - 60) / 140) * 100
-      return { x, y: Math.max(10, Math.min(90, y)), bpm }
+      const energy = node.targetEnergy || node.track.energy || 50
+      // Map Energy (1-100) to Y position (canvas height percentage)
+      const y = 100 - ((energy - 1) / 99) * 100
+      return { x, y: Math.max(10, Math.min(90, y)), energy }
     })
   }, [playlist])
 
@@ -288,7 +288,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
     setDragCurrentY(e.clientY)
     setIsDraggingHorizontal(false)
     setIsDraggingVertical(false)
-    setCurrentDragBpm(null)
+    setCurrentDragEnergy(null)
   }, [])
 
   const handleLockToggle = (index: number) => {
@@ -326,9 +326,9 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
         prompt,
         constraints: {
           trackCount,
-          bpmRange: { min: 80, max: 160 },
+          energyRange: { min: 20, max: 80 },
           // Map extended constraints to AIConstraints
-          bpmTolerance: activeConstraints.bpmTolerance,
+          energyTolerance: activeConstraints.energyTolerance,
           syncopation: activeConstraints.syncopation,
           keyMatch: activeConstraints.keyMatch,
           artistDiversity: activeConstraints.diversity,
@@ -363,9 +363,9 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
         prompt,
         constraints: {
           trackCount: countToGenerate,
-          bpmRange: { min: 80, max: 160 },
+          energyRange: { min: 20, max: 80 },
           // Include all extended constraints
-          bpmTolerance: constraints.bpmTolerance,
+          energyTolerance: constraints.energyTolerance,
           syncopation: constraints.syncopation,
           keyMatch: constraints.keyMatch,
           artistDiversity: constraints.diversity,
@@ -418,9 +418,9 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
         prompt: arcPrompt,
         constraints: {
           trackCount,
-          bpmRange: { min: 80, max: 160 },
+          energyRange: { min: 20, max: 80 },
           // Include all extended constraints
-          bpmTolerance: constraints.bpmTolerance,
+          energyTolerance: constraints.energyTolerance,
           syncopation: constraints.syncopation,
           keyMatch: constraints.keyMatch,
           artistDiversity: constraints.diversity,
@@ -566,8 +566,8 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
             }
           }}
           isGenerating={isGenerating}
-          bpmTolerance={bpmTolerance}
-          onBpmToleranceChange={setBpmTolerance}
+          energyTolerance={energyTolerance}
+          onEnergyToleranceChange={setEnergyTolerance}
           targetTrackCount={targetTrackCount}
           onTargetTrackCountChange={setTargetTrackCount}
         />
@@ -582,7 +582,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2 text-[9px] font-bold tracking-[0.2em] text-gray-500">
                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 shadow-[0_0_5px_rgba(0,242,255,1)]" />
-                TEMPO CURVE
+                ENERGY CURVE
               </div>
               <div className="flex items-center gap-2 text-[9px] font-bold tracking-[0.2em] text-gray-500">
                 <div className="w-1.5 h-1.5 rounded-full bg-pink-500" />
@@ -698,7 +698,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                       )}
                     </AnimatePresence>
 
-                    {/* BPM adjustment indicator - show when dragging vertically */}
+                    {/* Energy adjustment indicator - show when dragging vertically */}
                     <AnimatePresence>
                       {isBeingDraggedVertical && (
                         <motion.div
@@ -707,7 +707,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                           exit={{ opacity: 0, scale: 0.8 }}
                           className="absolute -top-10 left-1/2 -translate-x-1/2 bg-pink-500 text-white px-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider shadow-lg z-50 whitespace-nowrap"
                         >
-                          Adjust BPM
+                          Adjust Energy
                         </motion.div>
                       )}
                     </AnimatePresence>
@@ -781,7 +781,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
               )}
             </AnimatePresence>
 
-            {/* Ghost Preview - follows cursor when dragging vertically (BPM adjustment/Track swap) */}
+            {/* Ghost Preview - follows cursor when dragging vertically (Energy adjustment/Track swap) */}
             <AnimatePresence>
               {draggedIndex !== null && isDraggingVertical && canvasRef.current && (
                 <motion.div
@@ -818,7 +818,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                     </div>
                   </div>
 
-                  {/* BPM indicator */}
+                  {/* Energy indicator */}
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -827,7 +827,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                       swapPreview ? "bg-green-500 text-black" : "bg-pink-500 text-white"
                     )}
                   >
-                    {swapPreview?.bpm || currentDragBpm}<span className="text-[10px] ml-1 font-bold">BPM</span>
+                    {swapPreview?.energy || currentDragEnergy}<span className="text-[10px] ml-1 font-bold">Energy</span>
                   </motion.div>
 
                   {/* Track info */}
@@ -913,7 +913,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                   {(isPlaying || playingNodeIndex !== null) && (
                     <>
                       <span>•</span>
-                      <span>{playlist[activeTrackIndex]?.track.bpm || 120} BPM</span>
+                      <span>Energy: {playlist[activeTrackIndex]?.track.energy || 50}</span>
                     </>
                   )}
                 </div>
@@ -1011,8 +1011,8 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                      <div className="text-[8px] font-bold text-gray-500 uppercase mb-1">BPM</div>
-                      <div className="text-lg font-black text-white">{selectedNode.track.bpm || 'N/A'}</div>
+                      <div className="text-[8px] font-bold text-gray-500 uppercase mb-1">Energy</div>
+                      <div className="text-lg font-black text-white">{selectedNode.track.energy || 'N/A'}</div>
                     </div>
                     <div className="bg-white/5 p-3 rounded-xl border border-white/5">
                       <div className="text-[8px] font-bold text-gray-500 uppercase mb-1">Key</div>

@@ -162,7 +162,7 @@ export function PlaylistTimeline({
                         <div className="font-medium text-white">{node.track.title}</div>
                         <div className="text-white/50">{node.track.artist}</div>
                         <div className="flex gap-2 mt-1">
-                          {node.track.bpm && <span className="text-cyan-400">{node.track.bpm} BPM</span>}
+                          {node.track.energy && <span className="text-cyan-400">Energy: {node.track.energy}</span>}
                           {node.track.key && <span className="text-magenta-400">{node.track.key}</span>}
                         </div>
                       </motion.div>

@@ -77,7 +77,7 @@ function parseISO8601Duration(duration: string): number {
 }
 
 async function suggestTrackWithOpenAI(
-  targetBpm: number,
+  targetEnergy: number,
   genre: string,
   mood: string,
   excludeArtists: string[]
@@ -105,17 +105,22 @@ async function suggestTrackWithOpenAI(
             Return ONLY valid JSON with these fields:
             - title: string (track name)
             - artist: string (artist name)
-            - bpm: number (must be within ±3 of the target BPM)
             - key: string (musical key)
             - genre: string
-            - energy: number (0-1)
+            - energy: number (1-100 subjective intensity scale, NOT tempo)
+              1-20: Ambient/chill
+              21-40: Relaxed, groovy
+              41-60: Moderate, steady
+              61-80: High energy, driving
+              81-100: Peak intensity
+              Based on: aggression, rhythmic intensity, emotional intensity, builds/drops
             - aiReasoning: string (IMPORTANT: explain how this track fits the set's style/mood AND how it transitions well from surrounding tracks. Reference the genre/mood directly.)
 
             No markdown, no explanation, just the JSON object.`
           },
           {
             role: 'user',
-            content: `Suggest ONE track at approximately ${targetBpm} BPM.
+            content: `Suggest ONE track with energy around ${targetEnergy} (1-100 scale).
             Style: ${genre || 'electronic dance music'}
             Mood: ${mood || 'energetic'}
             ${excludeArtists.length > 0 ? `Exclude these artists: ${excludeArtists.join(', ')}` : ''}
@@ -153,7 +158,7 @@ async function suggestTrackWithOpenAI(
 }
 
 async function suggestTrackWithClaude(
-  targetBpm: number,
+  targetEnergy: number,
   genre: string,
   mood: string,
   excludeArtists: string[]
@@ -179,7 +184,7 @@ async function suggestTrackWithClaude(
         messages: [
           {
             role: 'user',
-            content: `You are a professional DJ. Suggest ONE track at approximately ${targetBpm} BPM.
+            content: `You are a professional DJ. Suggest ONE track with energy around ${targetEnergy} (1-100 scale).
             Style: ${genre || 'electronic dance music'}
             Mood: ${mood || 'energetic'}
             ${excludeArtists.length > 0 ? `Exclude these artists: ${excludeArtists.join(', ')}` : ''}
@@ -187,10 +192,10 @@ async function suggestTrackWithClaude(
             Return ONLY a JSON object with these fields:
             - title: string (track name)
             - artist: string (artist name)
-            - bpm: number (must be within ±3 of ${targetBpm})
             - key: string (musical key)
             - genre: string
-            - energy: number (0-1)
+            - energy: number (1-100 subjective intensity scale - NOT tempo)
+              1-20: Ambient/chill, 21-40: Relaxed, 41-60: Moderate, 61-80: High energy, 81-100: Peak intensity
             - aiReasoning: string (IMPORTANT: explain how this track fits the "${genre}" style and "${mood}" mood, and how it transitions well from surrounding tracks)
 
             No markdown, no explanation, just the JSON object.`
@@ -219,7 +224,7 @@ async function suggestTrackWithClaude(
 }
 
 async function suggestTrackWithGemini(
-  targetBpm: number,
+  targetEnergy: number,
   genre: string,
   mood: string,
   excludeArtists: string[]
@@ -244,7 +249,7 @@ async function suggestTrackWithGemini(
             {
               parts: [
                 {
-                  text: `You are a professional DJ. Suggest ONE track at approximately ${targetBpm} BPM.
+                  text: `You are a professional DJ. Suggest ONE track with energy around ${targetEnergy} (1-100 scale).
                   Style: ${genre || 'electronic dance music'}
                   Mood: ${mood || 'energetic'}
                   ${excludeArtists.length > 0 ? `Exclude these artists: ${excludeArtists.join(', ')}` : ''}
@@ -252,10 +257,10 @@ async function suggestTrackWithGemini(
                   Return ONLY a JSON object with these fields:
                   - title: string (track name)
                   - artist: string (artist name)
-                  - bpm: number (must be within ±3 of ${targetBpm})
                   - key: string (musical key)
                   - genre: string
-                  - energy: number (0-1)
+                  - energy: number (1-100 subjective intensity scale - NOT tempo)
+                    1-20: Ambient/chill, 21-40: Relaxed, 41-60: Moderate, 61-80: High energy, 81-100: Peak intensity
                   - aiReasoning: string (IMPORTANT: explain how this track fits the "${genre}" style and "${mood}" mood, and how it transitions well from surrounding tracks)
 
                   No markdown, no explanation, just the JSON object.`
@@ -300,7 +305,6 @@ async function enrichTrackWithYouTube(track: Partial<Track>): Promise<Track> {
     title: track.title || 'Unknown Track',
     artist: track.artist || 'Unknown Artist',
     duration: result?.duration || track.duration || 240,
-    bpm: track.bpm,
     key: track.key,
     genre: track.genre,
     energy: track.energy,
@@ -316,16 +320,16 @@ export async function POST(request: NextRequest) {
       currentTrack,
       previousTrack,
       nextTrack,
-      targetBpm,
+      targetEnergy,
       constraints,
       provider = 'openai'
     } = body
 
     console.log('[Swap API] Request received:', {
       provider,
-      targetBpm,
+      targetEnergy,
       currentTrack: currentTrack?.title,
-      currentBpm: currentTrack?.bpm
+      currentEnergy: currentTrack?.energy
     })
 
     if (!currentTrack) {
@@ -335,38 +339,38 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Calculate target BPM if not provided
-    let finalTargetBpm = targetBpm
-    if (!finalTargetBpm) {
-      if (previousTrack?.bpm && nextTrack?.bpm) {
-        finalTargetBpm = Math.round((previousTrack.bpm + nextTrack.bpm) / 2)
-      } else if (previousTrack?.bpm) {
-        finalTargetBpm = previousTrack.bpm + 2
-      } else if (nextTrack?.bpm) {
-        finalTargetBpm = nextTrack.bpm - 2
+    // Calculate target energy if not provided (1-100 scale)
+    let finalTargetEnergy = targetEnergy
+    if (!finalTargetEnergy) {
+      if (previousTrack?.energy && nextTrack?.energy) {
+        finalTargetEnergy = Math.round((previousTrack.energy + nextTrack.energy) / 2)
+      } else if (previousTrack?.energy) {
+        finalTargetEnergy = Math.min(100, previousTrack.energy + 5)
+      } else if (nextTrack?.energy) {
+        finalTargetEnergy = Math.max(1, nextTrack.energy - 5)
       } else {
-        finalTargetBpm = currentTrack.bpm || 128
+        finalTargetEnergy = currentTrack.energy || 60
       }
     }
 
     const genre = currentTrack.genre || 'electronic dance music'
-    const mood = currentTrack.energy && currentTrack.energy > 0.7 ? 'high energy' : 'groovy'
+    const mood = currentTrack.energy && currentTrack.energy > 70 ? 'high energy' : 'groovy'
     const excludeArtists = [currentTrack.artist, previousTrack?.artist, nextTrack?.artist].filter(Boolean) as string[]
 
-    console.log('[Swap API] Searching for track at', finalTargetBpm, 'BPM, genre:', genre)
+    console.log('[Swap API] Searching for track with energy', finalTargetEnergy, ', genre:', genre)
 
     let suggestedTrack: Partial<Track> | null = null
 
     switch (provider) {
       case 'claude':
-        suggestedTrack = await suggestTrackWithClaude(finalTargetBpm, genre, mood, excludeArtists)
+        suggestedTrack = await suggestTrackWithClaude(finalTargetEnergy, genre, mood, excludeArtists)
         break
       case 'gemini':
-        suggestedTrack = await suggestTrackWithGemini(finalTargetBpm, genre, mood, excludeArtists)
+        suggestedTrack = await suggestTrackWithGemini(finalTargetEnergy, genre, mood, excludeArtists)
         break
       case 'openai':
       default:
-        suggestedTrack = await suggestTrackWithOpenAI(finalTargetBpm, genre, mood, excludeArtists)
+        suggestedTrack = await suggestTrackWithOpenAI(finalTargetEnergy, genre, mood, excludeArtists)
         break
     }
 
@@ -377,26 +381,26 @@ export async function POST(request: NextRequest) {
     // Enrich with YouTube data
     const newTrack = await enrichTrackWithYouTube(suggestedTrack)
 
-    // Calculate transition quality
+    // Calculate transition quality based on energy (1-100 scale)
     let transitionQuality: 'excellent' | 'good' | 'fair' | 'poor' = 'good'
-    if (previousTrack?.bpm && newTrack.bpm) {
-      const bpmDiff = Math.abs(previousTrack.bpm - newTrack.bpm)
-      if (bpmDiff <= 3) transitionQuality = 'excellent'
-      else if (bpmDiff <= 6) transitionQuality = 'good'
-      else if (bpmDiff <= 10) transitionQuality = 'fair'
+    if (previousTrack?.energy && newTrack.energy) {
+      const energyDiff = Math.abs(previousTrack.energy - newTrack.energy)
+      if (energyDiff <= 5) transitionQuality = 'excellent'
+      else if (energyDiff <= 10) transitionQuality = 'good'
+      else if (energyDiff <= 20) transitionQuality = 'fair'
       else transitionQuality = 'poor'
     }
 
-    console.log('[Swap API] Returning track:', newTrack.artist, '-', newTrack.title, 'at', newTrack.bpm, 'BPM')
+    console.log('[Swap API] Returning track:', newTrack.artist, '-', newTrack.title, 'with energy', newTrack.energy)
 
     return NextResponse.json({
       success: true,
       newTrack,
       transitionQuality,
-      reasoning: newTrack.aiReasoning || `Selected "${newTrack.title}" by ${newTrack.artist} (${newTrack.bpm} BPM) as an alternative that maintains flow with surrounding tracks.`,
+      reasoning: newTrack.aiReasoning || `Selected "${newTrack.title}" by ${newTrack.artist} (Energy: ${newTrack.energy}) as an alternative that maintains flow with surrounding tracks.`,
       metadata: {
         provider,
-        targetBpm: finalTargetBpm,
+        targetEnergy: finalTargetEnergy,
         generatedAt: new Date().toISOString()
       }
     })

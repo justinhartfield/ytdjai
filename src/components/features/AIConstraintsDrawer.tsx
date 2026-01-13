@@ -10,7 +10,7 @@ interface AIConstraintsDrawerProps {
   isOpen: boolean
   onClose: () => void
   onRegenerate?: (constraints: {
-    bpmTolerance: number
+    energyTolerance: number
     syncopation: number
     keyMatch: 'strict' | 'loose'
     diversity: number
@@ -79,18 +79,18 @@ export function AIConstraintsDrawer({ isOpen, onClose, onRegenerate }: AIConstra
                 Rhythm Metrics
               </h3>
 
-              {/* BPM Tolerance */}
+              {/* Energy Tolerance */}
               <div className="space-y-3">
                 <div className="flex justify-between items-end">
-                  <label className="text-xs font-bold text-gray-400">BPM Tolerance</label>
-                  <span className="text-sm font-mono text-cyan-400">±{constraints.bpmTolerance}</span>
+                  <label className="text-xs font-bold text-gray-400">Energy Tolerance</label>
+                  <span className="text-sm font-mono text-cyan-400">±{constraints.energyTolerance}</span>
                 </div>
                 <input
                   type="range"
                   min="1"
                   max="20"
-                  value={constraints.bpmTolerance}
-                  onChange={(e) => setConstraints({ bpmTolerance: parseInt(e.target.value) })}
+                  value={constraints.energyTolerance}
+                  onChange={(e) => setConstraints({ energyTolerance: parseInt(e.target.value) })}
                   className="w-full accent-cyan-500"
                 />
                 <div className="flex justify-between text-[9px] font-bold text-gray-600 uppercase">

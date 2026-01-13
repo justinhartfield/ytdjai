@@ -66,7 +66,7 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
   const [novelty, setNovelty] = useState(50)
   const [duration, setDuration] = useState(45)
   const [selectedArc, setSelectedArc] = useState('mountain')
-  const [bpmRange, setBpmRange] = useState({ min: 80, max: 165 })
+  const [energyRange, setEnergyRange] = useState({ min: 20, max: 80 })
   const [isGenerating, setIsGenerating] = useState(false)
 
   const { aiProvider, updateSetWithPrompt, setIsGenerating: setStoreGenerating, constraints } = useYTDJStore()
@@ -99,7 +99,7 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
       tagsText && `Style: ${tagsText}`,
       arcText,
       `Duration: approximately ${duration} minutes`,
-      `BPM range: ${bpmRange.min}-${bpmRange.max}`,
+      `Energy range: ${energyRange.min}-${energyRange.max}`,
       novelty > 66 ? 'Include deep cuts and obscure tracks' : novelty < 33 ? 'Focus on well-known hits' : 'Mix of familiar and fresh tracks'
     ].filter(Boolean).join('. ')
 
@@ -110,10 +110,10 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
         prompt: fullPrompt,
         constraints: {
           trackCount,
-          bpmRange,
+          energyRange,
           novelty,
           // Include all extended constraints from AI Settings
-          bpmTolerance: constraints.bpmTolerance,
+          energyTolerance: constraints.energyTolerance,
           syncopation: constraints.syncopation,
           keyMatch: constraints.keyMatch,
           artistDiversity: constraints.diversity,
@@ -134,7 +134,7 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
       setIsGenerating(false)
       setStoreGenerating(false)
     }
-  }, [prompt, selectedTags, selectedArc, duration, bpmRange, novelty, aiProvider, constraints, updateSetWithPrompt, setStoreGenerating, onComplete])
+  }, [prompt, selectedTags, selectedArc, duration, energyRange, novelty, aiProvider, constraints, updateSetWithPrompt, setStoreGenerating, onComplete])
 
   return (
     <div className="min-h-screen bg-[#05060f] text-white overflow-auto">
@@ -290,12 +290,11 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-white/50 mb-1">TARGET</p>
-                  <p className="text-xs font-bold tracking-widest text-white/50">RANGE</p>
+                  <p className="text-xs font-bold tracking-widest text-white/50">ENERGY</p>
                   <p className="text-lg font-bold">
-                    <span className="text-cyan-400">{bpmRange.min}</span>
+                    <span className="text-cyan-400">{energyRange.min}</span>
                     <span className="text-white/50"> — </span>
-                    <span className="text-cyan-400">{bpmRange.max}</span>
-                    <span className="text-white/50 text-sm ml-1">BPM</span>
+                    <span className="text-cyan-400">{energyRange.max}</span>
                   </p>
                 </div>
               </div>

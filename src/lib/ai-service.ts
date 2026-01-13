@@ -92,10 +92,9 @@ export const MOCK_TRACKS: Track[] = [
     title: 'Strobe',
     artist: 'deadmau5',
     duration: 637,
-    bpm: 128,
     key: 'F minor',
     genre: 'Progressive House',
-    energy: 0.7,
+    energy: 70, // 1-100 scale
     thumbnail: 'https://i.ytimg.com/vi/tKi9Z-f6qX4/hqdefault.jpg'
   },
   {
@@ -104,10 +103,9 @@ export const MOCK_TRACKS: Track[] = [
     title: 'Opus',
     artist: 'Eric Prydz',
     duration: 540,
-    bpm: 126,
     key: 'A minor',
     genre: 'Progressive House',
-    energy: 0.8,
+    energy: 80, // 1-100 scale
     thumbnail: 'https://i.ytimg.com/vi/iRA82xLsb_w/hqdefault.jpg'
   },
   {
@@ -116,10 +114,9 @@ export const MOCK_TRACKS: Track[] = [
     title: 'Gecko (Overdrive)',
     artist: 'Oliver Heldens',
     duration: 210,
-    bpm: 125,
     key: 'G minor',
     genre: 'Future House',
-    energy: 0.85,
+    energy: 85, // 1-100 scale
     thumbnail: 'https://i.ytimg.com/vi/ckDFjYcBzoc/hqdefault.jpg'
   },
   {
@@ -128,10 +125,9 @@ export const MOCK_TRACKS: Track[] = [
     title: 'Insomnia',
     artist: 'Faithless',
     duration: 420,
-    bpm: 130,
     key: 'D minor',
     genre: 'Trance',
-    energy: 0.9,
+    energy: 90, // 1-100 scale
     thumbnail: 'https://i.ytimg.com/vi/P8JEm4d6Wu4/hqdefault.jpg'
   },
   {
@@ -140,10 +136,9 @@ export const MOCK_TRACKS: Track[] = [
     title: 'Adagio for Strings',
     artist: 'Tiësto',
     duration: 480,
-    bpm: 138,
     key: 'B♭ minor',
     genre: 'Trance',
-    energy: 0.95,
+    energy: 95, // 1-100 scale
     thumbnail: 'https://i.ytimg.com/vi/2EaE0_gQLw0/hqdefault.jpg'
   },
   {
@@ -152,10 +147,9 @@ export const MOCK_TRACKS: Track[] = [
     title: 'Ghosts n Stuff',
     artist: 'deadmau5 ft. Rob Swire',
     duration: 360,
-    bpm: 127,
     key: 'E minor',
     genre: 'Electro House',
-    energy: 0.8,
+    energy: 80, // 1-100 scale
     thumbnail: 'https://i.ytimg.com/vi/QV8eiSA4vqc/hqdefault.jpg'
   },
   {
@@ -164,10 +158,9 @@ export const MOCK_TRACKS: Track[] = [
     title: 'Levels',
     artist: 'Avicii',
     duration: 210,
-    bpm: 126,
     key: 'F♯ minor',
     genre: 'Progressive House',
-    energy: 0.9,
+    energy: 90, // 1-100 scale
     thumbnail: 'https://i.ytimg.com/vi/_ovdm2yX4MA/hqdefault.jpg'
   },
   {
@@ -176,10 +169,9 @@ export const MOCK_TRACKS: Track[] = [
     title: 'Cafe Del Mar',
     artist: 'Energy 52',
     duration: 450,
-    bpm: 132,
     key: 'C minor',
     genre: 'Trance',
-    energy: 0.75,
+    energy: 75, // 1-100 scale
     thumbnail: 'https://i.ytimg.com/vi/OOmRyyHhui8/hqdefault.jpg'
   }
 ]
@@ -204,18 +196,18 @@ export function generateMockPlaylist(trackCount: number): PlaylistNode[] {
 }
 
 /**
- * Calculate transition quality between two tracks
+ * Calculate transition quality between two tracks based on energy (1-100 scale)
  */
 export function calculateTransitionQuality(
   track1: Track,
   track2: Track
 ): 'excellent' | 'good' | 'fair' | 'poor' {
-  if (!track1.bpm || !track2.bpm) return 'good'
+  if (!track1.energy || !track2.energy) return 'good'
 
-  const bpmDiff = Math.abs(track1.bpm - track2.bpm)
+  const energyDiff = Math.abs(track1.energy - track2.energy)
 
-  if (bpmDiff <= 3) return 'excellent'
-  if (bpmDiff <= 6) return 'good'
-  if (bpmDiff <= 10) return 'fair'
+  if (energyDiff <= 5) return 'excellent'
+  if (energyDiff <= 10) return 'good'
+  if (energyDiff <= 20) return 'fair'
   return 'poor'
 }

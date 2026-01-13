@@ -20,11 +20,10 @@ export interface Track {
   title: string
   artist: string
   duration: number // in seconds
-  bpm?: number
   thumbnail?: string
   genres?: string[]
   genre?: string
-  energy?: number // 0-1
+  energy?: number // 1-100 subjective intensity (NOT tempo)
   key?: string
   isExplicit?: boolean
   aiReasoning?: string
@@ -36,22 +35,28 @@ export interface Transition {
   duration: number // in beats
 }
 
+export interface AlternativeTrack extends Track {
+  whyNotChosen?: string // AI explanation of why this wasn't the primary choice but is a good alternative
+  matchScore?: number // 0-100 compatibility score
+}
+
 export interface PlaylistNode {
   id: string
   track: Track
   position: number // X-axis position (order)
-  targetBpm?: number // Y-axis position
+  targetEnergy?: number // Y-axis position (1-100)
   isLocked?: boolean
-  isBpmLocked?: boolean
+  isEnergyLocked?: boolean
   state?: NodeState
   transitionToNext?: Transition
   startTime?: number // Start playback at this time (in seconds) - useful for skipping intros
+  alternatives?: AlternativeTrack[] // Alternative tracks that could work in this slot
 }
 
 export type NodeState =
   | 'ai-selected'
   | 'user-locked'
-  | 'bpm-locked'
+  | 'energy-locked'
   | 'playing'
   | 'previewing'
   | 'unresolved'
@@ -62,8 +67,7 @@ export interface TransitionQualityDetail {
   from: string
   to: string
   score: 'smooth' | 'ok' | 'jarring'
-  bpmDelta: number
-  energyDelta?: number
+  energyDelta: number
   keyCompatible?: boolean
 }
 
@@ -72,7 +76,7 @@ export interface ArcTemplate {
   name: string
   description: string
   svgPath: string
-  bpmProfile: number[] // Array of BPM values at each position
+  energyProfile: number[] // Array of Energy values (1-100) at each position
 }
 
 export interface Set {
@@ -90,7 +94,7 @@ export interface Set {
 }
 
 export interface AIConstraints {
-  bpmTolerance?: number // 1-20 - how strict BPM matching should be
+  energyTolerance?: number // 1-20 - how strict energy matching should be
   novelty?: number // 0-100 (familiar to deep cuts) - maps to discovery
   artistDiversity?: number // 0-100 - how much variety in artists
   genreDiversity?: number // 0-100
@@ -103,7 +107,7 @@ export interface AIConstraints {
   transitionQualityThreshold?: number
   moods?: Mood[]
   excludeArtists?: string[]
-  bpmRange?: { min: number; max: number }
+  energyRange?: { min: number; max: number } // 1-100 scale
   // Extended constraints from AI Settings panel
   syncopation?: number // 0-100 - beat complexity preference
   keyMatch?: 'strict' | 'loose' // how strict key matching should be
@@ -125,7 +129,7 @@ export interface SwapTrackRequest {
   currentTrack: Track
   previousTrack?: Track
   nextTrack?: Track
-  targetBpm?: number
+  targetEnergy?: number
   constraints?: AIConstraints
   provider: AIProvider
 }

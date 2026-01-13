@@ -270,7 +270,7 @@ export function WorkspacePanel() {
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-cyan-400">•</span>
-                    Use the advanced settings to fine-tune BPM and transitions
+                    Use the advanced settings to fine-tune energy and transitions
                   </li>
                 </ul>
               </div>

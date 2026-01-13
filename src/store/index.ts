@@ -32,7 +32,7 @@ interface UIState {
 
 // Extended AI Constraints (matching ai_engine_constraints.html)
 interface ExtendedConstraints {
-  bpmTolerance: number
+  energyTolerance: number
   syncopation: number
   keyMatch: 'strict' | 'loose'
   diversity: number
@@ -299,7 +299,7 @@ export const useYTDJStore = create<YTDJState>()(
 
       // Extended Constraints
       constraints: {
-        bpmTolerance: 5,
+        energyTolerance: 10,
         syncopation: 50,
         keyMatch: 'loose',
         diversity: 70,
@@ -544,7 +544,7 @@ interface AppState {
   updateNode: (nodeId: string, updates: Partial<PlaylistNode>) => void
   swapTrack: (nodeId: string, newTrack: Track) => void
   lockNode: (nodeId: string, locked: boolean) => void
-  lockBpm: (nodeId: string, locked: boolean) => void
+  lockEnergy: (nodeId: string, locked: boolean) => void
 
   // Editor State
   selectedNodeId: string | null
@@ -581,7 +581,7 @@ interface AppState {
 }
 
 const defaultConstraints: AIConstraints = {
-  bpmTolerance: 5,
+  energyTolerance: 10,
   novelty: 50,
   artistDiversity: 70,
   genreDiversity: 50,
@@ -634,7 +634,7 @@ export const useAppStore = create<AppState>()(
       swapTrack: (nodeId, newTrack) => set((state) => {
         if (!state.currentSet || !state.currentSet.nodes) return state
         const updatedNodes = state.currentSet.nodes.map((n) =>
-          n.id === nodeId ? { ...n, track: newTrack, targetBpm: newTrack.bpm } : n
+          n.id === nodeId ? { ...n, track: newTrack, targetEnergy: newTrack.energy } : n
         )
         return {
           currentSet: { ...state.currentSet, nodes: updatedNodes },
@@ -649,10 +649,10 @@ export const useAppStore = create<AppState>()(
           currentSet: { ...state.currentSet, nodes: updatedNodes },
         }
       }),
-      lockBpm: (nodeId, locked) => set((state) => {
+      lockEnergy: (nodeId, locked) => set((state) => {
         if (!state.currentSet || !state.currentSet.nodes) return state
         const updatedNodes = state.currentSet.nodes.map((n) =>
-          n.id === nodeId ? { ...n, isBpmLocked: locked, state: (locked ? 'bpm-locked' : 'ai-selected') as NodeState } : n
+          n.id === nodeId ? { ...n, isEnergyLocked: locked, state: (locked ? 'energy-locked' : 'ai-selected') as NodeState } : n
         )
         return {
           currentSet: { ...state.currentSet, nodes: updatedNodes },
@@ -726,62 +726,62 @@ export const useAppStore = create<AppState>()(
   )
 )
 
-// Arc Templates
+// Arc Templates (energyProfile: 1-100 scale)
 export const arcTemplates: ArcTemplate[] = [
   {
     id: 'mountain',
     name: 'The Mountain',
     description: 'Warm-up → Peak → Cooldown',
     svgPath: 'M0,25 Q25,25 50,5 Q75,25 100,25',
-    bpmProfile: [90, 100, 120, 140, 150, 145, 130, 110, 95, 85],
+    energyProfile: [30, 45, 70, 95, 100, 95, 80, 55, 35, 25],
   },
   {
     id: 'slow-burn',
     name: 'Slow Burn',
     description: 'Gradual build throughout',
     svgPath: 'M0,25 Q50,20 100,5',
-    bpmProfile: [80, 90, 100, 110, 120, 130, 140, 150, 155, 160],
+    energyProfile: [20, 30, 45, 55, 70, 80, 95, 100, 100, 100],
   },
   {
     id: 'rollercoaster',
     name: 'The Rollercoaster',
     description: 'Multiple peaks and valleys',
     svgPath: 'M0,15 Q15,5 25,15 Q35,25 50,10 Q65,25 75,15 Q85,5 100,20',
-    bpmProfile: [120, 140, 110, 145, 100, 150, 105, 140, 115, 130],
+    energyProfile: [70, 95, 55, 95, 45, 100, 50, 95, 65, 80],
   },
   {
     id: 'wave',
     name: 'The Wave',
     description: 'Smooth oscillations',
     svgPath: 'M0,15 Q25,5 50,15 Q75,25 100,15',
-    bpmProfile: [110, 130, 140, 130, 110, 100, 110, 130, 140, 120],
+    energyProfile: [55, 80, 95, 80, 55, 45, 55, 80, 95, 70],
   },
   {
     id: 'steady',
     name: 'Steady State',
     description: 'Consistent energy level',
     svgPath: 'M0,15 L100,15',
-    bpmProfile: [125, 125, 125, 125, 125, 125, 125, 125, 125, 125],
+    energyProfile: [75, 75, 75, 75, 75, 75, 75, 75, 75, 75],
   },
   {
     id: 'descend',
     name: 'The Descent',
     description: 'Wind down session',
     svgPath: 'M0,5 Q50,10 100,25',
-    bpmProfile: [150, 140, 130, 120, 110, 100, 95, 90, 85, 80],
+    energyProfile: [100, 95, 80, 70, 55, 45, 35, 30, 25, 20],
   },
   {
     id: 'double-peak',
     name: 'Double Peak',
     description: 'Two energy climaxes',
     svgPath: 'M0,20 Q12,10 25,5 Q38,15 50,20 Q62,10 75,5 Q88,15 100,20',
-    bpmProfile: [100, 120, 140, 130, 115, 120, 140, 145, 130, 110],
+    energyProfile: [45, 70, 95, 80, 65, 70, 95, 95, 80, 55],
   },
   {
     id: 'late-night',
     name: 'Late Night',
     description: 'Deep groove to sunrise build',
     svgPath: 'M0,15 Q30,18 50,15 Q70,10 85,5 Q95,8 100,12',
-    bpmProfile: [118, 120, 122, 120, 122, 125, 130, 138, 135, 128],
+    energyProfile: [65, 70, 72, 70, 72, 75, 80, 90, 88, 78],
   },
 ]

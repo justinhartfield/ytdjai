@@ -27,13 +27,13 @@ export function calculateTransitionQuality(
   fromNode: PlaylistNode,
   toNode: PlaylistNode
 ): TransitionQualityDetail {
-  const bpmDelta = Math.abs((fromNode.track.bpm ?? 120) - (toNode.track.bpm ?? 120))
-  const energyDelta = Math.abs((fromNode.track.energy ?? 0.5) - (toNode.track.energy ?? 0.5))
+  // Energy is now on 1-100 scale
+  const energyDelta = Math.abs((fromNode.track.energy ?? 50) - (toNode.track.energy ?? 50))
 
   let score: 'smooth' | 'ok' | 'jarring'
-  if (bpmDelta <= 5 && energyDelta <= 20) {
+  if (energyDelta <= 10) {
     score = 'smooth'
-  } else if (bpmDelta <= 15 || energyDelta <= 40) {
+  } else if (energyDelta <= 25) {
     score = 'ok'
   } else {
     score = 'jarring'
@@ -43,7 +43,6 @@ export function calculateTransitionQuality(
     from: fromNode.id,
     to: toNode.id,
     score,
-    bpmDelta,
     energyDelta,
   }
 }
@@ -80,14 +79,14 @@ export function interpolateCurve(
   return result
 }
 
-export function bpmToY(bpm: number, minBpm: number = 60, maxBpm: number = 180, height: number = 400): number {
-  const normalized = (bpm - minBpm) / (maxBpm - minBpm)
+export function energyToY(energy: number, minEnergy: number = 1, maxEnergy: number = 100, height: number = 400): number {
+  const normalized = (energy - minEnergy) / (maxEnergy - minEnergy)
   return height - normalized * height
 }
 
-export function yToBpm(y: number, minBpm: number = 60, maxBpm: number = 180, height: number = 400): number {
+export function yToEnergy(y: number, minEnergy: number = 1, maxEnergy: number = 100, height: number = 400): number {
   const normalized = (height - y) / height
-  return Math.round(minBpm + normalized * (maxBpm - minBpm))
+  return Math.round(minEnergy + normalized * (maxEnergy - minEnergy))
 }
 
 export function getTransitionColor(quality: 'smooth' | 'ok' | 'jarring'): string {
@@ -141,7 +140,7 @@ export function getNodeStateStyles(state: string): {
   switch (state) {
     case 'user-locked':
       return { ring: 'ring-accent-cyan', bg: 'bg-accent-cyan/10', icon: 'lock' }
-    case 'bpm-locked':
+    case 'energy-locked':
       return { ring: 'ring-accent-magenta', bg: 'bg-accent-magenta/10', icon: 'target' }
     case 'playing':
       return { ring: 'ring-accent-cyan animate-pulse-ring', bg: 'bg-accent-cyan/20' }

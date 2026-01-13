@@ -20,8 +20,8 @@ interface AIControlsSidebarProps {
   onRandomizeUnlocked?: () => void
   isGenerating: boolean
   isSmoothing?: boolean
-  bpmTolerance: number
-  onBpmToleranceChange: (value: number) => void
+  energyTolerance: number
+  onEnergyToleranceChange: (value: number) => void
   targetTrackCount: number
   onTargetTrackCountChange: (value: number) => void
 }
@@ -32,8 +32,8 @@ export function AIControlsSidebar({
   onRandomizeUnlocked,
   isGenerating,
   isSmoothing = false,
-  bpmTolerance,
-  onBpmToleranceChange,
+  energyTolerance,
+  onEnergyToleranceChange,
   targetTrackCount,
   onTargetTrackCountChange
 }: AIControlsSidebarProps) {
@@ -146,7 +146,7 @@ export function AIControlsSidebar({
 
         {/* Arc Template Selector */}
         <div className="space-y-4">
-          <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-widest">Tempo Arc Template</label>
+          <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-widest">Energy Arc Template</label>
           <div className="grid grid-cols-2 gap-2">
             {ARC_TEMPLATES.map((arc) => (
               <button
@@ -179,18 +179,18 @@ export function AIControlsSidebar({
           </div>
         </div>
 
-        {/* BPM Tolerance */}
+        {/* Energy Tolerance */}
         <div className="space-y-3">
           <div className="flex justify-between items-end">
-            <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-widest">BPM Tolerance</label>
-            <span className="text-xs font-mono text-cyan-400">±{bpmTolerance} BPM</span>
+            <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-widest">Energy Tolerance</label>
+            <span className="text-xs font-mono text-cyan-400">±{energyTolerance}</span>
           </div>
           <input
             type="range"
             min="1"
             max="20"
-            value={bpmTolerance}
-            onChange={(e) => onBpmToleranceChange(parseInt(e.target.value))}
+            value={energyTolerance}
+            onChange={(e) => onEnergyToleranceChange(parseInt(e.target.value))}
             className="w-full accent-cyan-500"
           />
         </div>

@@ -16,12 +16,12 @@ const mockSetData = {
   prompt: 'Upbeat progressive house set for a beach party with tropical influences',
   createdAt: new Date(),
   playlist: [
-    { id: '1', track: { id: 't1', youtubeId: 'abc123', title: 'Levels', artist: 'Avicii', bpm: 126, duration: 204, thumbnail: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100&h=100&fit=crop' }, targetBpm: 126 },
-    { id: '2', track: { id: 't2', youtubeId: 'def456', title: 'Strobe', artist: 'deadmau5', bpm: 128, duration: 612, thumbnail: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=100&h=100&fit=crop' }, targetBpm: 128 },
-    { id: '3', track: { id: 't3', youtubeId: 'ghi789', title: 'Opus', artist: 'Eric Prydz', bpm: 126, duration: 540, thumbnail: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100&h=100&fit=crop' }, targetBpm: 130 },
-    { id: '4', track: { id: 't4', youtubeId: 'jkl012', title: 'Ghosts n Stuff', artist: 'deadmau5', bpm: 130, duration: 294, thumbnail: 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=100&h=100&fit=crop' }, targetBpm: 132 },
-    { id: '5', track: { id: 't5', youtubeId: 'mno345', title: 'Language', artist: 'Porter Robinson', bpm: 128, duration: 375, thumbnail: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=100&h=100&fit=crop' }, targetBpm: 128 },
-    { id: '6', track: { id: 't6', youtubeId: 'pqr678', title: 'Midnight City', artist: 'M83', bpm: 105, duration: 243, thumbnail: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=100&h=100&fit=crop' }, targetBpm: 120 },
+    { id: '1', track: { id: 't1', youtubeId: 'abc123', title: 'Levels', artist: 'Avicii', energy: 85, duration: 204, thumbnail: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100&h=100&fit=crop' }, targetEnergy: 85 },
+    { id: '2', track: { id: 't2', youtubeId: 'def456', title: 'Strobe', artist: 'deadmau5', energy: 70, duration: 612, thumbnail: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=100&h=100&fit=crop' }, targetEnergy: 70 },
+    { id: '3', track: { id: 't3', youtubeId: 'ghi789', title: 'Opus', artist: 'Eric Prydz', energy: 80, duration: 540, thumbnail: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100&h=100&fit=crop' }, targetEnergy: 80 },
+    { id: '4', track: { id: 't4', youtubeId: 'jkl012', title: 'Ghosts n Stuff', artist: 'deadmau5', energy: 75, duration: 294, thumbnail: 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=100&h=100&fit=crop' }, targetEnergy: 75 },
+    { id: '5', track: { id: 't5', youtubeId: 'mno345', title: 'Language', artist: 'Porter Robinson', energy: 90, duration: 375, thumbnail: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=100&h=100&fit=crop' }, targetEnergy: 90 },
+    { id: '6', track: { id: 't6', youtubeId: 'pqr678', title: 'Midnight City', artist: 'M83', energy: 65, duration: 243, thumbnail: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=100&h=100&fit=crop' }, targetEnergy: 65 },
   ]
 }
 
@@ -37,13 +37,12 @@ export default function SharePage({ params }: SharePageProps) {
   const stats = useMemo(() => {
     const playlist = setData.playlist
     const duration = playlist.reduce((acc, n) => acc + (n.track?.duration || 0), 0)
-    const bpms = playlist.map(n => n.targetBpm || n.track?.bpm || 120)
-    const energies = playlist.map((_, i) => 0.5 + (i / playlist.length) * 0.4)
+    const energies = playlist.map(n => n.targetEnergy || n.track?.energy || 50)
 
     return {
       duration,
       trackCount: playlist.length,
-      bpmRange: { min: Math.min(...bpms), max: Math.max(...bpms) },
+      energyRange: { min: Math.min(...energies), max: Math.max(...energies) },
       peakEnergy: Math.max(...energies)
     }
   }, [setData])
@@ -55,8 +54,9 @@ export default function SharePage({ params }: SharePageProps) {
 
     const points = playlist.map((node, index) => {
       const x = ((index + 1) / (playlist.length + 1)) * 100
-      const bpm = node.targetBpm || node.track?.bpm || 120
-      const y = 50 - ((bpm - 80) / 80) * 40
+      const energy = node.targetEnergy || node.track?.energy || 50
+      // Map energy (1-100) to Y position (higher energy = higher on screen)
+      const y = 90 - ((energy - 1) / 99) * 80
       return { x, y: Math.max(10, Math.min(90, y)) }
     })
 
@@ -134,10 +134,7 @@ export default function SharePage({ params }: SharePageProps) {
             </h2>
             <div className="flex items-center gap-4 text-[10px] font-bold text-gray-600 uppercase tracking-wider">
               <span className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-cyan-500" /> BPM
-              </span>
-              <span className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-pink-500" /> Energy
+                <div className="w-2 h-2 rounded-full bg-cyan-500" /> Energy (1-100)
               </span>
             </div>
           </div>
@@ -162,8 +159,8 @@ export default function SharePage({ params }: SharePageProps) {
               {/* Track markers */}
               {setData.playlist.map((node, index) => {
                 const x = ((index + 1) / (setData.playlist.length + 1)) * 100
-                const bpm = node.targetBpm || node.track?.bpm || 120
-                const y = 50 - ((bpm - 80) / 80) * 40
+                const energy = node.targetEnergy || node.track?.energy || 50
+                const y = 90 - ((energy - 1) / 99) * 80
                 return (
                   <circle
                     key={node.id}
@@ -193,8 +190,8 @@ export default function SharePage({ params }: SharePageProps) {
           </div>
           <div className="p-6 bg-white/5 border border-white/10 rounded-2xl text-center">
             <Zap className="w-6 h-6 text-pink-400 mx-auto mb-2" />
-            <div className="text-2xl font-black text-white">{stats.bpmRange.min}-{stats.bpmRange.max}</div>
-            <div className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">BPM Range</div>
+            <div className="text-2xl font-black text-white">{stats.energyRange.min}-{stats.energyRange.max}</div>
+            <div className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Energy Range</div>
           </div>
           <div className="p-6 bg-white/5 border border-white/10 rounded-2xl text-center">
             <Music2 className="w-6 h-6 text-purple-400 mx-auto mb-2" />
@@ -243,7 +240,7 @@ export default function SharePage({ params }: SharePageProps) {
                   <div className="text-sm text-gray-500 truncate">{node.track.artist}</div>
                 </div>
                 <div className="text-sm font-mono text-cyan-400">
-                  {node.track.bpm} BPM
+                  Energy: {node.track.energy}
                 </div>
                 <div className="text-sm font-mono text-gray-600">
                   {formatDuration(node.track.duration)}

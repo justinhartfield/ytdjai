@@ -69,11 +69,11 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
   const generateDescription = () => {
     const trackCount = playlist.length
     const duration = playlist.reduce((acc, n) => acc + (n.track?.duration || 0), 0)
-    const bpms = playlist.map(n => n.targetBpm || n.track?.bpm || 120)
-    const minBpm = Math.min(...bpms)
-    const maxBpm = Math.max(...bpms)
+    const energies = playlist.map(n => n.targetEnergy || n.track?.energy || 50)
+    const minEnergy = Math.min(...energies)
+    const maxEnergy = Math.max(...energies)
 
-    return `AI-curated DJ set with ${trackCount} tracks | ${formatDuration(duration)} | ${minBpm}-${maxBpm} BPM\n\nGenerated with YTDJ.AI`
+    return `AI-curated DJ set with ${trackCount} tracks | ${formatDuration(duration)} | Energy: ${minEnergy}-${maxEnergy}\n\nGenerated with YTDJ.AI`
   }
 
   const handleExport = async () => {

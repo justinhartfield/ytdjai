@@ -21,8 +21,8 @@ function generateCurvePath(playlist: PlaylistNode[]): string {
 
   const points = playlist.map((node, index) => {
     const x = ((index + 1) / (playlist.length + 1)) * 100
-    const bpm = node.targetBpm || node.track?.bpm || 120
-    const y = 30 - ((bpm - 60) / 140) * 30
+    const energy = node.targetEnergy || node.track?.energy || 50
+    const y = 30 - ((energy - 1) / 99) * 30
     return { x, y: Math.max(5, Math.min(25, y)) }
   })
 
@@ -116,10 +116,10 @@ export function SetsDashboard({ isOpen, onClose, onSelectSet }: SetsDashboardPro
     return playlist.reduce((acc, node) => acc + (node.track?.duration || 0), 0)
   }
 
-  const getBpmRange = (playlist: PlaylistNode[]) => {
+  const getEnergyRange = (playlist: PlaylistNode[]) => {
     if (playlist.length === 0) return { min: 0, max: 0 }
-    const bpms = playlist.map(n => n.targetBpm || n.track?.bpm || 120)
-    return { min: Math.min(...bpms), max: Math.max(...bpms) }
+    const energies = playlist.map(n => n.targetEnergy || n.track?.energy || 50)
+    return { min: Math.min(...energies), max: Math.max(...energies) }
   }
 
   return (
@@ -195,7 +195,7 @@ export function SetsDashboard({ isOpen, onClose, onSelectSet }: SetsDashboardPro
 
             {/* Set Cards */}
             {filteredSets.map((set) => {
-              const bpmRange = getBpmRange(set.playlist)
+              const energyRange = getEnergyRange(set.playlist)
               const duration = getTotalDuration(set.playlist)
 
               return (
@@ -256,11 +256,11 @@ export function SetsDashboard({ isOpen, onClose, onSelectSet }: SetsDashboardPro
                           </span>
                         </>
                       )}
-                      {bpmRange.min > 0 && (
+                      {energyRange.min > 0 && (
                         <>
                           <span className="text-gray-700">•</span>
                           <span className="text-[10px] font-bold text-cyan-500">
-                            {bpmRange.min}-{bpmRange.max} BPM
+                            Energy: {energyRange.min}-{energyRange.max}
                           </span>
                         </>
                       )}

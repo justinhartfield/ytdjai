@@ -47,8 +47,7 @@ export function AIPromptPanel({
     trackCount: 8,
     transitionQualityThreshold: 0.7,
     moods: [],
-    excludeArtists: [],
-    bpmRange: { min: 100, max: 140 }
+    excludeArtists: []
   })
   const [newExcludedArtist, setNewExcludedArtist] = useState('')
 
@@ -182,33 +181,33 @@ export function AIPromptPanel({
                 </div>
               </div>
 
-              {/* BPM Range */}
+              {/* Energy Range */}
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <Clock className="w-4 h-4 text-yellow-400" />
-                  <span className="text-sm font-medium text-white">BPM Range</span>
+                  <span className="text-sm font-medium text-white">Energy Range</span>
                 </div>
                 <div className="flex items-center gap-4">
                   <Input
                     type="number"
-                    value={constraints.bpmRange?.min || 100}
+                    value={constraints.energyRange?.min || 20}
                     onChange={(e) => setConstraints(prev => ({
                       ...prev,
-                      bpmRange: { ...prev.bpmRange!, min: parseInt(e.target.value) }
+                      energyRange: { ...prev.energyRange!, min: parseInt(e.target.value) }
                     }))}
                     className="w-24"
                   />
                   <span className="text-white/50">to</span>
                   <Input
                     type="number"
-                    value={constraints.bpmRange?.max || 140}
+                    value={constraints.energyRange?.max || 80}
                     onChange={(e) => setConstraints(prev => ({
                       ...prev,
-                      bpmRange: { ...prev.bpmRange!, max: parseInt(e.target.value) }
+                      energyRange: { ...prev.energyRange!, max: parseInt(e.target.value) }
                     }))}
                     className="w-24"
                   />
-                  <span className="text-sm text-white/50">BPM</span>
+                  <span className="text-sm text-white/50">(1-100)</span>
                 </div>
               </div>
 

@@ -1,5 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
-import type { AIProvider, GeneratePlaylistRequest, PlaylistNode, Track } from '@/types'
+import type { AIProvider, GeneratePlaylistRequest, PlaylistNode, Track, AlternativeTrack } from '@/types'
+
+// Type for AI response with alternatives
+interface AITrackWithAlternatives {
+  title: string
+  artist: string
+  bpm?: number
+  key: string
+  genre: string
+  energy: number // 1-100 subjective intensity (NOT tempo)
+  duration: number
+  aiReasoning: string
+  alternatives?: {
+    title: string
+    artist: string
+    bpm?: number
+    key: string
+    genre: string
+    energy: number // 1-100 subjective intensity
+    duration: number
+    whyNotChosen: string
+    matchScore: number
+  }[]
+}
 
 // YouTube Data API search
 interface YouTubeSearchResult {
@@ -108,15 +131,15 @@ async function enrichTracksWithYouTube(tracks: Partial<Track>[]): Promise<Partia
 function buildConstraintInstructions(constraints: GeneratePlaylistRequest['constraints']): string {
   const instructions: string[] = []
 
-  // BPM Tolerance
-  if (constraints?.bpmTolerance !== undefined) {
-    const tolerance = constraints.bpmTolerance
+  // Energy Tolerance
+  if (constraints?.energyTolerance !== undefined) {
+    const tolerance = constraints.energyTolerance
     if (tolerance <= 5) {
-      instructions.push(`STRICT BPM TRANSITIONS: Adjacent tracks must be within ±${tolerance} BPM of each other for smooth mixing.`)
+      instructions.push(`STRICT ENERGY TRANSITIONS: Adjacent tracks must be within ±${tolerance} energy points of each other for smooth flow.`)
     } else if (tolerance <= 10) {
-      instructions.push(`MODERATE BPM TRANSITIONS: Keep adjacent tracks within ±${tolerance} BPM when possible.`)
+      instructions.push(`MODERATE ENERGY TRANSITIONS: Keep adjacent tracks within ±${tolerance} energy points when possible.`)
     } else {
-      instructions.push(`FLEXIBLE BPM TRANSITIONS: BPM can vary up to ±${tolerance} BPM between tracks.`)
+      instructions.push(`FLEXIBLE ENERGY TRANSITIONS: Energy can vary up to ±${tolerance} points between tracks.`)
     }
   }
 
@@ -216,15 +239,25 @@ async function generateWithOpenAI(prompt: string, constraints: GeneratePlaylistR
             Return a JSON array of track objects with these fields:
             - title: string (track name)
             - artist: string (artist name)
-            - bpm: number (beats per minute, typically 80-180)
             - key: string (musical key like "Am", "F#m", "C")
             - genre: string (music genre)
-            - energy: number (0-1 scale)
+            - energy: number (1-100 subjective intensity scale, NOT tempo)
+              1-20: Ambient/chill - downtempo, atmospheric, relaxing
+              21-40: Relaxed, groovy - laid-back beats, smooth vibes
+              41-60: Moderate, steady - balanced energy, consistent drive
+              61-80: High energy, driving - uplifting, powerful, building
+              81-100: Peak intensity, aggressive - drops, maximum impact
+              Based on: aggression, rhythmic intensity, emotional intensity, builds/drops - NOT just tempo
             - duration: number (in seconds, typically 180-420)
             - aiReasoning: string (IMPORTANT: 1-2 sentences explaining how this specific track fits the user's theme/vibe description AND how it transitions from the previous track. Reference the user's prompt directly, e.g. "Perfect for the beach party vibe with its tropical synths..." or "The driving bassline captures the late-night energy requested...")
+            - alternatives: array of 2 alternative track objects, each with:
+              - title, artist, key, genre, energy, duration (same as main track)
+              - whyNotChosen: string (1 sentence explaining why this wasn't the primary pick but is still a great alternative, e.g. "Slightly higher energy than ideal for this slot, but excellent key match and similar vibe")
+              - matchScore: number (70-95, how well this alternative fits the slot)
 
-            Consider transitions between tracks - adjacent tracks should have compatible BPMs and keys.
+            Consider transitions between tracks - adjacent tracks should have compatible energy levels and keys.
             Each track's aiReasoning MUST reference the user's theme/description to explain why it was selected.
+            The alternatives should be genuinely good options that almost made the cut - similar style, compatible energy/key.
             The response should ONLY be valid JSON array, no additional text or markdown.
 
 ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${constraintInstructions}` : ''}`
@@ -233,7 +266,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
             role: 'user',
             content: `Create a ${constraints?.trackCount || 8} track DJ set: ${prompt}
 
-            BPM range: ${constraints?.bpmRange?.min || 120}-${constraints?.bpmRange?.max || 140}
+            Energy range: ${constraints?.energyRange?.min || 40}-${constraints?.energyRange?.max || 80} (1-100 scale)
             Moods: ${constraints?.moods?.join(', ') || 'varied'}`
           }
         ],
@@ -249,7 +282,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
       console.log('[OpenAI] Raw response:', content.substring(0, 200))
       const tracks = JSON.parse(content)
       console.log('[OpenAI] Parsed', tracks.length, 'tracks')
-      return await tracksToPlaylistNodes(tracks, constraints?.bpmTolerance || 5)
+      return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
     }
 
     console.error('[OpenAI] No valid response content:', data)
@@ -288,7 +321,7 @@ async function generateWithClaude(prompt: string, constraints: GeneratePlaylistR
 
             Requirements:
             - Track count: ${constraints?.trackCount || 8}
-            - BPM range: ${constraints?.bpmRange?.min || 120}-${constraints?.bpmRange?.max || 140}
+            - Energy range: ${constraints?.energyRange?.min || 40}-${constraints?.energyRange?.max || 80} (1-100 scale)
             - Moods: ${constraints?.moods?.join(', ') || 'varied'}
 
 ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${constraintInstructions}` : ''}
@@ -296,15 +329,25 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
             Return ONLY a JSON array of track objects with these fields:
             - title: string (track name)
             - artist: string (artist name)
-            - bpm: number (beats per minute)
             - key: string (musical key like "Am", "F#m", "C")
             - genre: string (music genre)
-            - energy: number (0-1 scale)
+            - energy: number (1-100 subjective intensity scale, NOT tempo)
+              1-20: Ambient/chill - downtempo, atmospheric, relaxing
+              21-40: Relaxed, groovy - laid-back beats, smooth vibes
+              41-60: Moderate, steady - balanced energy, consistent drive
+              61-80: High energy, driving - uplifting, powerful, building
+              81-100: Peak intensity, aggressive - drops, maximum impact
+              Based on: aggression, rhythmic intensity, emotional intensity, builds/drops - NOT just tempo
             - duration: number (in seconds)
             - aiReasoning: string (IMPORTANT: 1-2 sentences explaining how this specific track fits the user's theme "${prompt}" AND how it transitions from the previous track. Reference the theme directly in your reasoning.)
+            - alternatives: array of 2 alternative track objects, each with:
+              - title, artist, key, genre, energy, duration (same fields as main track)
+              - whyNotChosen: string (1 sentence explaining why this wasn't the primary pick but is still a great alternative)
+              - matchScore: number (70-95, how well this alternative fits the slot)
 
-            Consider transitions - adjacent tracks should have compatible BPMs and keys.
-            Each track's aiReasoning MUST explicitly reference the user's theme to explain why it was selected.`
+            Consider transitions - adjacent tracks should have compatible energy levels and keys.
+            Each track's aiReasoning MUST explicitly reference the user's theme to explain why it was selected.
+            The alternatives should be genuinely good options that almost made the cut - similar style, compatible energy/key.`
           }
         ]
       })
@@ -320,7 +363,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
       if (jsonMatch) {
         const tracks = JSON.parse(jsonMatch[0])
         console.log('[Claude] Parsed', tracks.length, 'tracks')
-        return await tracksToPlaylistNodes(tracks, constraints?.bpmTolerance || 5)
+        return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
       }
     }
 
@@ -359,7 +402,7 @@ async function generateWithGemini(prompt: string, constraints: GeneratePlaylistR
 
                   Requirements:
                   - Track count: ${constraints?.trackCount || 8}
-                  - BPM range: ${constraints?.bpmRange?.min || 120}-${constraints?.bpmRange?.max || 140}
+                  - Energy range: ${constraints?.energyRange?.min || 40}-${constraints?.energyRange?.max || 80} (1-100 scale)
                   - Moods: ${constraints?.moods?.join(', ') || 'varied'}
 
 ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${constraintInstructions}` : ''}
@@ -367,15 +410,25 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
                   Return ONLY a JSON array of track objects with these fields:
                   - title: string (track name)
                   - artist: string (artist name)
-                  - bpm: number (beats per minute)
                   - key: string (musical key like "Am", "F#m", "C")
                   - genre: string (music genre)
-                  - energy: number (0-1 scale)
+                  - energy: number (1-100 subjective intensity scale, NOT tempo)
+                    1-20: Ambient/chill - downtempo, atmospheric, relaxing
+                    21-40: Relaxed, groovy - laid-back beats, smooth vibes
+                    41-60: Moderate, steady - balanced energy, consistent drive
+                    61-80: High energy, driving - uplifting, powerful, building
+                    81-100: Peak intensity, aggressive - drops, maximum impact
+                    Based on: aggression, rhythmic intensity, emotional intensity, builds/drops - NOT just tempo
                   - duration: number (in seconds)
                   - aiReasoning: string (IMPORTANT: 1-2 sentences explaining how this specific track fits the user's theme "${prompt}" AND how it transitions from the previous track. Reference the theme directly in your reasoning.)
+                  - alternatives: array of 2 alternative track objects, each with:
+                    - title, artist, key, genre, energy, duration (same fields as main track)
+                    - whyNotChosen: string (1 sentence explaining why this wasn't the primary pick but is still a great alternative)
+                    - matchScore: number (70-95, how well this alternative fits the slot)
 
-                  Consider transitions - adjacent tracks should have compatible BPMs and keys.
-                  Each track's aiReasoning MUST explicitly reference the user's theme to explain why it was selected.`
+                  Consider transitions - adjacent tracks should have compatible energy levels and keys.
+                  Each track's aiReasoning MUST explicitly reference the user's theme to explain why it was selected.
+                  The alternatives should be genuinely good options that almost made the cut - similar style, compatible energy/key.`
                 }
               ]
             }
@@ -397,7 +450,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
       if (jsonMatch) {
         const tracks = JSON.parse(jsonMatch[0])
         console.log('[Gemini] Parsed', tracks.length, 'tracks')
-        return await tracksToPlaylistNodes(tracks, constraints?.bpmTolerance || 5)
+        return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
       }
     }
 
@@ -409,11 +462,61 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
   }
 }
 
-async function tracksToPlaylistNodes(tracks: Partial<Track>[], bpmTolerance: number = 5): Promise<PlaylistNode[]> {
-  // Enrich tracks with real YouTube data
-  const enrichedTracks = await enrichTracksWithYouTube(tracks)
+async function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], energyTolerance: number = 10): Promise<PlaylistNode[]> {
+  // Collect all tracks that need YouTube enrichment (main tracks + alternatives)
+  const allTracksToEnrich: Partial<Track>[] = []
+  const trackIndexMap: { mainIndex: number; altIndex?: number }[] = []
 
-  return enrichedTracks.map((track, index) => ({
+  tracks.forEach((track, mainIndex) => {
+    // Add main track
+    allTracksToEnrich.push(track)
+    trackIndexMap.push({ mainIndex })
+
+    // Add alternatives
+    if (track.alternatives) {
+      track.alternatives.forEach((alt, altIndex) => {
+        allTracksToEnrich.push(alt)
+        trackIndexMap.push({ mainIndex, altIndex })
+      })
+    }
+  })
+
+  // Enrich all tracks with YouTube data in parallel
+  console.log(`[Generate] Enriching ${allTracksToEnrich.length} tracks with YouTube data (${tracks.length} main + alternatives)`)
+  const enrichedTracks = await enrichTracksWithYouTube(allTracksToEnrich)
+
+  // Rebuild the structure with enriched data
+  const enrichedMain: (Partial<Track> & { alternatives?: AITrackWithAlternatives['alternatives'] })[] = tracks.map(() => ({}))
+  const enrichedAlternatives: Map<number, AlternativeTrack[]> = new Map()
+
+  enrichedTracks.forEach((enriched, i) => {
+    const mapping = trackIndexMap[i]
+    if (mapping.altIndex === undefined) {
+      // This is a main track
+      enrichedMain[mapping.mainIndex] = { ...tracks[mapping.mainIndex], ...enriched }
+    } else {
+      // This is an alternative
+      if (!enrichedAlternatives.has(mapping.mainIndex)) {
+        enrichedAlternatives.set(mapping.mainIndex, [])
+      }
+      const originalAlt = tracks[mapping.mainIndex].alternatives?.[mapping.altIndex]
+      enrichedAlternatives.get(mapping.mainIndex)!.push({
+        id: `alt-${Date.now()}-${mapping.mainIndex}-${mapping.altIndex}`,
+        youtubeId: enriched.youtubeId || `yt-alt-${Date.now()}-${mapping.mainIndex}-${mapping.altIndex}`,
+        title: enriched.title || originalAlt?.title || 'Unknown Track',
+        artist: enriched.artist || originalAlt?.artist || 'Unknown Artist',
+        duration: enriched.duration || originalAlt?.duration || 240,
+        key: enriched.key || originalAlt?.key,
+        genre: enriched.genre || originalAlt?.genre,
+        energy: enriched.energy || originalAlt?.energy,
+        thumbnail: enriched.thumbnail || `https://picsum.photos/seed/${Date.now() + mapping.mainIndex + mapping.altIndex}/200/200`,
+        whyNotChosen: originalAlt?.whyNotChosen,
+        matchScore: originalAlt?.matchScore
+      })
+    }
+  })
+
+  return enrichedMain.map((track, index) => ({
     id: `node-${Date.now()}-${index}`,
     track: {
       id: `track-${Date.now()}-${index}`,
@@ -421,7 +524,6 @@ async function tracksToPlaylistNodes(tracks: Partial<Track>[], bpmTolerance: num
       title: track.title || 'Unknown Track',
       artist: track.artist || 'Unknown Artist',
       duration: track.duration || 240,
-      bpm: track.bpm,
       key: track.key,
       genre: track.genre,
       energy: track.energy,
@@ -429,29 +531,30 @@ async function tracksToPlaylistNodes(tracks: Partial<Track>[], bpmTolerance: num
       aiReasoning: track.aiReasoning
     },
     position: index,
-    transitionToNext: index < enrichedTracks.length - 1 ? {
-      quality: calculateTransitionQuality(track, enrichedTracks[index + 1], bpmTolerance),
+    alternatives: enrichedAlternatives.get(index) || [],
+    transitionToNext: index < enrichedMain.length - 1 ? {
+      quality: calculateTransitionQuality(track, enrichedMain[index + 1], energyTolerance),
       type: 'blend',
       duration: 16
     } : undefined
   }))
 }
 
-function calculateTransitionQuality(track1: Partial<Track>, track2: Partial<Track>, bpmTolerance: number = 5): 'excellent' | 'good' | 'fair' | 'poor' {
-  if (!track1.bpm || !track2.bpm) return 'good'
+function calculateTransitionQuality(track1: Partial<Track>, track2: Partial<Track>, energyTolerance: number = 10): 'excellent' | 'good' | 'fair' | 'poor' {
+  if (!track1.energy || !track2.energy) return 'good'
 
-  const bpmDiff = Math.abs(track1.bpm - track2.bpm)
+  const energyDiff = Math.abs(track1.energy - track2.energy)
 
-  // Adjust thresholds based on bpmTolerance setting
+  // Adjust thresholds based on energyTolerance setting (1-100 scale)
   // With strict tolerance (1-5), thresholds are tighter
   // With loose tolerance (15-20), thresholds are more forgiving
-  const excellentThreshold = Math.max(2, bpmTolerance * 0.6)
-  const goodThreshold = Math.max(4, bpmTolerance)
-  const fairThreshold = Math.max(8, bpmTolerance * 1.5)
+  const excellentThreshold = Math.max(5, energyTolerance * 0.5)
+  const goodThreshold = Math.max(10, energyTolerance)
+  const fairThreshold = Math.max(20, energyTolerance * 1.5)
 
-  if (bpmDiff <= excellentThreshold) return 'excellent'
-  if (bpmDiff <= goodThreshold) return 'good'
-  if (bpmDiff <= fairThreshold) return 'fair'
+  if (energyDiff <= excellentThreshold) return 'excellent'
+  if (energyDiff <= goodThreshold) return 'good'
+  if (energyDiff <= fairThreshold) return 'fair'
   return 'poor'
 }
 
