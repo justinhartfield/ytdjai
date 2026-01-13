@@ -104,6 +104,92 @@ async function enrichTracksWithYouTube(tracks: Partial<Track>[]): Promise<Partia
   return enrichedTracks
 }
 
+// Build constraint instructions for AI prompt
+function buildConstraintInstructions(constraints: GeneratePlaylistRequest['constraints']): string {
+  const instructions: string[] = []
+
+  // BPM Tolerance
+  if (constraints?.bpmTolerance !== undefined) {
+    const tolerance = constraints.bpmTolerance
+    if (tolerance <= 5) {
+      instructions.push(`STRICT BPM TRANSITIONS: Adjacent tracks must be within ±${tolerance} BPM of each other for smooth mixing.`)
+    } else if (tolerance <= 10) {
+      instructions.push(`MODERATE BPM TRANSITIONS: Keep adjacent tracks within ±${tolerance} BPM when possible.`)
+    } else {
+      instructions.push(`FLEXIBLE BPM TRANSITIONS: BPM can vary up to ±${tolerance} BPM between tracks.`)
+    }
+  }
+
+  // Beat Complexity / Syncopation
+  if (constraints?.syncopation !== undefined) {
+    const sync = constraints.syncopation
+    if (sync < 30) {
+      instructions.push('RHYTHM STYLE: Prefer tracks with simple, straightforward 4/4 beats and minimal syncopation.')
+    } else if (sync > 70) {
+      instructions.push('RHYTHM STYLE: Include tracks with complex rhythms, syncopation, polyrhythms, and intricate percussion.')
+    } else {
+      instructions.push('RHYTHM STYLE: Mix of straightforward and moderately complex rhythms.')
+    }
+  }
+
+  // Key Compatibility
+  if (constraints?.keyMatch === 'strict') {
+    instructions.push('KEY MATCHING: STRICTLY use harmonically compatible keys between adjacent tracks (same key, relative major/minor, or keys in the Camelot wheel that are adjacent).')
+  } else if (constraints?.keyMatch === 'loose') {
+    instructions.push('KEY MATCHING: Consider key compatibility but prioritize overall vibe over strict harmonic mixing.')
+  }
+
+  // Artist Diversity
+  if (constraints?.artistDiversity !== undefined) {
+    const diversity = constraints.artistDiversity
+    if (diversity < 30) {
+      instructions.push('ARTIST SELECTION: It\'s OK to repeat artists multiple times in the set.')
+    } else if (diversity > 70) {
+      instructions.push('ARTIST SELECTION: IMPORTANT - Use a different artist for each track. Maximize variety.')
+    } else {
+      instructions.push('ARTIST SELECTION: Try to vary artists, but occasional repeats are acceptable.')
+    }
+  }
+
+  // Active Decades
+  if (constraints?.activeDecades && constraints.activeDecades.length > 0 && constraints.activeDecades.length < 5) {
+    const decadeRanges: Record<string, string> = {
+      '80s': '1980-1989',
+      '90s': '1990-1999',
+      '00s': '2000-2009',
+      '10s': '2010-2019',
+      '20s': '2020-present'
+    }
+    const ranges = constraints.activeDecades.map(d => decadeRanges[d] || d).join(', ')
+    instructions.push(`ERA PREFERENCE: Focus on tracks from these periods: ${ranges}`)
+  }
+
+  // Discovery / Novelty
+  const discovery = constraints?.discovery ?? constraints?.novelty
+  if (discovery !== undefined) {
+    if (discovery < 30) {
+      instructions.push('TRACK SELECTION: Prioritize well-known hits, popular tracks, and recognizable songs that most people would know.')
+    } else if (discovery > 70) {
+      instructions.push('TRACK SELECTION: Prioritize deep cuts, underground tracks, lesser-known gems, and obscure selections over mainstream hits.')
+    } else {
+      instructions.push('TRACK SELECTION: Balance between popular tracks and deeper cuts.')
+    }
+  }
+
+  // Blacklist
+  const blacklist = [...(constraints?.blacklist || []), ...(constraints?.excludeArtists || []), ...(constraints?.avoidArtists || [])]
+  if (blacklist.length > 0) {
+    instructions.push(`EXCLUSIONS: DO NOT include any tracks by or similar to: ${blacklist.join(', ')}`)
+  }
+
+  // Avoid explicit
+  if (constraints?.avoidExplicit) {
+    instructions.push('CONTENT: Only include clean, non-explicit tracks.')
+  }
+
+  return instructions.join('\n')
+}
+
 async function generateWithOpenAI(prompt: string, constraints: GeneratePlaylistRequest['constraints']): Promise<PlaylistNode[]> {
   const apiKey = process.env.OPENAI_API_KEY
 
@@ -111,6 +197,8 @@ async function generateWithOpenAI(prompt: string, constraints: GeneratePlaylistR
     console.error('[OpenAI] No API key configured')
     throw new Error('OpenAI API key not configured')
   }
+
+  const constraintInstructions = buildConstraintInstructions(constraints)
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -137,15 +225,16 @@ async function generateWithOpenAI(prompt: string, constraints: GeneratePlaylistR
 
             Consider transitions between tracks - adjacent tracks should have compatible BPMs and keys.
             Each track's aiReasoning MUST reference the user's theme/description to explain why it was selected.
-            The response should ONLY be valid JSON array, no additional text or markdown.`
+            The response should ONLY be valid JSON array, no additional text or markdown.
+
+${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${constraintInstructions}` : ''}`
           },
           {
             role: 'user',
             content: `Create a ${constraints?.trackCount || 8} track DJ set: ${prompt}
 
             BPM range: ${constraints?.bpmRange?.min || 120}-${constraints?.bpmRange?.max || 140}
-            Moods: ${constraints?.moods?.join(', ') || 'varied'}
-            Exclude artists: ${constraints?.excludeArtists?.join(', ') || 'none'}`
+            Moods: ${constraints?.moods?.join(', ') || 'varied'}`
           }
         ],
         temperature: 0.8,
@@ -160,7 +249,7 @@ async function generateWithOpenAI(prompt: string, constraints: GeneratePlaylistR
       console.log('[OpenAI] Raw response:', content.substring(0, 200))
       const tracks = JSON.parse(content)
       console.log('[OpenAI] Parsed', tracks.length, 'tracks')
-      return await tracksToPlaylistNodes(tracks)
+      return await tracksToPlaylistNodes(tracks, constraints?.bpmTolerance || 5)
     }
 
     console.error('[OpenAI] No valid response content:', data)
@@ -178,6 +267,8 @@ async function generateWithClaude(prompt: string, constraints: GeneratePlaylistR
     console.error('[Claude] No API key configured')
     throw new Error('Anthropic API key not configured')
   }
+
+  const constraintInstructions = buildConstraintInstructions(constraints)
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -199,7 +290,8 @@ async function generateWithClaude(prompt: string, constraints: GeneratePlaylistR
             - Track count: ${constraints?.trackCount || 8}
             - BPM range: ${constraints?.bpmRange?.min || 120}-${constraints?.bpmRange?.max || 140}
             - Moods: ${constraints?.moods?.join(', ') || 'varied'}
-            - Exclude artists: ${constraints?.excludeArtists?.join(', ') || 'none'}
+
+${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${constraintInstructions}` : ''}
 
             Return ONLY a JSON array of track objects with these fields:
             - title: string (track name)
@@ -228,7 +320,7 @@ async function generateWithClaude(prompt: string, constraints: GeneratePlaylistR
       if (jsonMatch) {
         const tracks = JSON.parse(jsonMatch[0])
         console.log('[Claude] Parsed', tracks.length, 'tracks')
-        return await tracksToPlaylistNodes(tracks)
+        return await tracksToPlaylistNodes(tracks, constraints?.bpmTolerance || 5)
       }
     }
 
@@ -247,6 +339,8 @@ async function generateWithGemini(prompt: string, constraints: GeneratePlaylistR
     console.error('[Gemini] No API key configured')
     throw new Error('Google AI API key not configured')
   }
+
+  const constraintInstructions = buildConstraintInstructions(constraints)
 
   try {
     const response = await fetch(
@@ -267,7 +361,8 @@ async function generateWithGemini(prompt: string, constraints: GeneratePlaylistR
                   - Track count: ${constraints?.trackCount || 8}
                   - BPM range: ${constraints?.bpmRange?.min || 120}-${constraints?.bpmRange?.max || 140}
                   - Moods: ${constraints?.moods?.join(', ') || 'varied'}
-                  - Exclude artists: ${constraints?.excludeArtists?.join(', ') || 'none'}
+
+${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${constraintInstructions}` : ''}
 
                   Return ONLY a JSON array of track objects with these fields:
                   - title: string (track name)
@@ -302,7 +397,7 @@ async function generateWithGemini(prompt: string, constraints: GeneratePlaylistR
       if (jsonMatch) {
         const tracks = JSON.parse(jsonMatch[0])
         console.log('[Gemini] Parsed', tracks.length, 'tracks')
-        return await tracksToPlaylistNodes(tracks)
+        return await tracksToPlaylistNodes(tracks, constraints?.bpmTolerance || 5)
       }
     }
 
@@ -314,7 +409,7 @@ async function generateWithGemini(prompt: string, constraints: GeneratePlaylistR
   }
 }
 
-async function tracksToPlaylistNodes(tracks: Partial<Track>[]): Promise<PlaylistNode[]> {
+async function tracksToPlaylistNodes(tracks: Partial<Track>[], bpmTolerance: number = 5): Promise<PlaylistNode[]> {
   // Enrich tracks with real YouTube data
   const enrichedTracks = await enrichTracksWithYouTube(tracks)
 
@@ -335,21 +430,28 @@ async function tracksToPlaylistNodes(tracks: Partial<Track>[]): Promise<Playlist
     },
     position: index,
     transitionToNext: index < enrichedTracks.length - 1 ? {
-      quality: calculateTransitionQuality(track, enrichedTracks[index + 1]),
+      quality: calculateTransitionQuality(track, enrichedTracks[index + 1], bpmTolerance),
       type: 'blend',
       duration: 16
     } : undefined
   }))
 }
 
-function calculateTransitionQuality(track1: Partial<Track>, track2: Partial<Track>): 'excellent' | 'good' | 'fair' | 'poor' {
+function calculateTransitionQuality(track1: Partial<Track>, track2: Partial<Track>, bpmTolerance: number = 5): 'excellent' | 'good' | 'fair' | 'poor' {
   if (!track1.bpm || !track2.bpm) return 'good'
 
   const bpmDiff = Math.abs(track1.bpm - track2.bpm)
 
-  if (bpmDiff <= 3) return 'excellent'
-  if (bpmDiff <= 6) return 'good'
-  if (bpmDiff <= 10) return 'fair'
+  // Adjust thresholds based on bpmTolerance setting
+  // With strict tolerance (1-5), thresholds are tighter
+  // With loose tolerance (15-20), thresholds are more forgiving
+  const excellentThreshold = Math.max(2, bpmTolerance * 0.6)
+  const goodThreshold = Math.max(4, bpmTolerance)
+  const fairThreshold = Math.max(8, bpmTolerance * 1.5)
+
+  if (bpmDiff <= excellentThreshold) return 'excellent'
+  if (bpmDiff <= goodThreshold) return 'good'
+  if (bpmDiff <= fairThreshold) return 'fair'
   return 'poor'
 }
 
@@ -359,6 +461,7 @@ export async function POST(request: NextRequest) {
     const { prompt, constraints, provider = 'openai' } = body
 
     console.log('[Generate API] Request received:', { provider, prompt: prompt?.substring(0, 50) })
+    console.log('[Generate API] Constraints:', JSON.stringify(constraints, null, 2))
     console.log('[Generate API] API Keys present:', {
       openai: !!process.env.OPENAI_API_KEY,
       anthropic: !!process.env.ANTHROPIC_API_KEY,

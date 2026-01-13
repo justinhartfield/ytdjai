@@ -69,7 +69,7 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
   const [bpmRange, setBpmRange] = useState({ min: 80, max: 165 })
   const [isGenerating, setIsGenerating] = useState(false)
 
-  const { aiProvider, updateSetWithPrompt, setIsGenerating: setStoreGenerating } = useYTDJStore()
+  const { aiProvider, updateSetWithPrompt, setIsGenerating: setStoreGenerating, constraints } = useYTDJStore()
 
   const toggleTag = (tag: string) => {
     setSelectedTags(prev =>
@@ -111,7 +111,15 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
         constraints: {
           trackCount,
           bpmRange,
-          novelty
+          novelty,
+          // Include all extended constraints from AI Settings
+          bpmTolerance: constraints.bpmTolerance,
+          syncopation: constraints.syncopation,
+          keyMatch: constraints.keyMatch,
+          artistDiversity: constraints.diversity,
+          discovery: constraints.discovery,
+          activeDecades: constraints.activeDecades,
+          blacklist: constraints.blacklist
         } as AIConstraints,
         provider: aiProvider
       })
@@ -126,7 +134,7 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
       setIsGenerating(false)
       setStoreGenerating(false)
     }
-  }, [prompt, selectedTags, selectedArc, duration, bpmRange, novelty, aiProvider, updateSetWithPrompt, setStoreGenerating, onComplete])
+  }, [prompt, selectedTags, selectedArc, duration, bpmRange, novelty, aiProvider, constraints, updateSetWithPrompt, setStoreGenerating, onComplete])
 
   return (
     <div className="min-h-screen bg-[#05060f] text-white overflow-auto">

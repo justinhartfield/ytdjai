@@ -9,7 +9,15 @@ import { useYTDJStore } from '@/store'
 interface AIConstraintsDrawerProps {
   isOpen: boolean
   onClose: () => void
-  onRegenerate?: () => void
+  onRegenerate?: (constraints: {
+    bpmTolerance: number
+    syncopation: number
+    keyMatch: 'strict' | 'loose'
+    diversity: number
+    activeDecades: string[]
+    discovery: number
+    blacklist: string[]
+  }) => void
 }
 
 export function AIConstraintsDrawer({ isOpen, onClose, onRegenerate }: AIConstraintsDrawerProps) {
@@ -263,7 +271,7 @@ export function AIConstraintsDrawer({ isOpen, onClose, onRegenerate }: AIConstra
           {/* Footer */}
           <div className="p-6 border-t border-white/5 bg-black/20">
             <button
-              onClick={onRegenerate}
+              onClick={() => onRegenerate?.(constraints)}
               disabled={isGenerating}
               className="w-full py-4 bg-gradient-to-r from-cyan-500 to-pink-500 text-black font-black text-xs uppercase tracking-widest rounded-xl hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >

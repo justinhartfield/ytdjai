@@ -308,17 +308,27 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
     }
   }, [currentSet?.prompt, isPromptEditing])
 
-  const handleRegenerate = useCallback(async () => {
+  const handleRegenerate = useCallback(async (overrideConstraints?: typeof constraints) => {
     if (!editingPrompt.trim() || isGenerating) return
 
     setIsGenerating(true)
     try {
       const trackCount = playlist.length || 8
+      const activeConstraints = overrideConstraints || constraints
+
       const result = await generatePlaylist({
         prompt: editingPrompt,
         constraints: {
           trackCount,
-          bpmRange: { min: 80, max: 160 }
+          bpmRange: { min: 80, max: 160 },
+          // Map extended constraints to AIConstraints
+          bpmTolerance: activeConstraints.bpmTolerance,
+          syncopation: activeConstraints.syncopation,
+          keyMatch: activeConstraints.keyMatch,
+          artistDiversity: activeConstraints.diversity,
+          discovery: activeConstraints.discovery,
+          activeDecades: activeConstraints.activeDecades,
+          blacklist: activeConstraints.blacklist
         } as AIConstraints,
         provider: aiProvider
       })
@@ -332,7 +342,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
       setIsGenerating(false)
       setIsPromptEditing(false)
     }
-  }, [editingPrompt, isGenerating, playlist.length, aiProvider, updateSetWithPrompt, setIsGenerating])
+  }, [editingPrompt, isGenerating, playlist.length, aiProvider, constraints, updateSetWithPrompt, setIsGenerating])
 
   const handleRegenerateWithCount = useCallback(async (mode: 'replace' | 'append') => {
     if (!editingPrompt.trim() || isGenerating) return
@@ -348,9 +358,14 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
         constraints: {
           trackCount: countToGenerate,
           bpmRange: { min: 80, max: 160 },
+          // Include all extended constraints
           bpmTolerance: constraints.bpmTolerance,
+          syncopation: constraints.syncopation,
+          keyMatch: constraints.keyMatch,
           artistDiversity: constraints.diversity,
-          novelty: constraints.discovery
+          discovery: constraints.discovery,
+          activeDecades: constraints.activeDecades,
+          blacklist: constraints.blacklist
         } as AIConstraints,
         provider: aiProvider
       })
@@ -397,7 +412,15 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
         prompt: arcPrompt,
         constraints: {
           trackCount,
-          bpmRange: { min: 80, max: 160 }
+          bpmRange: { min: 80, max: 160 },
+          // Include all extended constraints
+          bpmTolerance: constraints.bpmTolerance,
+          syncopation: constraints.syncopation,
+          keyMatch: constraints.keyMatch,
+          artistDiversity: constraints.diversity,
+          discovery: constraints.discovery,
+          activeDecades: constraints.activeDecades,
+          blacklist: constraints.blacklist
         } as AIConstraints,
         provider: aiProvider
       })
@@ -411,7 +434,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
     } finally {
       setIsGenerating(false)
     }
-  }, [pendingArcChange, isGenerating, editingPrompt, currentSet?.prompt, playlist.length, aiProvider, updateSetWithPrompt, setIsGenerating])
+  }, [pendingArcChange, isGenerating, editingPrompt, currentSet?.prompt, playlist.length, aiProvider, constraints, updateSetWithPrompt, setIsGenerating])
 
   const selectedNode = selectedNodeIndex !== null ? playlist[selectedNodeIndex] : null
   const totalDuration = playlist.reduce((acc, node) => acc + node.track.duration, 0)
@@ -552,7 +575,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                       Cancel
                     </button>
                     <button
-                      onClick={handleRegenerate}
+                      onClick={() => handleRegenerate()}
                       disabled={isGenerating || !editingPrompt.trim()}
                       className="flex-1 py-2 text-[10px] font-bold text-black uppercase tracking-wider bg-cyan-500 rounded-lg hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
                     >
@@ -692,7 +715,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
           {/* Regenerate Footer */}
           <div className="p-6 border-t border-white/5 bg-black/20">
             <button
-              onClick={handleRegenerate}
+              onClick={() => handleRegenerate()}
               disabled={isGenerating || !editingPrompt.trim()}
               className="w-full py-4 bg-cyan-500 text-black font-black text-xs uppercase tracking-widest rounded-lg hover:bg-cyan-400 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >

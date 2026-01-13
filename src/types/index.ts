@@ -90,9 +90,9 @@ export interface Set {
 }
 
 export interface AIConstraints {
-  bpmTolerance?: number // 1-20
-  novelty?: number // 0-100 (familiar to deep cuts)
-  artistDiversity?: number // 0-100
+  bpmTolerance?: number // 1-20 - how strict BPM matching should be
+  novelty?: number // 0-100 (familiar to deep cuts) - maps to discovery
+  artistDiversity?: number // 0-100 - how much variety in artists
   genreDiversity?: number // 0-100
   decadeSpread?: number // 0-100
   avoidArtists?: string[]
@@ -104,6 +104,12 @@ export interface AIConstraints {
   moods?: Mood[]
   excludeArtists?: string[]
   bpmRange?: { min: number; max: number }
+  // Extended constraints from AI Settings panel
+  syncopation?: number // 0-100 - beat complexity preference
+  keyMatch?: 'strict' | 'loose' // how strict key matching should be
+  activeDecades?: string[] // which decades to include ('80s', '90s', '00s', '10s', '20s')
+  discovery?: number // 0-100 - chart hits (0) to underground (100)
+  blacklist?: string[] // artists/genres to exclude
 }
 
 export interface GeneratePlaylistRequest {
