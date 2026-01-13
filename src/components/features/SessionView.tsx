@@ -4,11 +4,24 @@ import { useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Zap, Undo2, Redo2, Download, Play, Pause, SkipBack, SkipForward,
-  Lock, X, RefreshCw, Plus, Sparkles, Info
+  Lock, X, RefreshCw, Plus, Sparkles, Info, Loader2, Shuffle
 } from 'lucide-react'
 import { cn, formatDuration } from '@/lib/utils'
-import { useYTDJStore } from '@/store'
-import type { PlaylistNode, Track } from '@/types'
+import { useYTDJStore, arcTemplates } from '@/store'
+import { generatePlaylist } from '@/lib/ai-service'
+import { IconSidebar } from './IconSidebar'
+import { AIConstraintsDrawer } from './AIConstraintsDrawer'
+import { SetsDashboard } from './SetsDashboard'
+import { ExportFlow } from './ExportFlow'
+import type { PlaylistNode, Track, Set, AIConstraints } from '@/types'
+
+// Local ARC_TEMPLATES that matches the store format
+const ARC_TEMPLATES = [
+  { id: 'warmup', name: 'Warm-up Peak', svg: 'M0,25 Q50,5 100,25' },
+  { id: 'burn', name: 'Slow Burn', svg: 'M0,28 L100,5' },
+  { id: 'valley', name: 'The Valley', svg: 'M0,5 Q50,28 100,5' },
+  { id: 'chaos', name: 'Pulse Chaos', svg: 'M0,15 L20,5 L40,25 L60,10 L80,28 L100,15' }
+]
 
 interface SessionViewProps {
   onViewChange: (view: 'arrangement' | 'session') => void
@@ -23,16 +36,44 @@ interface SessionColumn {
 }
 
 export function SessionView({ onViewChange, currentView }: SessionViewProps) {
-  const { currentSet, updatePlaylist } = useYTDJStore()
+  const {
+    currentSet,
+    updatePlaylist,
+    updateSetWithPrompt,
+    aiProvider,
+    isGenerating,
+    setIsGenerating,
+    player,
+    playTrack,
+    pauseTrack,
+    skipNext,
+    skipPrevious,
+    ui,
+    setLeftSidebarPanel,
+    setCurrentSet,
+    constraints,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    activeArcTemplate
+  } = useYTDJStore()
   const playlist = currentSet?.playlist || []
 
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null)
   const [selectedColumnIndex, setSelectedColumnIndex] = useState<number | null>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
   const [auditioningTrack, setAuditioningTrack] = useState<Track | null>(null)
-  const [autoPreview, setAutoPreview] = useState(true)
-  const [matchHarmonics, setMatchHarmonics] = useState(true)
   const [showExport, setShowExport] = useState(false)
+  const [isRegenerating, setIsRegenerating] = useState(false)
+  const [isSmoothing, setIsSmoothing] = useState(false)
+  const [addingTrackAtIndex, setAddingTrackAtIndex] = useState<number | null>(null)
+
+  // Player state from store
+  const { isPlaying, playingNodeIndex, currentTime, duration } = player
+  const activeTrackIndex = playingNodeIndex ?? 0
+
+  // Get the current arc template
+  const currentArc = ARC_TEMPLATES.find(arc => arc.id === activeArcTemplate) || ARC_TEMPLATES[0]
 
   // Convert playlist to session columns
   const sessionColumns: SessionColumn[] = useMemo(() => {
@@ -55,9 +96,6 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
     setAuditioningTrack(track)
     setSelectedTrack(track)
     setSelectedColumnIndex(columnIndex)
-    if (autoPreview) {
-      setIsPlaying(true)
-    }
   }
 
   const handleSwapIn = useCallback((track: Track, columnIndex: number) => {
@@ -71,6 +109,151 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
     setAuditioningTrack(null)
   }, [playlist, updatePlaylist])
 
+  const handleLockToggle = useCallback((columnIndex: number) => {
+    const newPlaylist = [...playlist]
+    newPlaylist[columnIndex] = {
+      ...newPlaylist[columnIndex],
+      isLocked: !newPlaylist[columnIndex].isLocked
+    }
+    updatePlaylist(newPlaylist)
+  }, [playlist, updatePlaylist])
+
+  // Global Ops: Regenerate Grid
+  const handleRegenerateGrid = useCallback(async () => {
+    if (isRegenerating || !currentSet?.prompt) return
+
+    setIsRegenerating(true)
+    try {
+      const result = await generatePlaylist({
+        prompt: currentSet.prompt,
+        constraints: {
+          trackCount: playlist.length || 8,
+          bpmRange: { min: 80, max: 160 },
+          bpmTolerance: constraints.bpmTolerance,
+          artistDiversity: constraints.diversity
+        } as AIConstraints,
+        provider: aiProvider
+      })
+
+      if (result.success && result.playlist) {
+        // Preserve locked tracks
+        const newPlaylist = result.playlist.map((node, index) => {
+          const existingNode = playlist[index]
+          if (existingNode?.isLocked) {
+            return { ...node, track: existingNode.track, isLocked: true }
+          }
+          return node
+        })
+        updateSetWithPrompt(newPlaylist, currentSet.prompt)
+      }
+    } catch (error) {
+      console.error('Failed to regenerate grid:', error)
+    } finally {
+      setIsRegenerating(false)
+    }
+  }, [isRegenerating, currentSet, playlist, constraints, aiProvider, updateSetWithPrompt])
+
+  // Global Ops: Auto-Smooth Transitions
+  const handleAutoSmooth = useCallback(() => {
+    if (isSmoothing || playlist.length < 2) return
+
+    setIsSmoothing(true)
+    try {
+      // Sort tracks by BPM to create smooth transitions
+      const unlockedWithIndex = playlist
+        .map((node, index) => ({ node, index, isLocked: node.isLocked }))
+        .filter(item => !item.isLocked)
+
+      const lockedPositions = playlist
+        .map((node, index) => ({ node, index }))
+        .filter(item => item.node.isLocked)
+
+      // Get BPMs of locked tracks to understand constraints
+      const lockedBpms = lockedPositions.map(item => ({
+        index: item.index,
+        bpm: item.node.targetBpm || item.node.track.bpm || 120
+      }))
+
+      // Sort unlocked tracks by BPM
+      unlockedWithIndex.sort((a, b) => {
+        const bpmA = a.node.targetBpm || a.node.track.bpm || 120
+        const bpmB = b.node.targetBpm || b.node.track.bpm || 120
+        return bpmA - bpmB
+      })
+
+      // Rebuild playlist with smooth BPM progression
+      const newPlaylist = [...playlist]
+      let unlockedIdx = 0
+
+      for (let i = 0; i < newPlaylist.length; i++) {
+        if (!newPlaylist[i].isLocked && unlockedIdx < unlockedWithIndex.length) {
+          newPlaylist[i] = unlockedWithIndex[unlockedIdx].node
+          unlockedIdx++
+        }
+      }
+
+      updatePlaylist(newPlaylist)
+    } catch (error) {
+      console.error('Failed to smooth transitions:', error)
+    } finally {
+      setIsSmoothing(false)
+    }
+  }, [isSmoothing, playlist, updatePlaylist])
+
+  // Global Ops: Randomize Unlocked
+  const handleRandomizeUnlocked = useCallback(() => {
+    const unlockedIndices = playlist
+      .map((node, index) => ({ node, index }))
+      .filter(item => !item.node.isLocked)
+      .map(item => item.index)
+
+    if (unlockedIndices.length < 2) return
+
+    // Fisher-Yates shuffle for unlocked tracks
+    const newPlaylist = [...playlist]
+    const unlockedNodes = unlockedIndices.map(i => newPlaylist[i])
+
+    for (let i = unlockedNodes.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [unlockedNodes[i], unlockedNodes[j]] = [unlockedNodes[j], unlockedNodes[i]]
+    }
+
+    unlockedIndices.forEach((originalIndex, i) => {
+      newPlaylist[originalIndex] = unlockedNodes[i]
+    })
+
+    updatePlaylist(newPlaylist)
+  }, [playlist, updatePlaylist])
+
+  // Add track at specific position
+  const handleAddTrack = useCallback(async (columnIndex: number) => {
+    if (addingTrackAtIndex !== null) return
+
+    setAddingTrackAtIndex(columnIndex)
+    try {
+      const result = await generatePlaylist({
+        prompt: currentSet?.prompt || 'Add a track that fits the set',
+        constraints: {
+          trackCount: 1,
+          bpmRange: { min: 80, max: 160 }
+        } as AIConstraints,
+        provider: aiProvider
+      })
+
+      if (result.success && result.playlist && result.playlist.length > 0) {
+        const newTrack = result.playlist[0]
+        const newPlaylist = [...playlist]
+        // Insert after the column index
+        newPlaylist.splice(columnIndex + 1, 0, newTrack)
+        updatePlaylist(newPlaylist)
+      }
+    } catch (error) {
+      console.error('Failed to add track:', error)
+    } finally {
+      setAddingTrackAtIndex(null)
+    }
+  }, [addingTrackAtIndex, currentSet, playlist, aiProvider, updatePlaylist])
+
   return (
     <div className="h-full flex flex-col bg-[#05060f] overflow-hidden">
       {/* Scanline Effect */}
@@ -79,29 +262,18 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
       </div>
 
       {/* Header */}
-      <header className="h-14 bg-[#0a0c1c]/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-4 z-40">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-gradient-to-br from-cyan-400 to-pink-500 rounded-sm" />
-            <span className="font-bold tracking-tighter text-lg">YTDJ.AI</span>
-          </div>
-
-          <div className="h-6 w-px bg-white/10" />
-
+      <header className="h-16 bg-[#0a0c1c]/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-6 z-40">
+        <div className="flex items-center gap-8">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-semibold text-gray-300">{currentSet?.name || 'Untitled Set'}</span>
-            <span className="text-[10px] uppercase tracking-widest text-cyan-500 font-bold bg-cyan-500/10 px-2 py-0.5 rounded animate-pulse">
-              Live Link
-            </span>
+            <div className="w-8 h-8 rounded bg-gradient-to-tr from-cyan-500 to-pink-500 flex items-center justify-center font-black text-black text-sm">YT</div>
+            <h1 className="text-xl font-extrabold tracking-tighter uppercase">YTDJ<span className="text-cyan-400">.AI</span></h1>
           </div>
-        </div>
 
-        <div className="flex items-center gap-4">
-          <nav className="flex items-center bg-black/40 rounded-lg p-1 border border-white/5">
+          <nav className="flex items-center bg-black/40 rounded-full border border-white/5 p-1">
             <button
               onClick={() => onViewChange('arrangement')}
               className={cn(
-                'px-3 py-1 rounded text-xs font-bold transition-all',
+                'px-4 py-1.5 rounded-full text-[10px] font-bold tracking-widest transition-all',
                 currentView === 'arrangement' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'
               )}
             >
@@ -110,31 +282,78 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
             <button
               onClick={() => onViewChange('session')}
               className={cn(
-                'px-3 py-1 rounded text-xs font-bold transition-all',
+                'px-4 py-1.5 rounded-full text-[10px] font-bold tracking-widest transition-all',
                 currentView === 'session' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'
               )}
             >
               SESSION
             </button>
           </nav>
+        </div>
 
-          <div className="flex items-center gap-1">
-            <button className="p-2 hover:bg-white/5 rounded text-gray-400"><Undo2 className="w-4 h-4" /></button>
-            <button className="p-2 hover:bg-white/5 rounded text-gray-400"><Redo2 className="w-4 h-4" /></button>
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={undo}
+              disabled={!canUndo()}
+              className={cn(
+                "p-2 transition-colors rounded",
+                canUndo() ? "text-gray-400 hover:text-cyan-400 hover:bg-white/5" : "text-gray-600 cursor-not-allowed"
+              )}
+            >
+              <Undo2 className="w-5 h-5" />
+            </button>
+            <button
+              onClick={redo}
+              disabled={!canRedo()}
+              className={cn(
+                "p-2 transition-colors rounded",
+                canRedo() ? "text-gray-400 hover:text-cyan-400 hover:bg-white/5" : "text-gray-600 cursor-not-allowed"
+              )}
+            >
+              <Redo2 className="w-5 h-5" />
+            </button>
           </div>
-
+          <div className="h-8 w-px bg-white/10" />
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Project:</span>
+            <span className="text-sm font-bold text-cyan-400">{currentSet?.name || 'Untitled Set'}</span>
+          </div>
           <button
             onClick={() => setShowExport(true)}
-            className="px-4 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-black text-xs font-bold rounded-md transition-all shadow-[0_0_15px_rgba(0,242,255,0.2)] hover:shadow-[0_0_25px_rgba(0,242,255,0.4)]"
+            className="px-6 py-2 bg-white text-black text-xs font-black rounded hover:bg-cyan-400 hover:scale-105 transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] uppercase tracking-widest"
           >
-            EXPORT SET
+            Export Set
           </button>
         </div>
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar: AI Controls */}
-        <aside className="w-72 bg-[#0a0c1c]/80 backdrop-blur-xl border-r border-white/5 flex flex-col z-40">
+        {/* Icon Sidebar */}
+        <IconSidebar />
+
+        {/* AI Constraints Drawer */}
+        <AIConstraintsDrawer
+          isOpen={ui.leftSidebarPanel === 'constraints'}
+          onClose={() => setLeftSidebarPanel(null)}
+          onRegenerate={handleRegenerateGrid}
+        />
+
+        {/* Sets Dashboard Drawer */}
+        <SetsDashboard
+          isOpen={ui.leftSidebarPanel === 'sets'}
+          onClose={() => setLeftSidebarPanel(null)}
+          onSelectSet={(set: Set) => {
+            setCurrentSet(set)
+            setLeftSidebarPanel(null)
+          }}
+        />
+
+        {/* Left Sidebar: Set Info (shown when no drawer is open) */}
+        <aside className={cn(
+          "w-80 bg-[#0a0c1c]/80 backdrop-blur-xl border-r border-white/5 flex flex-col overflow-hidden transition-all",
+          ui.leftSidebarPanel === 'constraints' || ui.leftSidebarPanel === 'sets' ? 'hidden' : ''
+        )}>
           <div className="p-4 border-b border-white/5 flex items-center justify-between bg-black/20">
             <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400">Set Constraints</h2>
             <Zap className="w-4 h-4 text-cyan-400" />
@@ -149,53 +368,19 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
               </div>
             </div>
 
-            {/* Current Arc */}
+            {/* Current Arc - Now shows real arc from store */}
             <div className="space-y-3">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Current Arc</label>
               <div className="p-3 border border-cyan-500/30 bg-cyan-500/5 rounded-xl">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-bold">WARM-UP PEAK</span>
+                  <span className="text-xs font-bold text-cyan-400 uppercase">{currentArc.name}</span>
                   <span className="text-[9px] text-cyan-400">
                     {playlist[0]?.track.bpm || 80} → {playlist[playlist.length - 1]?.track.bpm || 145} BPM
                   </span>
                 </div>
-                <svg className="w-full h-8" viewBox="0 0 100 20">
-                  <path d="M0,15 Q30,15 50,5 T100,2" fill="none" stroke="#00f2ff" strokeWidth="2" />
+                <svg className="w-full h-8" viewBox="0 0 100 30">
+                  <path d={currentArc.svg} fill="none" stroke="#00f2ff" strokeWidth="2" />
                 </svg>
-              </div>
-            </div>
-
-            {/* Session Toggles */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-gray-400 uppercase">Auto-Preview</span>
-                <button
-                  onClick={() => setAutoPreview(!autoPreview)}
-                  className={cn(
-                    'w-8 h-4 rounded-full relative transition-colors',
-                    autoPreview ? 'bg-cyan-500' : 'bg-white/10'
-                  )}
-                >
-                  <div className={cn(
-                    'absolute w-4 h-4 bg-white rounded-full transition-transform shadow-md',
-                    autoPreview ? 'translate-x-4' : 'translate-x-0'
-                  )} />
-                </button>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-gray-400 uppercase">Match Harmonics</span>
-                <button
-                  onClick={() => setMatchHarmonics(!matchHarmonics)}
-                  className={cn(
-                    'w-8 h-4 rounded-full relative transition-colors',
-                    matchHarmonics ? 'bg-pink-500' : 'bg-white/10'
-                  )}
-                >
-                  <div className={cn(
-                    'absolute w-4 h-4 bg-white rounded-full transition-transform shadow-md',
-                    matchHarmonics ? 'translate-x-4' : 'translate-x-0'
-                  )} />
-                </button>
               </div>
             </div>
 
@@ -208,6 +393,10 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
               <div className="flex justify-between items-center mt-2">
                 <span className="text-[10px] font-bold text-gray-500 uppercase">Duration</span>
                 <span className="text-sm font-bold text-cyan-400">{Math.floor(totalDuration / 60)} min</span>
+              </div>
+              <div className="flex justify-between items-center mt-2">
+                <span className="text-[10px] font-bold text-gray-500 uppercase">Locked</span>
+                <span className="text-sm font-bold text-pink-400">{playlist.filter(n => n.isLocked).length}</span>
               </div>
             </div>
           </div>
@@ -265,7 +454,8 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
                       <div className={cn(
                         'relative bg-[#0a0c1c]/80 backdrop-blur-xl rounded-xl overflow-hidden border-2 p-2',
                         'border-cyan-500/40 bg-gradient-to-r from-cyan-500/10 to-transparent',
-                        selectedTrack?.id === col.activeTrack.track.id && 'border-cyan-400'
+                        selectedTrack?.id === col.activeTrack.track.id && 'border-cyan-400',
+                        isPlaying && playingNodeIndex === colIdx && 'border-green-400 shadow-[0_0_15px_rgba(34,197,94,0.4)]'
                       )}>
                         <div className="relative aspect-video rounded-lg overflow-hidden bg-gray-900 mb-2">
                           <img
@@ -274,7 +464,23 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
                             className="w-full h-full object-cover"
                           />
                           <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Play className="w-8 h-8 fill-white text-white" />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (isPlaying && playingNodeIndex === colIdx) {
+                                  pauseTrack()
+                                } else {
+                                  playTrack(colIdx)
+                                }
+                              }}
+                              className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center hover:scale-110 transition-transform"
+                            >
+                              {isPlaying && playingNodeIndex === colIdx ? (
+                                <Pause className="w-5 h-5 text-black" />
+                              ) : (
+                                <Play className="w-5 h-5 fill-black text-black ml-0.5" />
+                              )}
+                            </button>
                           </div>
                           <div className="absolute bottom-1 right-1 bg-black/80 px-1 rounded text-[8px] font-mono">
                             {formatDuration(col.activeTrack.track.duration)}
@@ -293,11 +499,21 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
                     </div>
                     <div className="flex items-center justify-between px-1">
                       <div className="flex gap-1">
-                        <button className="w-4 h-4 bg-white/5 rounded flex items-center justify-center hover:text-cyan-400 transition-colors">
-                          <Lock className="w-2.5 h-2.5" />
+                        <button
+                          onClick={() => handleLockToggle(colIdx)}
+                          className={cn(
+                            "w-5 h-5 rounded flex items-center justify-center transition-colors",
+                            col.activeTrack.isLocked
+                              ? "bg-cyan-500 text-black"
+                              : "bg-white/5 hover:bg-white/10 text-gray-400 hover:text-cyan-400"
+                          )}
+                        >
+                          <Lock className="w-3 h-3" />
                         </button>
                       </div>
-                      <div className="text-[9px] font-bold text-gray-600 uppercase">Match: 98%</div>
+                      <div className="text-[9px] font-bold text-gray-600 uppercase">
+                        {col.activeTrack.track.bpm || '?'} BPM
+                      </div>
                     </div>
                   </div>
 
@@ -346,8 +562,22 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
                       </div>
                     )}
 
-                    <button className="w-full py-4 rounded-lg border-2 border-dashed border-white/5 hover:border-white/10 flex items-center justify-center group transition-all">
-                      <Plus className="w-5 h-5 text-gray-600 group-hover:text-gray-400" />
+                    {/* Functional Plus Button */}
+                    <button
+                      onClick={() => handleAddTrack(colIdx)}
+                      disabled={addingTrackAtIndex !== null}
+                      className={cn(
+                        "w-full py-4 rounded-lg border-2 border-dashed flex items-center justify-center group transition-all",
+                        addingTrackAtIndex === colIdx
+                          ? "border-cyan-500/50 bg-cyan-500/5"
+                          : "border-white/5 hover:border-cyan-500/30 hover:bg-cyan-500/5"
+                      )}
+                    >
+                      {addingTrackAtIndex === colIdx ? (
+                        <Loader2 className="w-5 h-5 text-cyan-400 animate-spin" />
+                      ) : (
+                        <Plus className="w-5 h-5 text-gray-600 group-hover:text-cyan-400" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -368,17 +598,62 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
             </div>
           </div>
 
-          {/* Global Action Bar */}
+          {/* Global Action Bar - Now functional */}
           <div className="h-12 border-t border-white/5 bg-black/40 flex items-center px-6 gap-6 z-20">
             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Global Ops</span>
             <div className="h-4 w-px bg-white/10" />
-            <button className="text-[9px] font-bold text-cyan-400 hover:bg-cyan-400/10 px-3 py-1 rounded-full border border-cyan-400/20 transition-all uppercase">
-              Regenerate Grid
+            <button
+              onClick={handleRegenerateGrid}
+              disabled={isRegenerating || !currentSet?.prompt}
+              className={cn(
+                "text-[9px] font-bold px-3 py-1 rounded-full border transition-all uppercase flex items-center gap-2",
+                isRegenerating
+                  ? "text-cyan-400/50 border-cyan-400/10 cursor-not-allowed"
+                  : "text-cyan-400 hover:bg-cyan-400/10 border-cyan-400/20"
+              )}
+            >
+              {isRegenerating ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Regenerating...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-3 h-3" />
+                  Regenerate Grid
+                </>
+              )}
             </button>
-            <button className="text-[9px] font-bold text-pink-400 hover:bg-pink-400/10 px-3 py-1 rounded-full border border-pink-400/20 transition-all uppercase">
-              Auto-Smooth Transitions
+            <button
+              onClick={handleAutoSmooth}
+              disabled={isSmoothing || playlist.length < 2}
+              className={cn(
+                "text-[9px] font-bold px-3 py-1 rounded-full border transition-all uppercase flex items-center gap-2",
+                isSmoothing
+                  ? "text-pink-400/50 border-pink-400/10 cursor-not-allowed"
+                  : "text-pink-400 hover:bg-pink-400/10 border-pink-400/20"
+              )}
+            >
+              {isSmoothing ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Smoothing...
+                </>
+              ) : (
+                'Auto-Smooth Transitions'
+              )}
             </button>
-            <button className="text-[9px] font-bold text-white hover:bg-white/10 px-3 py-1 rounded-full border border-white/20 transition-all uppercase">
+            <button
+              onClick={handleRandomizeUnlocked}
+              disabled={playlist.filter(n => !n.isLocked).length < 2}
+              className={cn(
+                "text-[9px] font-bold px-3 py-1 rounded-full border transition-all uppercase flex items-center gap-2",
+                playlist.filter(n => !n.isLocked).length < 2
+                  ? "text-white/30 border-white/10 cursor-not-allowed"
+                  : "text-white hover:bg-white/10 border-white/20"
+              )}
+            >
+              <Shuffle className="w-3 h-3" />
               Randomize Unlocked
             </button>
           </div>
@@ -415,8 +690,28 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
                         <p className="text-gray-400 text-sm mt-1">{selectedTrack.artist}</p>
                       </div>
                     </div>
-                    <button className="absolute bottom-4 right-4 w-10 h-10 bg-white text-black rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform">
-                      <Play className="w-5 h-5" />
+                    <button
+                      onClick={() => {
+                        if (selectedColumnIndex !== null) {
+                          if (isPlaying && playingNodeIndex === selectedColumnIndex) {
+                            pauseTrack()
+                          } else {
+                            playTrack(selectedColumnIndex)
+                          }
+                        }
+                      }}
+                      className={cn(
+                        "absolute bottom-4 right-4 w-10 h-10 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform",
+                        isPlaying && selectedColumnIndex !== null && playingNodeIndex === selectedColumnIndex
+                          ? "bg-cyan-500 text-black"
+                          : "bg-white text-black"
+                      )}
+                    >
+                      {isPlaying && selectedColumnIndex !== null && playingNodeIndex === selectedColumnIndex ? (
+                        <Pause className="w-5 h-5" />
+                      ) : (
+                        <Play className="w-5 h-5 ml-0.5" />
+                      )}
                     </button>
                   </div>
 
@@ -499,16 +794,33 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
       <footer className="h-20 bg-[#0a0c1c]/80 backdrop-blur-xl border-t border-white/5 flex items-center px-6 gap-8 z-50">
         {/* Player Controls */}
         <div className="flex items-center gap-4">
-          <button className="text-gray-400 hover:text-white transition-colors">
+          <button
+            onClick={skipPrevious}
+            disabled={playingNodeIndex === null || playingNodeIndex <= 0}
+            className="text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
             <SkipBack className="w-5 h-5" />
           </button>
           <button
-            onClick={() => setIsPlaying(!isPlaying)}
-            className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+            onClick={() => {
+              if (isPlaying) {
+                pauseTrack()
+              } else if (playingNodeIndex !== null) {
+                playTrack(playingNodeIndex)
+              } else if (playlist.length > 0) {
+                playTrack(0)
+              }
+            }}
+            disabled={playlist.length === 0}
+            className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
           </button>
-          <button className="text-gray-400 hover:text-white transition-colors">
+          <button
+            onClick={skipNext}
+            disabled={playingNodeIndex === null || playingNodeIndex >= playlist.length - 1}
+            className="text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
             <SkipForward className="w-5 h-5" />
           </button>
         </div>
@@ -517,7 +829,9 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
         <div className="flex-1 space-y-2">
           <div className="flex justify-between text-[10px] font-mono text-gray-500">
             <span className="text-cyan-400 font-bold uppercase tracking-wider">
-              {isPlaying ? `Playing: ${selectedTrack?.title || 'Unknown'}` : 'Paused'}
+              {isPlaying || playingNodeIndex !== null
+                ? `Playing: ${playlist[activeTrackIndex]?.track.title || 'Unknown'}`
+                : 'Ready to play'}
             </span>
             <span>00:00 / {formatDuration(totalDuration)}</span>
           </div>
@@ -531,14 +845,14 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
         <div className="flex items-center gap-4 w-72 border-l border-white/10 pl-8">
           <div className="w-14 h-9 bg-black/40 border border-white/5 rounded flex items-center justify-center overflow-hidden relative group">
             <img
-              src={selectedTrack?.thumbnail || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100&h=100&fit=crop'}
+              src={playlist[activeTrackIndex]?.track.thumbnail || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100&h=100&fit=crop'}
               alt=""
               className="w-full h-full object-cover"
             />
           </div>
           <div className="text-left overflow-hidden">
             <div className="text-[10px] font-bold text-white truncate uppercase tracking-tighter">
-              {selectedTrack?.title || 'Project Workspace'}
+              {playlist[activeTrackIndex]?.track.title || 'Project Workspace'}
             </div>
             <div className="text-[9px] text-gray-500 uppercase tracking-widest flex items-center gap-1">
               YouTube Source
@@ -547,58 +861,8 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
         </div>
       </footer>
 
-      {/* Export Modal */}
-      <AnimatePresence>
-        {showExport && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-6"
-          >
-            <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={() => setShowExport(false)} />
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="relative bg-[#0a0c1c] border border-white/10 max-w-lg w-full p-10 rounded-3xl overflow-hidden"
-            >
-              <div className="absolute -top-24 -right-24 w-64 h-64 bg-cyan-500/10 blur-[100px]" />
-
-              <h2 className="text-4xl font-black tracking-tighter mb-4 uppercase">Finalize Set</h2>
-              <p className="text-gray-400 text-sm mb-8">
-                Ready to export your {playlist.length} track set to YouTube Music?
-              </p>
-
-              <div className="space-y-6">
-                <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Playlist Name</div>
-                    <div className="px-2 py-0.5 bg-green-500/20 text-green-400 text-[8px] font-bold rounded">READY</div>
-                  </div>
-                  <input
-                    type="text"
-                    defaultValue={currentSet?.name || 'My DJ Set'}
-                    className="w-full bg-black/40 border border-white/5 rounded-xl p-4 text-white font-bold outline-none focus:border-cyan-500/50"
-                  />
-                </div>
-
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => setShowExport(false)}
-                    className="flex-1 py-4 rounded-xl text-xs font-black uppercase tracking-widest text-white bg-white/5 hover:bg-white/10 transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button className="flex-[2] py-4 rounded-xl text-xs font-black uppercase tracking-widest text-black bg-cyan-500 hover:bg-cyan-400 transition-all shadow-2xl">
-                    Create YT Playlist
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Export Flow */}
+      <ExportFlow isOpen={showExport} onClose={() => setShowExport(false)} />
     </div>
   )
 }

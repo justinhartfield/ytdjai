@@ -88,6 +88,19 @@ interface YTDJState {
   isGenerating: boolean
   setIsGenerating: (loading: boolean) => void
 
+  // History (Undo/Redo)
+  history: Set[]
+  historyIndex: number
+  pushHistory: () => void
+  undo: () => void
+  redo: () => void
+  canUndo: () => boolean
+  canRedo: () => boolean
+
+  // Active Arc Template
+  activeArcTemplate: string
+  setActiveArcTemplate: (templateId: string) => void
+
   // Initialize
   initializeStore: () => void
 }
@@ -118,30 +131,56 @@ export const useYTDJStore = create<YTDJState>()(
       })),
 
       // Playlist
-      updatePlaylist: (playlist) => set((state) => {
-        const currentSet = state.currentSet || {
-          id: `set-${Date.now()}`,
-          name: 'Untitled Set',
-          playlist: [],
-          createdAt: new Date(),
-          updatedAt: new Date()
+      updatePlaylist: (playlist) => {
+        // Push current state to history before making changes
+        const state = get()
+        if (state.currentSet) {
+          const newHistory = state.history.slice(0, state.historyIndex + 1)
+          const snapshot = JSON.parse(JSON.stringify(state.currentSet))
+          set({
+            history: [...newHistory, snapshot],
+            historyIndex: state.historyIndex + 1,
+          })
         }
-        return {
-          currentSet: { ...currentSet, playlist, updatedAt: new Date() }
+
+        set((state) => {
+          const currentSet = state.currentSet || {
+            id: `set-${Date.now()}`,
+            name: 'Untitled Set',
+            playlist: [],
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+          return {
+            currentSet: { ...currentSet, playlist, updatedAt: new Date() }
+          }
+        })
+      },
+      updateSetWithPrompt: (playlist, prompt) => {
+        // Push current state to history before making changes
+        const state = get()
+        if (state.currentSet) {
+          const newHistory = state.history.slice(0, state.historyIndex + 1)
+          const snapshot = JSON.parse(JSON.stringify(state.currentSet))
+          set({
+            history: [...newHistory, snapshot],
+            historyIndex: state.historyIndex + 1,
+          })
         }
-      }),
-      updateSetWithPrompt: (playlist, prompt) => set((state) => {
-        const currentSet = state.currentSet || {
-          id: `set-${Date.now()}`,
-          name: 'Untitled Set',
-          playlist: [],
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-        return {
-          currentSet: { ...currentSet, playlist, prompt, updatedAt: new Date() }
-        }
-      }),
+
+        set((state) => {
+          const currentSet = state.currentSet || {
+            id: `set-${Date.now()}`,
+            name: 'Untitled Set',
+            playlist: [],
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+          return {
+            currentSet: { ...currentSet, playlist, prompt, updatedAt: new Date() }
+          }
+        })
+      },
       updatePrompt: (prompt) => set((state) => {
         if (!state.currentSet) return state
         return {
@@ -292,6 +331,45 @@ export const useYTDJStore = create<YTDJState>()(
       isGenerating: false,
       setIsGenerating: (loading) => set({ isGenerating: loading }),
 
+      // History (Undo/Redo)
+      history: [],
+      historyIndex: -1,
+      pushHistory: () => set((state) => {
+        if (!state.currentSet) return state
+        // Slice history to current index (discard any redo states)
+        const newHistory = state.history.slice(0, state.historyIndex + 1)
+        // Deep clone the current set
+        const snapshot = JSON.parse(JSON.stringify(state.currentSet))
+        return {
+          history: [...newHistory, snapshot],
+          historyIndex: state.historyIndex + 1,
+        }
+      }),
+      undo: () => set((state) => {
+        if (state.historyIndex <= 0) return state
+        const newIndex = state.historyIndex - 1
+        const previousSet = state.history[newIndex]
+        return {
+          currentSet: JSON.parse(JSON.stringify(previousSet)),
+          historyIndex: newIndex,
+        }
+      }),
+      redo: () => set((state) => {
+        if (state.historyIndex >= state.history.length - 1) return state
+        const newIndex = state.historyIndex + 1
+        const nextSet = state.history[newIndex]
+        return {
+          currentSet: JSON.parse(JSON.stringify(nextSet)),
+          historyIndex: newIndex,
+        }
+      }),
+      canUndo: () => get().historyIndex > 0,
+      canRedo: () => get().historyIndex < get().history.length - 1,
+
+      // Active Arc Template
+      activeArcTemplate: 'warmup',
+      setActiveArcTemplate: (templateId) => set({ activeArcTemplate: templateId }),
+
       // Initialize
       initializeStore: () => {
         const state = get()
@@ -315,6 +393,7 @@ export const useYTDJStore = create<YTDJState>()(
         aiProvider: state.aiProvider,
         currentSet: state.currentSet,
         constraints: state.constraints,
+        activeArcTemplate: state.activeArcTemplate,
       }),
     }
   )

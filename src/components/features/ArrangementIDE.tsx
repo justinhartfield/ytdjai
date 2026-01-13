@@ -47,7 +47,13 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
     setLeftSidebarPanel,
     setCurrentSet,
     constraints,
-    updateNodeStartTime
+    updateNodeStartTime,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    activeArcTemplate,
+    setActiveArcTemplate
   } = useYTDJStore()
   const playlist = currentSet?.playlist || []
   const [editingPrompt, setEditingPrompt] = useState(currentSet?.prompt || '')
@@ -67,7 +73,6 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
   const [swapPreview, setSwapPreview] = useState<Track | null>(null)
   const [isLoadingSwap, setIsLoadingSwap] = useState(false)
   const [lastFetchedBpm, setLastFetchedBpm] = useState<number | null>(null)
-  const [activeTemplate, setActiveTemplate] = useState('warmup')
   const [bpmTolerance, setBpmTolerance] = useState(5)
   const [showExport, setShowExport] = useState(false)
   const [targetTrackCount, setTargetTrackCount] = useState(8)
@@ -368,9 +373,9 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
   }, [editingPrompt, isGenerating, targetTrackCount, playlist, aiProvider, constraints, updateSetWithPrompt, setIsGenerating])
 
   const handleArcChange = useCallback((arcId: string) => {
-    if (arcId === activeTemplate) return
+    if (arcId === activeArcTemplate) return
     setPendingArcChange(arcId)
-  }, [activeTemplate])
+  }, [activeArcTemplate])
 
   const confirmArcChange = useCallback(async () => {
     if (!pendingArcChange || isGenerating) return
@@ -378,7 +383,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
     const arc = ARC_TEMPLATES.find(a => a.id === pendingArcChange)
     if (!arc) return
 
-    setActiveTemplate(pendingArcChange)
+    setActiveArcTemplate(pendingArcChange)
     setPendingArcChange(null)
     setIsGenerating(true)
 
@@ -450,8 +455,26 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
 
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
-            <button className="p-2 text-gray-400 hover:text-cyan-400 transition-colors"><Undo2 className="w-5 h-5" /></button>
-            <button className="p-2 text-gray-400 hover:text-cyan-400 transition-colors"><Redo2 className="w-5 h-5" /></button>
+            <button
+              onClick={undo}
+              disabled={!canUndo()}
+              className={cn(
+                "p-2 transition-colors",
+                canUndo() ? "text-gray-400 hover:text-cyan-400" : "text-gray-600 cursor-not-allowed"
+              )}
+            >
+              <Undo2 className="w-5 h-5" />
+            </button>
+            <button
+              onClick={redo}
+              disabled={!canRedo()}
+              className={cn(
+                "p-2 transition-colors",
+                canRedo() ? "text-gray-400 hover:text-cyan-400" : "text-gray-600 cursor-not-allowed"
+              )}
+            >
+              <Redo2 className="w-5 h-5" />
+            </button>
           </div>
           <div className="h-8 w-px bg-white/10" />
           <div className="flex items-center gap-3">
@@ -568,14 +591,14 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                     disabled={isGenerating}
                     className={cn(
                       'p-3 border rounded-xl transition-all text-left disabled:opacity-50',
-                      activeTemplate === arc.id
+                      activeArcTemplate === arc.id
                         ? 'border-cyan-500/50 bg-cyan-500/5'
                         : 'border-white/5 hover:border-white/10'
                     )}
                   >
                     <span className={cn(
                       'text-[9px] font-bold uppercase block mb-2',
-                      activeTemplate === arc.id ? 'text-cyan-400' : 'text-gray-500'
+                      activeArcTemplate === arc.id ? 'text-cyan-400' : 'text-gray-500'
                     )}>
                       {arc.name}
                     </span>
@@ -583,7 +606,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                       <path
                         d={arc.svg}
                         fill="none"
-                        stroke={activeTemplate === arc.id ? '#00f2ff' : '#444'}
+                        stroke={activeArcTemplate === arc.id ? '#00f2ff' : '#444'}
                         strokeWidth="2"
                       />
                     </svg>
