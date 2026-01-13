@@ -120,7 +120,7 @@ export function YouTubePlayer({ className }: YouTubePlayerProps) {
         opts={opts}
         onReady={onPlayerReady}
         onStateChange={onStateChange}
-        onError={(e) => console.error('[YouTubePlayer] Error:', e.data)}
+        onError={(e: Parameters<NonNullable<YouTubeProps['onError']>>[0]) => console.error('[YouTubePlayer] Error:', e.data)}
       />
     </div>
   )
