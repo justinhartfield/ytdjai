@@ -88,7 +88,23 @@ export function YouTubePlayer({ className }: YouTubePlayerProps) {
     } else {
       playerRef.current.pauseVideo()
     }
-  }, [isPlaying, currentVideoId])
+  }, [isPlaying])
+
+  // When video changes, seek to start time and ensure playback
+  useEffect(() => {
+    if (!playerRef.current || !currentVideoId) return
+
+    // When video ID changes, the player will reload the video
+    // We need to ensure it starts at the correct time and plays
+    // The onReady handler will also handle this, but this catches
+    // cases where the player is already loaded
+    if (startTime > 0) {
+      playerRef.current.seekTo(startTime, true)
+    }
+    if (isPlaying) {
+      playerRef.current.playVideo()
+    }
+  }, [currentVideoId, startTime, isPlaying])
 
   // Update volume
   useEffect(() => {

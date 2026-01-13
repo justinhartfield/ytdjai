@@ -9,6 +9,7 @@ import {
 import { cn, formatDuration } from '@/lib/utils'
 import { useYTDJStore, arcTemplates } from '@/store'
 import { generatePlaylist } from '@/lib/ai-service'
+import { formatTime } from './YouTubePlayer'
 import { IconSidebar } from './IconSidebar'
 import { AIConstraintsDrawer } from './AIConstraintsDrawer'
 import { SetsDashboard } from './SetsDashboard'
@@ -833,11 +834,16 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
                 ? `Playing: ${playlist[activeTrackIndex]?.track.title || 'Unknown'}`
                 : 'Ready to play'}
             </span>
-            <span>00:00 / {formatDuration(totalDuration)}</span>
+            <span>
+              <span className="text-white">{formatTime(currentTime)}</span> / {duration > 0 ? formatTime(duration) : formatDuration(totalDuration)}
+            </span>
           </div>
           <div className="h-1.5 bg-white/5 rounded-full overflow-hidden relative cursor-pointer group">
             <div className="absolute inset-0 bg-white/5 group-hover:bg-white/10 transition-colors" />
-            <div className="absolute top-0 left-0 bottom-0 bg-gradient-to-r from-cyan-500 to-pink-500 w-0 shadow-[0_0_10px_rgba(0,242,255,0.5)]" />
+            <div
+              className="absolute top-0 left-0 bottom-0 bg-gradient-to-r from-cyan-500 to-pink-500 shadow-[0_0_10px_rgba(0,242,255,0.5)]"
+              style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
+            />
           </div>
         </div>
 
