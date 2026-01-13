@@ -135,7 +135,16 @@ export function YouTubePlayer({ className }: YouTubePlayerProps) {
         opts={opts}
         onReady={onPlayerReady}
         onStateChange={onStateChange}
-        onError={(e: Parameters<NonNullable<YouTubeProps['onError']>>[0]) => console.error('[YouTubePlayer] Error:', e.data)}
+        onError={(e: Parameters<NonNullable<YouTubeProps['onError']>>[0]) => {
+          const errorCodes: Record<number, string> = {
+            2: 'Invalid video ID',
+            5: 'HTML5 player error',
+            100: 'Video not found or removed',
+            101: 'Video not embeddable',
+            150: 'Video not embeddable (same as 101)'
+          }
+          console.error('[YouTubePlayer] Error:', e.data, '-', errorCodes[e.data] || 'Unknown error')
+        }}
       />
     </div>
   )
