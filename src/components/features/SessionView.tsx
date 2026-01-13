@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Zap, Undo2, Redo2, Download, Play, Pause, SkipBack, SkipForward,
-  Lock, X, RefreshCw, Plus, Sparkles, Info, Loader2, Shuffle
+  Lock, X, RefreshCw, Plus, Sparkles, Info, Loader2, Shuffle, Cloud, FolderOpen
 } from 'lucide-react'
 import { cn, formatDuration } from '@/lib/utils'
 import { useYTDJStore, arcTemplates } from '@/store'
@@ -15,6 +15,8 @@ import { AIConstraintsDrawer } from './AIConstraintsDrawer'
 import { SetsDashboard } from './SetsDashboard'
 import { ExportFlow } from './ExportFlow'
 import { AIControlsSidebar } from './AIControlsSidebar'
+import { SaveSetDialog } from './SaveSetDialog'
+import { BrowseSetsModal } from './BrowseSetsModal'
 import type { PlaylistNode, Track, Set, AIConstraints } from '@/types'
 
 // Local ARC_TEMPLATES that matches the store format
@@ -66,6 +68,8 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
   const [selectedColumnIndex, setSelectedColumnIndex] = useState<number | null>(null)
   const [auditioningTrack, setAuditioningTrack] = useState<Track | null>(null)
   const [showExport, setShowExport] = useState(false)
+  const [showSaveDialog, setShowSaveDialog] = useState(false)
+  const [showBrowseSets, setShowBrowseSets] = useState(false)
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [isSmoothing, setIsSmoothing] = useState(false)
   const [addingTrackAtIndex, setAddingTrackAtIndex] = useState<number | null>(null)
@@ -321,14 +325,30 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
           <div className="h-8 w-px bg-white/10" />
           <div className="flex items-center gap-3">
             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Project:</span>
-            <span className="text-sm font-bold text-cyan-400">{currentSet?.name || 'Untitled Set'}</span>
+            <button
+              onClick={() => setShowBrowseSets(true)}
+              className="flex items-center gap-2 text-sm font-bold text-cyan-400 hover:text-cyan-300 transition-colors"
+            >
+              <FolderOpen className="w-4 h-4" />
+              {currentSet?.name || 'Untitled Set'}
+            </button>
           </div>
-          <button
-            onClick={() => setShowExport(true)}
-            className="px-6 py-2 bg-white text-black text-xs font-black rounded hover:bg-cyan-400 hover:scale-105 transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] uppercase tracking-widest"
-          >
-            Export Set
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSaveDialog(true)}
+              disabled={!currentSet || playlist.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-500/20 text-purple-400 text-xs font-black rounded hover:bg-purple-500/30 hover:scale-105 transition-all border border-purple-500/30 uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+            >
+              <Cloud className="w-4 h-4" />
+              Save to Cloud
+            </button>
+            <button
+              onClick={() => setShowExport(true)}
+              className="px-6 py-2 bg-white text-black text-xs font-black rounded hover:bg-cyan-400 hover:scale-105 transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] uppercase tracking-widest"
+            >
+              Export Set
+            </button>
+          </div>
         </div>
       </header>
 
@@ -766,6 +786,12 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
 
       {/* Export Flow */}
       <ExportFlow isOpen={showExport} onClose={() => setShowExport(false)} />
+
+      {/* Save Set Dialog */}
+      <SaveSetDialog isOpen={showSaveDialog} onClose={() => setShowSaveDialog(false)} />
+
+      {/* Browse Sets Modal */}
+      <BrowseSetsModal isOpen={showBrowseSets} onClose={() => setShowBrowseSets(false)} />
     </div>
   )
 }
