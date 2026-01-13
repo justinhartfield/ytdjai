@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession, signIn } from 'next-auth/react'
+import { useSession, signIn, signOut } from 'next-auth/react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, Check, Copy, ExternalLink, Share2, Twitter, Music2, Youtube,
@@ -474,20 +474,38 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
                     </p>
                   </div>
 
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setStep('settings')}
-                      className="flex-1 py-4 bg-white/5 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-white/10 transition-all"
-                    >
-                      Back
-                    </button>
-                    <button
-                      onClick={handleExport}
-                      className="flex-1 py-4 bg-cyan-500 text-black font-black text-xs uppercase tracking-widest rounded-xl hover:bg-cyan-400 transition-all"
-                    >
-                      Try Again
-                    </button>
-                  </div>
+                  {/* Show re-auth button if scope issue */}
+                  {exportState.error?.includes('insufficient authentication scopes') ? (
+                    <div className="space-y-3">
+                      <p className="text-xs text-gray-500">
+                        YouTube access wasn&apos;t granted. Please sign out and sign in again to grant YouTube permissions.
+                      </p>
+                      <button
+                        onClick={async () => {
+                          await signOut({ redirect: false })
+                          signIn('google', { callbackUrl: window.location.href })
+                        }}
+                        className="w-full py-4 bg-cyan-500 text-black font-black text-xs uppercase tracking-widest rounded-xl hover:bg-cyan-400 transition-all"
+                      >
+                        Sign Out & Re-authorize
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setStep('settings')}
+                        className="flex-1 py-4 bg-white/5 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-white/10 transition-all"
+                      >
+                        Back
+                      </button>
+                      <button
+                        onClick={handleExport}
+                        className="flex-1 py-4 bg-cyan-500 text-black font-black text-xs uppercase tracking-widest rounded-xl hover:bg-cyan-400 transition-all"
+                      >
+                        Try Again
+                      </button>
+                    </div>
+                  )}
                 </motion.div>
               )}
 
