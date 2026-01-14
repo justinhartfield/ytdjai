@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
-import { Settings2, Music2, FolderOpen, ImagePlus } from 'lucide-react'
+import { Settings2, Music2, FolderOpen, ImagePlus, LayoutGrid, GitBranch } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
 
@@ -9,14 +9,31 @@ type SidebarPanel = 'arrangement' | 'constraints' | 'sets'
 
 interface IconSidebarProps {
   className?: string
+  onViewChange?: (view: 'arrangement' | 'session') => void
+  currentView?: 'arrangement' | 'session'
 }
 
-export function IconSidebar({ className }: IconSidebarProps) {
+export function IconSidebar({ className, onViewChange, currentView }: IconSidebarProps) {
   const { ui, setLeftSidebarPanel, currentSet, updateCoverArt } = useYTDJStore()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const activePanel = ui.leftSidebarPanel
 
-  const icons = [
+  const viewIcons = [
+    {
+      id: 'arrangement' as const,
+      icon: GitBranch,
+      label: 'Arrangement View',
+      shortcut: 'A'
+    },
+    {
+      id: 'session' as const,
+      icon: LayoutGrid,
+      label: 'Session View',
+      shortcut: 'S'
+    }
+  ]
+
+  const panelIcons = [
     {
       id: 'constraints' as SidebarPanel,
       icon: Settings2,
@@ -24,16 +41,10 @@ export function IconSidebar({ className }: IconSidebarProps) {
       shortcut: '1'
     },
     {
-      id: 'arrangement' as SidebarPanel,
-      icon: Music2,
-      label: 'Arrangement',
-      shortcut: '2'
-    },
-    {
       id: 'sets' as SidebarPanel,
       icon: FolderOpen,
       label: 'My Sets',
-      shortcut: '3'
+      shortcut: '2'
     }
   ]
 
@@ -99,16 +110,48 @@ export function IconSidebar({ className }: IconSidebarProps) {
         className="hidden"
       />
 
-      {/* Navigation Icons */}
+      {/* View Switcher Icons */}
+      {onViewChange && (
+        <nav className="flex flex-col items-center gap-1 pb-3 border-b border-white/5 mb-3">
+          {viewIcons.map(({ id, icon: Icon, label, shortcut }) => (
+            <button
+              key={id}
+              onClick={() => onViewChange(id)}
+              className={cn(
+                "w-12 h-12 rounded-xl flex items-center justify-center transition-all group relative",
+                currentView === id
+                  ? "bg-cyan-500/20 text-cyan-400"
+                  : "text-gray-500 hover:text-white hover:bg-white/5"
+              )}
+              title={`${label} (${shortcut})`}
+            >
+              <Icon className="w-5 h-5" />
+
+              {/* Active indicator */}
+              {currentView === id && (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-cyan-500 rounded-r" />
+              )}
+
+              {/* Tooltip */}
+              <div className="absolute left-full ml-2 px-2 py-1 bg-black/90 border border-white/10 rounded text-[10px] font-bold text-white whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50">
+                {label}
+                <span className="ml-2 text-gray-500">{shortcut}</span>
+              </div>
+            </button>
+          ))}
+        </nav>
+      )}
+
+      {/* Panel Icons */}
       <nav className="flex-1 flex flex-col items-center gap-1">
-        {icons.map(({ id, icon: Icon, label, shortcut }) => (
+        {panelIcons.map(({ id, icon: Icon, label, shortcut }) => (
           <button
             key={id}
             onClick={() => setLeftSidebarPanel(activePanel === id ? null : id)}
             className={cn(
               "w-12 h-12 rounded-xl flex items-center justify-center transition-all group relative",
               activePanel === id
-                ? "bg-cyan-500/20 text-cyan-400"
+                ? "bg-pink-500/20 text-pink-400"
                 : "text-gray-500 hover:text-white hover:bg-white/5"
             )}
             title={`${label} (${shortcut})`}
@@ -117,7 +160,7 @@ export function IconSidebar({ className }: IconSidebarProps) {
 
             {/* Active indicator */}
             {activePanel === id && (
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-cyan-500 rounded-r" />
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-pink-500 rounded-r" />
             )}
 
             {/* Tooltip */}

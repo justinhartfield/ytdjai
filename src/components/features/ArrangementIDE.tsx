@@ -607,7 +607,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
 
       <div className="flex-1 flex overflow-hidden">
         {/* Icon Sidebar */}
-        <IconSidebar />
+        <IconSidebar onViewChange={onViewChange} currentView={currentView} />
 
         {/* AI Constraints Drawer */}
         <AIConstraintsDrawer
