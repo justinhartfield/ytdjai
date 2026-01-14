@@ -144,6 +144,10 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
       <AIConstraintsDrawer
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
+        onRegenerate={() => {
+          setShowSettings(false)
+          handleGenerate()
+        }}
       />
 
       {/* Background grid */}

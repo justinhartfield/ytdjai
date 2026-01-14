@@ -382,7 +382,7 @@ Return ONLY valid JSON array, no markdown.${constraintInstructions ? `\n\nConstr
         temperature: 0.8,
         max_tokens: 4000
       })
-    }, 15000)
+    }, 20000)
 
     const data = await response.json()
 
@@ -495,7 +495,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
           }
         ]
       })
-    }, 15000)
+    }, 20000)
 
     const data = await response.json()
 
