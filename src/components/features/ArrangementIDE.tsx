@@ -20,7 +20,7 @@ import { AIControlsSidebar } from './AIControlsSidebar'
 import { SaveSetDialog } from './SaveSetDialog'
 import { BrowseSetsModal } from './BrowseSetsModal'
 import type { PlaylistNode, Track, AIConstraints, Set, AIProvider } from '@/types'
-import { GhostTrackNode } from './GhostTrackNode'
+import { GhostTrackNode, AIProviderBadge } from './GhostTrackNode'
 
 interface ArrangementIDEProps {
   onViewChange: (view: 'arrangement' | 'session') => void
@@ -826,8 +826,8 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
               />
             )}
 
-            {/* Ghost Track Nodes - show while loading */}
-            {generationProgress.isGenerating && playlist.length === 0 && (
+            {/* Ghost Track Nodes - show while waiting for primary result */}
+            {generationProgress.isGenerating && generationProgress.primaryProvider === null && (
               <AnimatePresence>
                 {Array.from({ length: generationProgress.skeletonCount }).map((_, index) => {
                   const x = ((index + 1) / (generationProgress.skeletonCount + 1)) * 100

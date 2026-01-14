@@ -247,6 +247,7 @@ function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], provider: AIPr
       aiReasoning: track.aiReasoning
     },
     position: index,
+    sourceProvider: provider, // Tag which AI generated this track
     alternatives: (track.alternatives || []).map((alt, altIndex) => ({
       id: `alt-${provider}-${Date.now()}-${index}-${altIndex}`,
       youtubeId: '',

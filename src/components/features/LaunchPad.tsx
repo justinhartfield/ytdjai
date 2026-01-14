@@ -9,11 +9,7 @@ import { generatePlaylist } from '@/lib/ai-service'
 import { streamGeneratePlaylist } from '@/lib/ai-stream-service'
 import type { AIConstraints } from '@/types'
 import { AIConstraintsDrawer } from './AIConstraintsDrawer'
-import { AdvancedPromptPanel } from './AdvancedPromptPanel'
-import { GenerationControls } from './GenerationControls'
-import { AnchorTracks } from './AnchorTracks'
-import { ContextTokens } from './ContextTokens'
-import { SimilarPlaylist } from './SimilarPlaylist'
+import { AIWizardPro } from './AIWizardPro'
 
 const VIBE_TAGS = [
   'CYBERPUNK',
@@ -76,7 +72,7 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
   const [energyRange, setEnergyRange] = useState({ min: 20, max: 80 })
   const [isGenerating, setIsGenerating] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [showWizard, setShowWizard] = useState(false)
 
   const {
     aiProvider,

@@ -51,6 +51,7 @@ export interface PlaylistNode {
   transitionToNext?: Transition
   startTime?: number // Start playback at this time (in seconds) - useful for skipping intros
   alternatives?: AlternativeTrack[] // Alternative tracks that could work in this slot
+  sourceProvider?: AIProvider // Which AI provider generated this track
 }
 
 export type NodeState =

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Undo2, Redo2, Play, Pause,
   Lock, X, Plus, Sparkles, Info, Loader2, Cloud, FolderOpen, GripVertical,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, AlertTriangle, Zap, RefreshCw
 } from 'lucide-react'
 import { cn, formatDuration } from '@/lib/utils'
 import { TransportBar } from './TransportBar'
@@ -19,7 +19,8 @@ import { ExportFlow } from './ExportFlow'
 import { AIControlsSidebar } from './AIControlsSidebar'
 import { SaveSetDialog } from './SaveSetDialog'
 import { BrowseSetsModal } from './BrowseSetsModal'
-import type { PlaylistNode, Track, Set, AIConstraints, AlternativeTrack } from '@/types'
+import type { PlaylistNode, Track, Set, AIConstraints, AlternativeTrack, AIProvider } from '@/types'
+import { GhostTrackCard } from './GhostTrackNode'
 
 interface SessionViewProps {
   onViewChange: (view: 'arrangement' | 'session') => void
@@ -55,7 +56,9 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
     redo,
     canUndo,
     canRedo,
-    activeArcTemplate
+    activeArcTemplate,
+    generationProgress,
+    swapWithProviderAlternative
   } = useYTDJStore()
   const playlist = currentSet?.playlist || []
 
@@ -69,6 +72,14 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
   const [addingTrackAtIndex, setAddingTrackAtIndex] = useState<number | null>(null)
   const [energyTolerance, setEnergyTolerance] = useState(10)
   const [targetTrackCount, setTargetTrackCount] = useState(8)
+
+  // Arc mismatch modal state
+  const [arcMismatchInfo, setArcMismatchInfo] = useState<{
+    arcId: string
+    arcName: string
+    poorFitCount: number
+    poorFitPositions: number[]
+  } | null>(null)
 
   // Drag and drop state
   const [draggedColumnIndex, setDraggedColumnIndex] = useState<number | null>(null)
@@ -299,6 +310,9 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
     const arc = arcTemplates.find(a => a.id === arcId)
     if (!arc) return
 
+    // Energy tolerance threshold - tracks more than this off from target are "poor fit"
+    const POOR_FIT_THRESHOLD = 20
+
     // Interpolate the arc's energy profile to match the playlist length
     const targetEnergies: number[] = []
     for (let i = 0; i < playlist.length; i++) {
@@ -334,10 +348,15 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
     // For each unlocked position, find the best matching unlocked track
     const newPlaylist: PlaylistNode[] = new Array(playlist.length)
     const usedTracks = new Set<string>()
+    const poorFitPositions: number[] = []
 
-    // First, place locked tracks
+    // First, place locked tracks and check if they fit
     lockedPositions.forEach((node, index) => {
       newPlaylist[index] = node
+      const energyDiff = Math.abs((node.track.energy || 50) - targetEnergies[index])
+      if (energyDiff > POOR_FIT_THRESHOLD) {
+        poorFitPositions.push(index)
+      }
     })
 
     // Then, for each unlocked position, find the best matching track
@@ -363,11 +382,102 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
           targetEnergy: targetEnergy
         }
         usedTracks.add(bestMatch.node.id)
+
+        // Check if this is a poor fit
+        if (bestDiff > POOR_FIT_THRESHOLD) {
+          poorFitPositions.push(i)
+        }
       }
     }
 
-    updatePlaylist(newPlaylist)
+    // If there are poor fits, show the confirmation modal
+    if (poorFitPositions.length > 0) {
+      setArcMismatchInfo({
+        arcId,
+        arcName: arc.name,
+        poorFitCount: poorFitPositions.length,
+        poorFitPositions
+      })
+      // Still apply the best-effort rearrangement
+      updatePlaylist(newPlaylist)
+    } else {
+      // Perfect fit - just update
+      updatePlaylist(newPlaylist)
+    }
   }, [playlist, updatePlaylist])
+
+  // Regenerate poor fit tracks to match arc
+  const handleRegeneratePoorFits = useCallback(async () => {
+    if (!arcMismatchInfo || isRegenerating) return
+
+    const arc = arcTemplates.find(a => a.id === arcMismatchInfo.arcId)
+    if (!arc) return
+
+    setIsRegenerating(true)
+    setArcMismatchInfo(null)
+
+    try {
+      // Calculate target energies for each position
+      const targetEnergies: number[] = []
+      for (let i = 0; i < playlist.length; i++) {
+        const position = i / (playlist.length - 1)
+        const profileIndex = position * (arc.energyProfile.length - 1)
+        const lowerIndex = Math.floor(profileIndex)
+        const upperIndex = Math.ceil(profileIndex)
+        const fraction = profileIndex - lowerIndex
+
+        if (upperIndex >= arc.energyProfile.length) {
+          targetEnergies.push(arc.energyProfile[arc.energyProfile.length - 1])
+        } else {
+          const interpolatedEnergy = arc.energyProfile[lowerIndex] * (1 - fraction) + arc.energyProfile[upperIndex] * fraction
+          targetEnergies.push(Math.round(interpolatedEnergy))
+        }
+      }
+
+      // Generate replacement tracks for poor fit positions
+      const poorFitPositions = arcMismatchInfo.poorFitPositions.filter(pos => !playlist[pos]?.isLocked)
+
+      if (poorFitPositions.length === 0) {
+        // All poor fits are locked, nothing we can do
+        return
+      }
+
+      const result = await generatePlaylist({
+        prompt: `${currentSet?.prompt || 'Generate tracks'}. Focus on tracks with these specific energy levels: ${poorFitPositions.map(pos => `position ${pos + 1} needs energy ~${targetEnergies[pos]}`).join(', ')}`,
+        constraints: {
+          trackCount: poorFitPositions.length,
+          energyRange: { min: 1, max: 100 },
+          energyTolerance: constraints.energyTolerance,
+          syncopation: constraints.syncopation,
+          keyMatch: constraints.keyMatch,
+          artistDiversity: constraints.diversity,
+          discovery: constraints.discovery,
+          activeDecades: constraints.activeDecades,
+          blacklist: constraints.blacklist
+        } as AIConstraints,
+        provider: aiProvider
+      })
+
+      if (result.success && result.playlist && result.playlist.length > 0) {
+        // Replace poor fit tracks with new ones
+        const newPlaylist = [...playlist]
+        result.playlist.forEach((newNode, idx) => {
+          if (idx < poorFitPositions.length) {
+            const targetPos = poorFitPositions[idx]
+            newPlaylist[targetPos] = {
+              ...newNode,
+              targetEnergy: targetEnergies[targetPos]
+            }
+          }
+        })
+        updatePlaylist(newPlaylist)
+      }
+    } catch (error) {
+      console.error('Failed to regenerate poor fit tracks:', error)
+    } finally {
+      setIsRegenerating(false)
+    }
+  }, [arcMismatchInfo, isRegenerating, playlist, currentSet, constraints, aiProvider, updatePlaylist])
 
   // Add track at specific position (insert between tiles)
   const handleInsertTrack = useCallback(async (insertIndex: number) => {
@@ -595,9 +705,65 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
           backgroundSize: '40px 40px'
         }}>
           {/* Session Header Labels */}
-          <div className="h-10 border-b border-white/5 flex items-center bg-black/60 z-10">
-            <div className="w-16 border-r border-white/5 flex items-center justify-center">
-              <span className="text-[9px] font-bold text-gray-600">SLOT</span>
+          <div className="h-10 border-b border-white/5 flex items-center justify-between bg-black/60 z-10">
+            <div className="flex items-center">
+              <div className="w-16 border-r border-white/5 flex items-center justify-center">
+                <span className="text-[9px] font-bold text-gray-600">SLOT</span>
+              </div>
+            </div>
+
+            {/* AI Provider Results Selector & Loading Status */}
+            <div className="flex items-center gap-4 px-4">
+              {/* Provider Selector */}
+              {generationProgress.providerPlaylists.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-bold tracking-[0.2em] text-gray-500 mr-2">AI RESULTS:</span>
+                  {generationProgress.providerPlaylists.map(({ provider }) => (
+                    <button
+                      key={provider}
+                      onClick={() => swapWithProviderAlternative(provider)}
+                      className={cn(
+                        'px-3 py-1 rounded text-[9px] font-bold uppercase tracking-wider transition-all',
+                        generationProgress.primaryProvider === provider
+                          ? 'bg-cyan-500 text-black'
+                          : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
+                      )}
+                    >
+                      {provider === 'openai' ? 'GPT-4o' : provider === 'claude' ? 'Claude' : 'Gemini'}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Loading Status */}
+              {generationProgress.isGenerating && (
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1">
+                    {(['openai', 'claude', 'gemini'] as AIProvider[]).map((provider) => {
+                      const isActive = generationProgress.activeProviders.includes(provider)
+                      const isComplete = generationProgress.completedProviders.includes(provider)
+                      const isFailed = generationProgress.failedProviders.includes(provider)
+                      return (
+                        <div
+                          key={provider}
+                          className={cn(
+                            'w-2 h-2 rounded-full transition-all',
+                            isComplete ? 'bg-green-500' :
+                            isFailed ? 'bg-red-500' :
+                            isActive ? 'bg-cyan-500 animate-pulse' : 'bg-gray-600'
+                          )}
+                          title={`${provider}: ${isComplete ? 'Done' : isFailed ? 'Failed' : isActive ? 'Loading...' : 'Waiting'}`}
+                        />
+                      )
+                    })}
+                  </div>
+                  <span className="text-[9px] font-bold tracking-wider text-cyan-400">
+                    {generationProgress.enrichedCount > 0
+                      ? `Enriching ${generationProgress.enrichedCount}/${generationProgress.skeletonCount}`
+                      : 'Generating...'}
+                  </span>
+                </div>
+              )}
             </div>
             <div
               ref={headerScrollContainerRef}
@@ -888,8 +1054,27 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
                 </div>
               ))}
 
-              {/* Empty State */}
-              {sessionColumns.length === 0 && (
+              {/* Empty State - show ghost tracks while generating */}
+              {sessionColumns.length === 0 && generationProgress.isGenerating && generationProgress.primaryProvider === null && (
+                <div className="flex">
+                  {Array.from({ length: generationProgress.skeletonCount }).map((_, index) => (
+                    <div
+                      key={`ghost-${index}`}
+                      className="min-w-[200px] border-r border-white/5 flex flex-col p-2 space-y-4"
+                    >
+                      <GhostTrackCard index={index} />
+                      {/* Ghost alternatives */}
+                      <div className="space-y-2 pt-4">
+                        <div className="h-16 bg-white/5 rounded-lg animate-pulse" />
+                        <div className="h-16 bg-white/5 rounded-lg animate-pulse opacity-50" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Empty State - no tracks and not generating */}
+              {sessionColumns.length === 0 && !generationProgress.isGenerating && (
                 <div className="flex-1 flex items-center justify-center">
                   <div className="text-center p-8">
                     <div className="w-20 h-20 rounded-full bg-gradient-to-br from-cyan-500/20 to-pink-500/20 flex items-center justify-center mx-auto mb-4">
@@ -1075,6 +1260,88 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
 
       {/* Browse Sets Modal */}
       <BrowseSetsModal isOpen={showBrowseSets} onClose={() => setShowBrowseSets(false)} />
+
+      {/* Arc Mismatch Modal */}
+      <AnimatePresence>
+        {arcMismatchInfo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-6"
+          >
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={() => setArcMismatchInfo(null)} />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-[#0a0c1c] border border-white/10 max-w-md w-full p-8 rounded-3xl overflow-hidden"
+            >
+              <div className="absolute -top-24 -right-24 w-64 h-64 bg-orange-500/10 blur-[100px]" />
+
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-orange-500/20 flex items-center justify-center">
+                  <AlertTriangle className="w-6 h-6 text-orange-400" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black tracking-tighter uppercase">Energy Mismatch</h2>
+                  <p className="text-sm text-gray-500">{arcMismatchInfo.arcName} Arc</p>
+                </div>
+              </div>
+
+              <p className="text-gray-400 text-sm mb-4">
+                <span className="text-orange-400 font-bold">{arcMismatchInfo.poorFitCount} track{arcMismatchInfo.poorFitCount > 1 ? 's' : ''}</span> {arcMismatchInfo.poorFitCount > 1 ? "don't" : "doesn't"} have the right energy level to match this curve.
+              </p>
+
+              <div className="bg-white/5 rounded-xl p-4 mb-6 border border-white/5">
+                <div className="text-[10px] font-bold text-gray-500 uppercase mb-3">Affected Positions</div>
+                <div className="flex flex-wrap gap-2">
+                  {arcMismatchInfo.poorFitPositions.slice(0, 8).map((pos) => (
+                    <div key={pos} className="px-3 py-1.5 bg-orange-500/20 border border-orange-500/30 rounded-lg text-orange-400 text-xs font-bold">
+                      Slot {pos + 1}
+                    </div>
+                  ))}
+                  {arcMismatchInfo.poorFitPositions.length > 8 && (
+                    <div className="px-3 py-1.5 bg-white/10 rounded-lg text-gray-400 text-xs font-bold">
+                      +{arcMismatchInfo.poorFitPositions.length - 8} more
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <p className="text-gray-500 text-xs mb-6">
+                We've rearranged your tracks as best as possible. Would you like to regenerate {arcMismatchInfo.poorFitCount > 1 ? 'these' : 'this'} track{arcMismatchInfo.poorFitCount > 1 ? 's' : ''} with better energy matches?
+              </p>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setArcMismatchInfo(null)}
+                  className="flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest text-white bg-white/5 hover:bg-white/10 transition-all"
+                >
+                  Keep As Is
+                </button>
+                <button
+                  onClick={handleRegeneratePoorFits}
+                  disabled={isRegenerating}
+                  className="flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest text-black bg-cyan-500 hover:bg-cyan-400 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isRegenerating ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Regenerating...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4" />
+                      Regenerate {arcMismatchInfo.poorFitCount}
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
