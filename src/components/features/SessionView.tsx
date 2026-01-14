@@ -133,13 +133,14 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
   }, [playlist, updatePlaylist])
 
   // Global Ops: Regenerate Grid
-  const handleRegenerateGrid = useCallback(async () => {
-    if (isRegenerating || !currentSet?.prompt) return
+  const handleRegenerateGrid = useCallback(async (promptOverride?: string) => {
+    const prompt = promptOverride || currentSet?.prompt
+    if (isRegenerating || !prompt) return
 
     setIsRegenerating(true)
     try {
       const result = await generatePlaylist({
-        prompt: currentSet.prompt,
+        prompt,
         constraints: {
           trackCount: playlist.length || 8,
           energyRange: { min: 20, max: 80 },
@@ -158,7 +159,7 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
           }
           return node
         })
-        updateSetWithPrompt(newPlaylist, currentSet.prompt)
+        updateSetWithPrompt(newPlaylist, prompt)
       }
     } catch (error) {
       console.error('Failed to regenerate grid:', error)
@@ -435,7 +436,7 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
         <AIConstraintsDrawer
           isOpen={ui.leftSidebarPanel === 'constraints'}
           onClose={() => setLeftSidebarPanel(null)}
-          onRegenerate={handleRegenerateGrid}
+          onRegenerate={() => handleRegenerateGrid()}
         />
 
         {/* Sets Dashboard Drawer */}
@@ -450,7 +451,7 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
 
         {/* Left Sidebar: AI Controls */}
         <AIControlsSidebar
-          onRegenerate={() => handleRegenerateGrid()}
+          onRegenerate={(mode, prompt) => handleRegenerateGrid(prompt)}
           onAutoSmooth={handleAutoSmooth}
           onRandomizeUnlocked={handleRandomizeUnlocked}
           isGenerating={isRegenerating}

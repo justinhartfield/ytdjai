@@ -313,8 +313,8 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
     }
   }, [currentSet?.prompt, isPromptEditing])
 
-  const handleRegenerate = useCallback(async (overrideConstraints?: typeof constraints) => {
-    const prompt = currentSet?.prompt || ''
+  const handleRegenerate = useCallback(async (overrideConstraints?: typeof constraints, promptOverride?: string) => {
+    const prompt = promptOverride || currentSet?.prompt || ''
     if (!prompt.trim() || isGenerating) return
 
     setIsGenerating(true)
@@ -349,8 +349,8 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
     }
   }, [currentSet?.prompt, isGenerating, playlist.length, aiProvider, constraints, updateSetWithPrompt, setIsGenerating])
 
-  const handleRegenerateWithCount = useCallback(async (mode: 'replace' | 'append') => {
-    const prompt = currentSet?.prompt || ''
+  const handleRegenerateWithCount = useCallback(async (mode: 'replace' | 'append', promptOverride?: string) => {
+    const prompt = promptOverride || currentSet?.prompt || ''
     if (!prompt.trim() || isGenerating) return
 
     setIsGenerating(true)
@@ -558,11 +558,11 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
 
         {/* Left Sidebar: AI Controls */}
         <AIControlsSidebar
-          onRegenerate={(mode) => {
+          onRegenerate={(mode, prompt) => {
             if (mode) {
-              handleRegenerateWithCount(mode)
+              handleRegenerateWithCount(mode, prompt)
             } else {
-              handleRegenerate()
+              handleRegenerate(undefined, prompt)
             }
           }}
           isGenerating={isGenerating}

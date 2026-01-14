@@ -15,7 +15,7 @@ const ARC_TEMPLATES = [
 ]
 
 interface AIControlsSidebarProps {
-  onRegenerate: (mode?: 'replace' | 'append') => void
+  onRegenerate: (mode?: 'replace' | 'append', prompt?: string) => void
   onAutoSmooth?: () => void
   onRandomizeUnlocked?: () => void
   isGenerating: boolean
@@ -72,7 +72,9 @@ export function AIControlsSidebar({
       updatePrompt(editingPrompt)
       setIsPromptEditing(false)
     }
-    onRegenerate()
+    // Pass the current editing prompt to ensure the latest value is used
+    // (avoids stale closure issues in parent callbacks)
+    onRegenerate(undefined, editingPrompt)
   }
 
   if (ui.leftSidebarPanel === 'constraints' || ui.leftSidebarPanel === 'sets') {
@@ -239,7 +241,7 @@ export function AIControlsSidebar({
           <div className="grid grid-cols-2 gap-2">
             {/* Replace All */}
             <button
-              onClick={() => onRegenerate('replace')}
+              onClick={() => onRegenerate('replace', editingPrompt)}
               disabled={isGenerating || !editingPrompt.trim()}
               className="py-3 px-2 bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 font-bold text-[10px] uppercase tracking-wider rounded-lg hover:bg-cyan-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
             >
@@ -249,7 +251,7 @@ export function AIControlsSidebar({
 
             {/* Add More */}
             <button
-              onClick={() => onRegenerate('append')}
+              onClick={() => onRegenerate('append', editingPrompt)}
               disabled={isGenerating || !editingPrompt.trim() || playlist.length >= 20}
               className="py-3 px-2 bg-pink-500/20 border border-pink-500/30 text-pink-400 font-bold text-[10px] uppercase tracking-wider rounded-lg hover:bg-pink-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
             >
