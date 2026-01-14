@@ -382,7 +382,7 @@ Return ONLY valid JSON array, no markdown.${constraintInstructions ? `\n\nConstr
         temperature: 0.8,
         max_tokens: 4000
       })
-    }, 20000)
+    }, 60000) // 60 second timeout for OpenAI
 
     const data = await response.json()
 
