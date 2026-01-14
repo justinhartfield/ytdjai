@@ -54,7 +54,9 @@ export function AIConstraintsDrawer({ isOpen, onClose, onRegenerate }: AIConstra
     addToBlacklist,
     removeFromBlacklist,
     toggleDecade,
-    isGenerating
+    isGenerating,
+    aiProvider,
+    setAIProvider
   } = useYTDJStore()
 
   const [blacklistInput, setBlacklistInput] = useState('')
@@ -101,6 +103,49 @@ export function AIConstraintsDrawer({ isOpen, onClose, onRegenerate }: AIConstra
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
+            {/* AI Model Selection */}
+            <section className="space-y-5">
+              <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                AI Model
+              </h3>
+              <div className="space-y-2">
+                {AI_PROVIDERS.map((provider) => (
+                  <button
+                    key={provider.id}
+                    onClick={() => setAIProvider(provider.id)}
+                    className={cn(
+                      "w-full flex items-center gap-3 p-3 rounded-xl transition-all border",
+                      aiProvider === provider.id
+                        ? "bg-purple-500/20 border-purple-500/50"
+                        : "bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-8 h-8 rounded-lg flex items-center justify-center",
+                      aiProvider === provider.id
+                        ? "bg-purple-500/30 text-purple-400"
+                        : "bg-white/10 text-gray-400"
+                    )}>
+                      {provider.icon}
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className={cn(
+                        "text-xs font-bold",
+                        aiProvider === provider.id ? "text-purple-400" : "text-white"
+                      )}>
+                        {provider.name}
+                      </p>
+                      <p className="text-[10px] text-gray-500">{provider.description}</p>
+                    </div>
+                    {aiProvider === provider.id && (
+                      <div className="w-2 h-2 rounded-full bg-purple-400" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </section>
+
             {/* Rhythm Metrics Section */}
             <section className="space-y-5">
               <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
