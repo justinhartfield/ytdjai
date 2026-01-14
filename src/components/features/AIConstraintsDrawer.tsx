@@ -75,15 +75,25 @@ export function AIConstraintsDrawer({ isOpen, onClose, onRegenerate }: AIConstra
   return (
     <AnimatePresence>
       {isOpen && (
-        <motion.div
-          initial={{ x: -320, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: -320, opacity: 0 }}
-          transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          className="w-80 bg-[#0a0c1c]/95 backdrop-blur-xl border-r border-white/5 flex flex-col overflow-hidden z-30"
-        >
-          {/* Header */}
-          <div className="p-6 border-b border-white/5 flex items-center justify-between">
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-black/60 z-40"
+          />
+          {/* Drawer */}
+          <motion.div
+            initial={{ x: -320, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -320, opacity: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="fixed top-0 left-0 h-full w-80 bg-[#0a0c1c]/95 backdrop-blur-xl border-r border-white/5 flex flex-col overflow-hidden z-50"
+          >
+            {/* Header */}
+            <div className="p-6 border-b border-white/5 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center">
                 <Sparkles className="w-4 h-4 text-cyan-400" />
@@ -401,7 +411,8 @@ export function AIConstraintsDrawer({ isOpen, onClose, onRegenerate }: AIConstra
               )}
             </button>
           </div>
-        </motion.div>
+          </motion.div>
+        </>
       )}
     </AnimatePresence>
   )
