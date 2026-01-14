@@ -386,30 +386,45 @@ Return ONLY valid JSON array, no markdown.${constraintInstructions ? `\n\nConstr
 
     const data = await response.json()
 
+    // Check for API errors first
+    if (data.error) {
+      console.error('[OpenAI] API Error:', data.error)
+      throw new Error(`OpenAI API error: ${data.error.message || JSON.stringify(data.error)}`)
+    }
+
     if (data.choices?.[0]?.message?.content) {
       let content = data.choices[0].message.content
-      console.log('[OpenAI] Raw response:', content.substring(0, 200))
+      console.log('[OpenAI] Raw response:', content.substring(0, 300))
+
+      // Remove markdown code blocks if present
+      content = content.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
 
       // Try to parse JSON, handle truncated responses
       try {
-        const tracks = JSON.parse(content)
-        console.log('[OpenAI] Parsed', tracks.length, 'tracks')
-        return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+        const jsonMatch = content.match(/\[[\s\S]*\]/)
+        if (jsonMatch) {
+          const tracks = JSON.parse(jsonMatch[0])
+          console.log('[OpenAI] Parsed', tracks.length, 'tracks')
+          return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+        }
       } catch (parseError) {
         // Try to fix truncated JSON by finding last complete object
         console.log('[OpenAI] JSON parse failed, attempting recovery...')
         const lastCompleteArray = content.lastIndexOf('}]')
         if (lastCompleteArray > 0) {
           content = content.substring(0, lastCompleteArray + 2)
-          const tracks = JSON.parse(content)
-          console.log('[OpenAI] Recovered', tracks.length, 'tracks from truncated response')
-          return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+          const jsonMatch = content.match(/\[[\s\S]*\]/)
+          if (jsonMatch) {
+            const tracks = JSON.parse(jsonMatch[0])
+            console.log('[OpenAI] Recovered', tracks.length, 'tracks from truncated response')
+            return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+          }
         }
         throw parseError
       }
     }
 
-    console.error('[OpenAI] No valid response content:', data)
+    console.error('[OpenAI] No valid response content:', JSON.stringify(data).substring(0, 500))
     throw new Error('OpenAI returned no valid content')
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
@@ -484,10 +499,20 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
 
     const data = await response.json()
 
+    // Check for API errors first
+    if (data.error) {
+      console.error('[Claude] API Error:', data.error)
+      throw new Error(`Claude API error: ${data.error.message || JSON.stringify(data.error)}`)
+    }
+
     if (data.content?.[0]?.text) {
       // Extract JSON from response
-      const text = data.content[0].text
-      console.log('[Claude] Raw response:', text.substring(0, 200))
+      let text = data.content[0].text
+      console.log('[Claude] Raw response:', text.substring(0, 300))
+
+      // Remove markdown code blocks if present
+      text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
+
       const jsonMatch = text.match(/\[[\s\S]*\]/)
       if (jsonMatch) {
         const tracks = JSON.parse(jsonMatch[0])
@@ -496,7 +521,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
       }
     }
 
-    console.error('[Claude] No valid response content:', data)
+    console.error('[Claude] No valid response content:', JSON.stringify(data).substring(0, 500))
     throw new Error('Claude returned no valid content')
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
@@ -578,9 +603,19 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
 
     const data = await response.json()
 
+    // Check for API errors first
+    if (data.error) {
+      console.error('[Gemini] API Error:', data.error)
+      throw new Error(`Gemini API error: ${data.error.message || JSON.stringify(data.error)}`)
+    }
+
     if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-      const text = data.candidates[0].content.parts[0].text
-      console.log('[Gemini] Raw response:', text.substring(0, 200))
+      let text = data.candidates[0].content.parts[0].text
+      console.log('[Gemini] Raw response:', text.substring(0, 300))
+
+      // Remove markdown code blocks if present
+      text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
+
       const jsonMatch = text.match(/\[[\s\S]*\]/)
       if (jsonMatch) {
         const tracks = JSON.parse(jsonMatch[0])
@@ -589,7 +624,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
       }
     }
 
-    console.error('[Gemini] No valid response content:', data)
+    console.error('[Gemini] No valid response content:', JSON.stringify(data).substring(0, 500))
     throw new Error('Gemini returned no valid content')
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
