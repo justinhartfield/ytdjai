@@ -573,7 +573,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
           }
         })
       },
-      12000
+      15000
     )
 
     const data = await response.json()
