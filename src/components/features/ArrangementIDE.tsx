@@ -76,6 +76,7 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
   const [targetTrackCount, setTargetTrackCount] = useState(8)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [showBrowseSets, setShowBrowseSets] = useState(false)
+  const [isFixingTrack, setIsFixingTrack] = useState(false)
 
   // Player state from store
   const { isPlaying, playingNodeIndex, currentTime, duration, volume } = player
@@ -300,6 +301,44 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
     updatePlaylist(newPlaylist)
     setSelectedNodeIndex(null)
   }
+
+  // Fix It action - swap only the selected track with a style hint
+  const handleFixIt = useCallback(async (styleHint: string) => {
+    if (selectedNodeIndex === null || isFixingTrack) return
+
+    const currentNode = playlist[selectedNodeIndex]
+    if (!currentNode) return
+
+    setIsFixingTrack(true)
+    try {
+      const previousNode = selectedNodeIndex > 0 ? playlist[selectedNodeIndex - 1] : undefined
+      const nextNode = selectedNodeIndex < playlist.length - 1 ? playlist[selectedNodeIndex + 1] : undefined
+
+      const result = await swapTrack({
+        currentTrack: currentNode.track,
+        previousTrack: previousNode?.track,
+        nextTrack: nextNode?.track,
+        targetEnergy: currentNode.targetEnergy || currentNode.track.energy,
+        provider: aiProvider,
+        styleHint
+      })
+
+      if (result.success && result.newTrack) {
+        const newPlaylist = [...playlist]
+        newPlaylist[selectedNodeIndex] = {
+          ...newPlaylist[selectedNodeIndex],
+          track: result.newTrack,
+          targetEnergy: result.newTrack.energy
+        }
+        updatePlaylist(newPlaylist)
+        console.log('[Fix It] Swapped track:', result.newTrack.artist, '-', result.newTrack.title)
+      }
+    } catch (error) {
+      console.error('[Fix It] Failed to swap track:', error)
+    } finally {
+      setIsFixingTrack(false)
+    }
+  }, [selectedNodeIndex, isFixingTrack, playlist, aiProvider, updatePlaylist])
 
   // Sync editing prompt when currentSet.prompt changes
   useEffect(() => {
@@ -1049,42 +1088,42 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
                 {/* Fix It Actions */}
                 <div className="bg-white/5 rounded-2xl p-4 border border-white/5 space-y-3">
                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                    <Zap className="w-3 h-3" />
+                    {isFixingTrack ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
                     Fix It
                   </h4>
-                  <p className="text-[10px] text-gray-500">One-click playlist improvements</p>
+                  <p className="text-[10px] text-gray-500">Replace this track with something...</p>
                   <div className="flex flex-wrap gap-2">
                     <button
-                      onClick={() => handleRegenerate(undefined, `${currentSet?.prompt || ''} Make it more upbeat and energetic`)}
-                      disabled={isGenerating}
+                      onClick={() => handleFixIt('more upbeat and energetic')}
+                      disabled={isFixingTrack}
                       className="px-3 py-2 bg-pink-500/10 text-pink-400 text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-pink-500/20 transition-all border border-pink-500/20 disabled:opacity-50"
                     >
                       More upbeat
                     </button>
                     <button
-                      onClick={() => handleRegenerate(undefined, `${currentSet?.prompt || ''} Make it more underground and less mainstream`)}
-                      disabled={isGenerating}
+                      onClick={() => handleFixIt('more underground and less mainstream')}
+                      disabled={isFixingTrack}
                       className="px-3 py-2 bg-purple-500/10 text-purple-400 text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-purple-500/20 transition-all border border-purple-500/20 disabled:opacity-50"
                     >
                       More underground
                     </button>
                     <button
-                      onClick={() => handleRegenerate(undefined, `${currentSet?.prompt || ''} Make it more cohesive with better flow between tracks`)}
-                      disabled={isGenerating}
+                      onClick={() => handleFixIt('more cohesive with better flow to surrounding tracks')}
+                      disabled={isFixingTrack}
                       className="px-3 py-2 bg-cyan-500/10 text-cyan-400 text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-cyan-500/20 transition-all border border-cyan-500/20 disabled:opacity-50"
                     >
                       More cohesive
                     </button>
                     <button
-                      onClick={() => handleRegenerate(undefined, `${currentSet?.prompt || ''} Add more variety with different styles and eras`)}
-                      disabled={isGenerating}
+                      onClick={() => handleFixIt('more variety, different style or era')}
+                      disabled={isFixingTrack}
                       className="px-3 py-2 bg-orange-500/10 text-orange-400 text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-orange-500/20 transition-all border border-orange-500/20 disabled:opacity-50"
                     >
                       More variety
                     </button>
                     <button
-                      onClick={() => handleRegenerate(undefined, `${currentSet?.prompt || ''} Include more guitar-driven and rock-influenced tracks`)}
-                      disabled={isGenerating}
+                      onClick={() => handleFixIt('more guitar-driven and rock-influenced')}
+                      disabled={isFixingTrack}
                       className="px-3 py-2 bg-green-500/10 text-green-400 text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-green-500/20 transition-all border border-green-500/20 disabled:opacity-50"
                     >
                       More guitars

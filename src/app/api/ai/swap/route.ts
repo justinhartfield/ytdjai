@@ -322,14 +322,16 @@ export async function POST(request: NextRequest) {
       nextTrack,
       targetEnergy,
       constraints,
-      provider = 'openai'
+      provider = 'openai',
+      styleHint
     } = body
 
     console.log('[Swap API] Request received:', {
       provider,
       targetEnergy,
       currentTrack: currentTrack?.title,
-      currentEnergy: currentTrack?.energy
+      currentEnergy: currentTrack?.energy,
+      styleHint
     })
 
     if (!currentTrack) {
@@ -354,10 +356,11 @@ export async function POST(request: NextRequest) {
     }
 
     const genre = currentTrack.genre || 'electronic dance music'
-    const mood = currentTrack.energy && currentTrack.energy > 70 ? 'high energy' : 'groovy'
+    // Use styleHint if provided, otherwise derive from energy
+    const mood = styleHint || (currentTrack.energy && currentTrack.energy > 70 ? 'high energy' : 'groovy')
     const excludeArtists = [currentTrack.artist, previousTrack?.artist, nextTrack?.artist].filter(Boolean) as string[]
 
-    console.log('[Swap API] Searching for track with energy', finalTargetEnergy, ', genre:', genre)
+    console.log('[Swap API] Searching for track with energy', finalTargetEnergy, ', genre:', genre, ', mood/styleHint:', mood)
 
     let suggestedTrack: Partial<Track> | null = null
 

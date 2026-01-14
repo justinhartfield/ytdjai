@@ -224,6 +224,7 @@ export interface SwapTrackRequest {
   targetEnergy?: number
   constraints?: AIConstraints
   provider: AIProvider
+  styleHint?: string // e.g., "more upbeat", "more underground", "more guitars"
 }
 
 export interface AIResponse<T> {
