@@ -24,6 +24,7 @@ import type { PlaylistNode, Track, Set, AIConstraints, AlternativeTrack } from '
 interface SessionViewProps {
   onViewChange: (view: 'arrangement' | 'session') => void
   currentView: 'arrangement' | 'session'
+  onGoHome?: () => void
 }
 
 interface SessionColumn {
@@ -33,7 +34,7 @@ interface SessionColumn {
   alternatives: AlternativeTrack[]
 }
 
-export function SessionView({ onViewChange, currentView }: SessionViewProps) {
+export function SessionView({ onViewChange, currentView, onGoHome }: SessionViewProps) {
   const {
     currentSet,
     updatePlaylist,
@@ -544,7 +545,7 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Icon Sidebar */}
-        <IconSidebar onViewChange={onViewChange} currentView={currentView} />
+        <IconSidebar onViewChange={onViewChange} currentView={currentView} onGoHome={onGoHome} />
 
         {/* AI Constraints Drawer */}
         <AIConstraintsDrawer

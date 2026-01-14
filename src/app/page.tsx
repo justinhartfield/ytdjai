@@ -35,6 +35,10 @@ export default function Home() {
     setCurrentView(view)
   }
 
+  const handleGoHome = () => {
+    setShowLaunchPad(true)
+  }
+
   // Render mobile version for landscape mobile devices
   if (isMobileLandscape) {
     return <MobileApp />
@@ -68,11 +72,13 @@ export default function Home() {
             <ArrangementIDE
               onViewChange={handleViewChange}
               currentView={currentView}
+              onGoHome={handleGoHome}
             />
           ) : (
             <SessionView
               onViewChange={handleViewChange}
               currentView={currentView}
+              onGoHome={handleGoHome}
             />
           )}
         </motion.div>

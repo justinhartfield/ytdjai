@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
-import { Settings2, Music2, FolderOpen, ImagePlus, LayoutGrid, GitBranch } from 'lucide-react'
+import { Settings2, Music2, FolderOpen, ImagePlus, LayoutGrid, GitBranch, Home } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
 
@@ -11,9 +11,10 @@ interface IconSidebarProps {
   className?: string
   onViewChange?: (view: 'arrangement' | 'session') => void
   currentView?: 'arrangement' | 'session'
+  onGoHome?: () => void
 }
 
-export function IconSidebar({ className, onViewChange, currentView }: IconSidebarProps) {
+export function IconSidebar({ className, onViewChange, currentView, onGoHome }: IconSidebarProps) {
   const { ui, setLeftSidebarPanel, currentSet, updateCoverArt } = useYTDJStore()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const activePanel = ui.leftSidebarPanel
@@ -80,6 +81,23 @@ export function IconSidebar({ className, onViewChange, currentView }: IconSideba
       "w-16 bg-[#070815] border-r border-white/5 flex flex-col items-center py-4 gap-2",
       className
     )}>
+      {/* Home Button */}
+      {onGoHome && (
+        <button
+          onClick={onGoHome}
+          className="w-12 h-12 rounded-xl flex items-center justify-center transition-all group relative text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/10 mb-2"
+          title="Back to LaunchPad (H)"
+        >
+          <Home className="w-5 h-5" />
+
+          {/* Tooltip */}
+          <div className="absolute left-full ml-2 px-2 py-1 bg-black/90 border border-white/10 rounded text-[10px] font-bold text-white whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50">
+            New Set
+            <span className="ml-2 text-gray-500">H</span>
+          </div>
+        </button>
+      )}
+
       {/* Cover Art */}
       <button
         onClick={handleCoverArtClick}

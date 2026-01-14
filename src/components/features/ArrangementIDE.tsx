@@ -24,9 +24,10 @@ import type { PlaylistNode, Track, AIConstraints, Set } from '@/types'
 interface ArrangementIDEProps {
   onViewChange: (view: 'arrangement' | 'session') => void
   currentView: 'arrangement' | 'session'
+  onGoHome?: () => void
 }
 
-export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProps) {
+export function ArrangementIDE({ onViewChange, currentView, onGoHome }: ArrangementIDEProps) {
   const {
     currentSet,
     updatePlaylist,
@@ -607,7 +608,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
 
       <div className="flex-1 flex overflow-hidden">
         {/* Icon Sidebar */}
-        <IconSidebar onViewChange={onViewChange} currentView={currentView} />
+        <IconSidebar onViewChange={onViewChange} currentView={currentView} onGoHome={onGoHome} />
 
         {/* AI Constraints Drawer */}
         <AIConstraintsDrawer
