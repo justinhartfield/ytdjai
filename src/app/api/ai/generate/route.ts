@@ -33,17 +33,9 @@ interface YouTubeSearchResult {
   duration?: number
 }
 
-async function searchYouTube(query: string): Promise<YouTubeSearchResult | null> {
-  const apiKey = process.env.YOUTUBE_API_KEY || process.env.GOOGLE_AI_API_KEY
-
-  if (!apiKey) {
-    console.error('[YouTube] ERROR: No YOUTUBE_API_KEY or GOOGLE_AI_API_KEY environment variable set!')
-    console.error('[YouTube] Please add YOUTUBE_API_KEY to your .env.local file')
-    return null
-  }
-
+// Search YouTube for a video (without fetching duration - that's batched later)
+async function searchYouTubeVideo(query: string, apiKey: string): Promise<{ videoId: string; title: string; thumbnail: string } | null> {
   try {
-    // Search for the video
     const searchResponse = await fetch(
       `https://www.googleapis.com/youtube/v3/search?` +
       `part=snippet&type=video&maxResults=1&q=${encodeURIComponent(query)}&key=${apiKey}`
@@ -61,34 +53,49 @@ async function searchYouTube(query: string): Promise<YouTubeSearchResult | null>
     }
 
     const item = searchData.items[0]
-    const videoId = item.id.videoId
-
-    // Get video details for duration
-    const detailsResponse = await fetch(
-      `https://www.googleapis.com/youtube/v3/videos?` +
-      `part=contentDetails&id=${videoId}&key=${apiKey}`
-    )
-
-    let duration: number | undefined
-    if (detailsResponse.ok) {
-      const detailsData = await detailsResponse.json()
-      if (detailsData.items?.[0]?.contentDetails?.duration) {
-        // Parse ISO 8601 duration (PT4M33S -> 273 seconds)
-        duration = parseISO8601Duration(detailsData.items[0].contentDetails.duration)
-      }
-    }
-
     return {
-      videoId,
+      videoId: item.id.videoId,
       title: item.snippet.title,
-      thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url,
-      channelTitle: item.snippet.channelTitle,
-      duration
+      thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url
     }
   } catch (error) {
     console.error('YouTube search error:', error)
     return null
   }
+}
+
+// Batch fetch durations for multiple video IDs in a single API call
+async function batchFetchDurations(videoIds: string[], apiKey: string): Promise<Map<string, number>> {
+  const durations = new Map<string, number>()
+
+  if (videoIds.length === 0) return durations
+
+  try {
+    // YouTube API allows up to 50 video IDs per request
+    const batchSize = 50
+    for (let i = 0; i < videoIds.length; i += batchSize) {
+      const batch = videoIds.slice(i, i + batchSize)
+      const idsParam = batch.join(',')
+
+      const response = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?` +
+        `part=contentDetails&id=${idsParam}&key=${apiKey}`
+      )
+
+      if (response.ok) {
+        const data = await response.json()
+        for (const item of data.items || []) {
+          if (item.contentDetails?.duration) {
+            durations.set(item.id, parseISO8601Duration(item.contentDetails.duration))
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('YouTube batch duration fetch error:', error)
+  }
+
+  return durations
 }
 
 function parseISO8601Duration(duration: string): number {
@@ -102,27 +109,51 @@ function parseISO8601Duration(duration: string): number {
   return hours * 3600 + minutes * 60 + seconds
 }
 
-async function enrichTracksWithYouTube(tracks: Partial<Track>[]): Promise<Partial<Track>[]> {
-  const enrichedTracks = await Promise.all(
+async function enrichTracksWithYouTube(tracks: Partial<Track>[], fetchDurations: boolean = true): Promise<Partial<Track>[]> {
+  const apiKey = process.env.YOUTUBE_API_KEY || process.env.GOOGLE_AI_API_KEY
+
+  if (!apiKey) {
+    console.error('[YouTube] ERROR: No YOUTUBE_API_KEY or GOOGLE_AI_API_KEY environment variable set!')
+    return tracks
+  }
+
+  // Step 1: Run all searches in parallel (no duration fetch yet)
+  console.log(`[YouTube] Searching for ${tracks.length} tracks in parallel...`)
+  const searchResults = await Promise.all(
     tracks.map(async (track) => {
       const query = `${track.artist} - ${track.title} official audio`
-      console.log(`[YouTube] Searching for: "${query}"`)
-      const result = await searchYouTube(query)
-
-      if (result) {
-        console.log(`[YouTube] Found video for "${track.artist} - ${track.title}": ${result.videoId}`)
-        return {
-          ...track,
-          youtubeId: result.videoId,
-          thumbnail: result.thumbnail,
-          duration: result.duration || track.duration || 240
-        }
-      }
-
-      console.warn(`[YouTube] WARNING: No YouTube video found for "${track.artist} - ${track.title}" - track will have invalid youtubeId`)
-      return track
+      const result = await searchYouTubeVideo(query, apiKey)
+      return { track, result }
     })
   )
+
+  // Step 2: Collect all video IDs that need duration lookup
+  const videoIds = searchResults
+    .filter(r => r.result !== null)
+    .map(r => r.result!.videoId)
+
+  // Step 3: Batch fetch all durations in ONE API call (instead of N calls)
+  let durations = new Map<string, number>()
+  if (fetchDurations && videoIds.length > 0) {
+    console.log(`[YouTube] Batch fetching durations for ${videoIds.length} videos...`)
+    durations = await batchFetchDurations(videoIds, apiKey)
+  }
+
+  // Step 4: Merge results
+  const enrichedTracks = searchResults.map(({ track, result }) => {
+    if (result) {
+      console.log(`[YouTube] Found: "${track.artist} - ${track.title}" -> ${result.videoId}`)
+      return {
+        ...track,
+        youtubeId: result.videoId,
+        thumbnail: result.thumbnail,
+        duration: durations.get(result.videoId) || track.duration || 240
+      }
+    }
+
+    console.warn(`[YouTube] Not found: "${track.artist} - ${track.title}"`)
+    return track
+  })
 
   return enrichedTracks
 }
