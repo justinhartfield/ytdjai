@@ -907,7 +907,7 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
 
                     {/* Node Circle */}
                     <div className={cn(
-                      'w-14 h-14 rounded-full border-2 flex items-center justify-center transition-all bg-[#05060f]',
+                      'w-14 h-14 rounded-full border-2 flex items-center justify-center transition-all bg-[#05060f] relative',
                       selectedNodeIndex === index ? 'border-cyan-400 shadow-[0_0_15px_rgba(0,242,255,0.4)]' : 'border-white/20 group-hover:border-white/40',
                       isPlaying && activeTrackIndex === index && 'animate-pulse',
                       isBeingReordered && 'border-pink-500 shadow-[0_0_20px_rgba(255,0,229,0.5)]',
@@ -926,6 +926,12 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
                           </div>
                         )}
                       </div>
+                      {/* AI Provider Badge */}
+                      {node.sourceProvider && (
+                        <div className="absolute -bottom-1 -right-1">
+                          <AIProviderBadge provider={node.sourceProvider} size="sm" />
+                        </div>
+                      )}
                     </div>
 
                     {/* Floating Label */}

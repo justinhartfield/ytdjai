@@ -20,7 +20,7 @@ import { AIControlsSidebar } from './AIControlsSidebar'
 import { SaveSetDialog } from './SaveSetDialog'
 import { BrowseSetsModal } from './BrowseSetsModal'
 import type { PlaylistNode, Track, Set, AIConstraints, AlternativeTrack, AIProvider } from '@/types'
-import { GhostTrackCard } from './GhostTrackNode'
+import { GhostTrackCard, AIProviderBadge } from './GhostTrackNode'
 
 interface SessionViewProps {
   onViewChange: (view: 'arrangement' | 'session') => void
@@ -921,6 +921,12 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
                               {col.activeTrack.isLocked && (
                                 <div className="absolute top-1 left-1 bg-cyan-500/80 p-1 rounded">
                                   <Lock className="w-3 h-3 text-black" />
+                                </div>
+                              )}
+                              {/* AI Provider Badge */}
+                              {col.activeTrack.sourceProvider && (
+                                <div className="absolute top-1 right-1">
+                                  <AIProviderBadge provider={col.activeTrack.sourceProvider} size="md" />
                                 </div>
                               )}
                             </div>

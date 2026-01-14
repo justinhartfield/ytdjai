@@ -319,6 +319,13 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
         }}
       />
 
+      {/* AI Wizard Pro Modal */}
+      <AIWizardPro
+        isOpen={showWizard}
+        onClose={() => setShowWizard(false)}
+        onGenerate={handleGenerate}
+      />
+
       {/* Background grid */}
       <div
         className="fixed inset-0 opacity-20"
@@ -457,35 +464,27 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
               </div>
             </div>
 
-            {/* Advanced Generation Controls Toggle */}
-            <button
-              onClick={() => setShowAdvanced(!showAdvanced)}
+            {/* AI Wizard Pro Button */}
+            <motion.button
+              onClick={() => setShowWizard(true)}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
               className={cn(
                 'w-full flex items-center justify-between px-5 py-4 rounded-2xl border transition-all',
-                showAdvanced
-                  ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-purple-500/30'
-                  : 'bg-[#0a0c1c]/80 backdrop-blur-xl border-white/10 hover:border-white/20'
+                'bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-purple-500/30',
+                'hover:from-purple-500/20 hover:to-pink-500/20 hover:border-purple-500/50'
               )}
             >
               <div className="flex items-center gap-3">
-                <div className={cn(
-                  'w-8 h-8 rounded-lg flex items-center justify-center',
-                  showAdvanced ? 'bg-purple-500/20' : 'bg-white/10'
-                )}>
-                  <Sliders className={cn(
-                    'w-4 h-4',
-                    showAdvanced ? 'text-purple-400' : 'text-white/50'
-                  )} />
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.4)]">
+                  <Sparkles className="w-5 h-5 text-white" />
                 </div>
                 <div className="text-left">
-                  <h3 className={cn(
-                    'text-xs font-bold tracking-wider',
-                    showAdvanced ? 'text-purple-400' : 'text-white'
-                  )}>
-                    ADVANCED GENERATION
+                  <h3 className="text-sm font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+                    AI WIZARD PRO
                   </h3>
-                  <p className="text-[10px] text-white/40">
-                    Vibe blending, anchors, context & more
+                  <p className="text-[10px] text-white/50">
+                    Advanced customization in guided steps
                   </p>
                 </div>
               </div>
@@ -501,43 +500,11 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
                     ACTIVE
                   </span>
                 )}
-                {showAdvanced ? (
-                  <ChevronUp className="w-5 h-5 text-white/40" />
-                ) : (
-                  <ChevronDown className="w-5 h-5 text-white/40" />
-                )}
+                <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+                  <Sliders className="w-4 h-4 text-purple-400" />
+                </div>
               </div>
-            </button>
-
-            {/* Advanced Controls Panel */}
-            <AnimatePresence>
-              {showAdvanced && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="overflow-hidden"
-                >
-                  <div className="space-y-4 pt-2">
-                    {/* Advanced Prompt Features */}
-                    <AdvancedPromptPanel />
-
-                    {/* Generation Controls */}
-                    <GenerationControls />
-
-                    {/* Anchor Tracks */}
-                    <AnchorTracks />
-
-                    {/* Context Tokens */}
-                    <ContextTokens />
-
-                    {/* Similar Playlist */}
-                    <SimilarPlaylist />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            </motion.button>
           </div>
 
           {/* Right Column - Step 2 */}
