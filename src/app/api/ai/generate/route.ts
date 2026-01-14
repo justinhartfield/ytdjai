@@ -627,26 +627,51 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
       } catch (parseError) {
         // Try to fix truncated JSON by finding last complete object
         console.log('[Gemini] JSON parse failed, attempting recovery...')
-        const lastCompleteObject = text.lastIndexOf('},')
-        if (lastCompleteObject > 0) {
-          // Find the array start and close it after the last complete object
-          const arrayStart = text.indexOf('[')
-          if (arrayStart >= 0) {
+        const arrayStart = text.indexOf('[')
+        if (arrayStart >= 0) {
+          // Method 1: Find last complete object ending with },
+          const lastCompleteObject = text.lastIndexOf('},')
+          if (lastCompleteObject > arrayStart) {
             const recovered = text.substring(arrayStart, lastCompleteObject + 1) + ']'
             try {
               const tracks = JSON.parse(recovered)
-              console.log('[Gemini] Recovered', tracks.length, 'tracks from truncated response')
+              console.log('[Gemini] Recovered', tracks.length, 'tracks (method 1: last },)')
               return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
-            } catch {
-              // Try one more approach - find last }] pattern
-              const lastBracket = text.lastIndexOf('}]')
-              if (lastBracket > 0) {
-                const recovered2 = text.substring(arrayStart, lastBracket + 2)
-                const tracks = JSON.parse(recovered2)
-                console.log('[Gemini] Recovered', tracks.length, 'tracks (method 2)')
-                return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
-              }
-            }
+            } catch { /* continue to next method */ }
+          }
+
+          // Method 2: Find second-to-last complete object (in case last one is partial)
+          const secondLastObject = text.lastIndexOf('},', lastCompleteObject - 1)
+          if (secondLastObject > arrayStart) {
+            const recovered = text.substring(arrayStart, secondLastObject + 1) + ']'
+            try {
+              const tracks = JSON.parse(recovered)
+              console.log('[Gemini] Recovered', tracks.length, 'tracks (method 2: second-to-last)')
+              return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+            } catch { /* continue to next method */ }
+          }
+
+          // Method 3: Find last }] pattern
+          const lastBracket = text.lastIndexOf('}]')
+          if (lastBracket > arrayStart) {
+            const recovered = text.substring(arrayStart, lastBracket + 2)
+            try {
+              const tracks = JSON.parse(recovered)
+              console.log('[Gemini] Recovered', tracks.length, 'tracks (method 3: }])')
+              return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+            } catch { /* continue to next method */ }
+          }
+
+          // Method 4: Find all complete track objects using regex
+          const trackPattern = /\{[^{}]*"title"[^{}]*"artist"[^{}]*\}/g
+          const matches = text.match(trackPattern)
+          if (matches && matches.length > 0) {
+            const recovered = '[' + matches.join(',') + ']'
+            try {
+              const tracks = JSON.parse(recovered)
+              console.log('[Gemini] Recovered', tracks.length, 'tracks (method 4: regex extraction)')
+              return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+            } catch { /* give up */ }
           }
         }
         throw parseError
