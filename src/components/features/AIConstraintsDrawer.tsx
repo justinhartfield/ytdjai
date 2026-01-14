@@ -2,9 +2,36 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Plus, Trash2, Sparkles, RefreshCw } from 'lucide-react'
+import { X, Plus, Trash2, Sparkles, RefreshCw, Brain, Zap, Bot } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
+import type { AIProvider } from '@/types'
+
+const AI_PROVIDERS: {
+  id: AIProvider
+  name: string
+  description: string
+  icon: React.ReactNode
+}[] = [
+  {
+    id: 'openai',
+    name: 'OpenAI GPT-4',
+    description: 'Powerful reasoning',
+    icon: <Sparkles className="w-4 h-4" />
+  },
+  {
+    id: 'claude',
+    name: 'Anthropic Claude',
+    description: 'Nuanced analysis',
+    icon: <Brain className="w-4 h-4" />
+  },
+  {
+    id: 'gemini',
+    name: 'Google Gemini',
+    description: 'Fast inference',
+    icon: <Zap className="w-4 h-4" />
+  }
+]
 
 interface AIConstraintsDrawerProps {
   isOpen: boolean

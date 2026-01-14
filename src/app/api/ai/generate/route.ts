@@ -362,7 +362,7 @@ async function generateWithOpenAI(prompt: string, constraints: GeneratePlaylistR
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'gpt-4-turbo-preview',
+        model: 'gpt-4o-mini', // Fast model for Netlify timeout constraints
         messages: [
           {
             role: 'system',
@@ -382,7 +382,7 @@ Return ONLY valid JSON array, no markdown.${constraintInstructions ? `\n\nConstr
         temperature: 0.8,
         max_tokens: 4000
       })
-    }, 12000)
+    }, 15000)
 
     const data = await response.json()
 
@@ -480,7 +480,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
           }
         ]
       })
-    }, 12000)
+    }, 15000)
 
     const data = await response.json()
 
