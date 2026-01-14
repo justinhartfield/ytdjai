@@ -4,6 +4,19 @@ import type { AIProvider, GeneratePlaylistRequest, PlaylistNode, Track, Alternat
 // Next.js route segment config - increase timeout for serverless functions
 export const maxDuration = 60 // seconds (requires Netlify Pro or Vercel Pro)
 
+// Request-level timeout tracking for Netlify (hard limit ~26s)
+const NETLIFY_SAFE_TIMEOUT = 20000 // 20 seconds - leave buffer before Netlify kills us
+let requestStartTime = 0
+
+function timeRemaining(): number {
+  return Math.max(0, NETLIFY_SAFE_TIMEOUT - (Date.now() - requestStartTime))
+}
+
+function shouldSkipYouTube(): boolean {
+  // Skip YouTube enrichment if we have less than 8 seconds remaining
+  return timeRemaining() < 8000
+}
+
 // Type for AI response with alternatives
 interface AITrackWithAlternatives {
   title: string
@@ -40,6 +53,22 @@ interface YouTubeSearchResult {
 let youtubeQuotaExhausted = false
 let quotaExhaustedAt = 0
 
+// Fetch with timeout - abort if we're running out of time
+async function fetchWithTimeout(url: string, options?: RequestInit, timeoutMs?: number): Promise<Response> {
+  const timeout = timeoutMs || Math.min(timeRemaining(), 5000)
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeout)
+
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal })
+    clearTimeout(timeoutId)
+    return response
+  } catch (error) {
+    clearTimeout(timeoutId)
+    throw error
+  }
+}
+
 // Search YouTube for a video (without fetching duration - that's batched later)
 async function searchYouTubeVideo(query: string, apiKey: string): Promise<{ videoId: string; title: string; thumbnail: string } | null> {
   // Skip if we know quota is exhausted (reset after 5 minutes to retry)
@@ -47,10 +76,18 @@ async function searchYouTubeVideo(query: string, apiKey: string): Promise<{ vide
     return null
   }
 
+  // Skip if we're running out of time
+  if (shouldSkipYouTube()) {
+    console.log('[YouTube] Skipping search - running low on time')
+    return null
+  }
+
   try {
-    const searchResponse = await fetch(
+    const searchResponse = await fetchWithTimeout(
       `https://www.googleapis.com/youtube/v3/search?` +
-      `part=snippet&type=video&maxResults=1&q=${encodeURIComponent(query)}&key=${apiKey}`
+      `part=snippet&type=video&maxResults=1&q=${encodeURIComponent(query)}&key=${apiKey}`,
+      undefined,
+      4000 // 4 second timeout per search
     )
 
     if (!searchResponse.ok) {
@@ -80,7 +117,11 @@ async function searchYouTubeVideo(query: string, apiKey: string): Promise<{ vide
       thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url
     }
   } catch (error) {
-    console.error('YouTube search error:', error)
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log('[YouTube] Search timed out for:', query)
+    } else {
+      console.error('YouTube search error:', error)
+    }
     return null
   }
 }
@@ -91,6 +132,12 @@ async function batchFetchDurations(videoIds: string[], apiKey: string): Promise<
 
   if (videoIds.length === 0) return durations
 
+  // Skip if we're running out of time
+  if (shouldSkipYouTube()) {
+    console.log('[YouTube] Skipping duration fetch - running low on time')
+    return durations
+  }
+
   try {
     // YouTube API allows up to 50 video IDs per request
     const batchSize = 50
@@ -98,9 +145,11 @@ async function batchFetchDurations(videoIds: string[], apiKey: string): Promise<
       const batch = videoIds.slice(i, i + batchSize)
       const idsParam = batch.join(',')
 
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `https://www.googleapis.com/youtube/v3/videos?` +
-        `part=contentDetails&id=${idsParam}&key=${apiKey}`
+        `part=contentDetails&id=${idsParam}&key=${apiKey}`,
+        undefined,
+        4000 // 4 second timeout
       )
 
       if (response.ok) {
@@ -113,7 +162,11 @@ async function batchFetchDurations(videoIds: string[], apiKey: string): Promise<
       }
     }
   } catch (error) {
-    console.error('YouTube batch duration fetch error:', error)
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log('[YouTube] Duration fetch timed out')
+    } else {
+      console.error('YouTube batch duration fetch error:', error)
+    }
   }
 
   return durations
@@ -138,15 +191,40 @@ async function enrichTracksWithYouTube(tracks: Partial<Track>[], fetchDurations:
     return tracks
   }
 
+  // Check if we should skip YouTube entirely due to time constraints
+  if (shouldSkipYouTube()) {
+    console.log('[YouTube] Skipping all YouTube enrichment - running low on time')
+    return tracks
+  }
+
   // Step 1: Run all searches in parallel (no duration fetch yet)
-  console.log(`[YouTube] Searching for ${tracks.length} tracks in parallel...`)
-  const searchResults = await Promise.all(
-    tracks.map(async (track) => {
-      const query = `${track.artist} - ${track.title} official audio`
-      const result = await searchYouTubeVideo(query, apiKey)
-      return { track, result }
-    })
-  )
+  // But limit concurrency to avoid overwhelming the API and taking too long
+  console.log(`[YouTube] Searching for ${tracks.length} tracks (${timeRemaining()}ms remaining)...`)
+
+  // Process in smaller batches to allow early exit if running low on time
+  const batchSize = 5
+  const searchResults: { track: Partial<Track>; result: { videoId: string; title: string; thumbnail: string } | null }[] = []
+
+  for (let i = 0; i < tracks.length; i += batchSize) {
+    if (shouldSkipYouTube()) {
+      console.log(`[YouTube] Stopping early at track ${i}/${tracks.length} - running low on time`)
+      // Add remaining tracks without YouTube data
+      for (let j = i; j < tracks.length; j++) {
+        searchResults.push({ track: tracks[j], result: null })
+      }
+      break
+    }
+
+    const batch = tracks.slice(i, i + batchSize)
+    const batchResults = await Promise.all(
+      batch.map(async (track) => {
+        const query = `${track.artist} - ${track.title} official audio`
+        const result = await searchYouTubeVideo(query, apiKey)
+        return { track, result }
+      })
+    )
+    searchResults.push(...batchResults)
+  }
 
   // Step 2: Collect all video IDs that need duration lookup
   const videoIds = searchResults
@@ -155,7 +233,7 @@ async function enrichTracksWithYouTube(tracks: Partial<Track>[], fetchDurations:
 
   // Step 3: Batch fetch all durations in ONE API call (instead of N calls)
   let durations = new Map<string, number>()
-  if (fetchDurations && videoIds.length > 0) {
+  if (fetchDurations && videoIds.length > 0 && !shouldSkipYouTube()) {
     console.log(`[YouTube] Batch fetching durations for ${videoIds.length} videos...`)
     durations = await batchFetchDurations(videoIds, apiKey)
   }
@@ -276,7 +354,8 @@ async function generateWithOpenAI(prompt: string, constraints: GeneratePlaylistR
   const constraintInstructions = buildConstraintInstructions(constraints)
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Use timeout-aware fetch for AI call (allow 12 seconds max for AI response)
+    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -303,7 +382,7 @@ Return ONLY valid JSON array, no markdown.${constraintInstructions ? `\n\nConstr
         temperature: 0.8,
         max_tokens: 4000
       })
-    })
+    }, 12000)
 
     const data = await response.json()
 
@@ -333,6 +412,10 @@ Return ONLY valid JSON array, no markdown.${constraintInstructions ? `\n\nConstr
     console.error('[OpenAI] No valid response content:', data)
     throw new Error('OpenAI returned no valid content')
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('[OpenAI] Request timed out')
+      throw new Error('OpenAI request timed out - try again or reduce track count')
+    }
     console.error('[OpenAI] API error:', error)
     throw error
   }
@@ -349,7 +432,8 @@ async function generateWithClaude(prompt: string, constraints: GeneratePlaylistR
   const constraintInstructions = buildConstraintInstructions(constraints)
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    // Use timeout-aware fetch for AI call (allow 12 seconds max for AI response)
+    const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -396,7 +480,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
           }
         ]
       })
-    })
+    }, 12000)
 
     const data = await response.json()
 
@@ -415,6 +499,10 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
     console.error('[Claude] No valid response content:', data)
     throw new Error('Claude returned no valid content')
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('[Claude] Request timed out')
+      throw new Error('Claude request timed out - try again or reduce track count')
+    }
     console.error('[Claude] API error:', error)
     throw error
   }
@@ -431,7 +519,8 @@ async function generateWithGemini(prompt: string, constraints: GeneratePlaylistR
   const constraintInstructions = buildConstraintInstructions(constraints)
 
   try {
-    const response = await fetch(
+    // Use timeout-aware fetch for AI call (allow 12 seconds max for AI response)
+    const response = await fetchWithTimeout(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
       {
         method: 'POST',
@@ -483,7 +572,8 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
             maxOutputTokens: 2000
           }
         })
-      }
+      },
+      12000
     )
 
     const data = await response.json()
@@ -502,6 +592,10 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
     console.error('[Gemini] No valid response content:', data)
     throw new Error('Gemini returned no valid content')
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('[Gemini] Request timed out')
+      throw new Error('Gemini request timed out - try again or reduce track count')
+    }
     console.error('[Gemini] API error:', error)
     throw error
   }
@@ -604,11 +698,15 @@ function calculateTransitionQuality(track1: Partial<Track>, track2: Partial<Trac
 }
 
 export async function POST(request: NextRequest) {
+  // Start timing for Netlify timeout management
+  requestStartTime = Date.now()
+
   try {
     const body: GeneratePlaylistRequest = await request.json()
     const { prompt, constraints, provider = 'openai' } = body
 
     console.log('[Generate API] Request received:', { provider, prompt: prompt?.substring(0, 50) })
+    console.log('[Generate API] Timeout budget:', NETLIFY_SAFE_TIMEOUT, 'ms')
     console.log('[Generate API] Constraints:', JSON.stringify(constraints, null, 2))
     console.log('[Generate API] API Keys present:', {
       openai: !!process.env.OPENAI_API_KEY,
