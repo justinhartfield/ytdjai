@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YTDJ.AI — Music Playlist IDE</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Google Fonts: Syne -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --accent: #00FFD1;
+            --bg-dark: #0A0A0C;
+            --panel-bg: #141417;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --grid-color: rgba(255, 255, 255, 0.03);
+        }
+
+        body {
+            font-family: 'Syne', sans-serif;
+            background-color: var(--bg-dark);
+            color: #E2E8F0;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Algorithmic Clarity - Grid Background */
+        .micro-grid {
+            background-image: 
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        .y-axis-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* DAW Node Styling */
+        .node-connection {
+            stroke: rgba(0, 255, 209, 0.2);
+            stroke-width: 2;
+            fill: none;
+            transition: all 0.3s ease;
+        }
+
+        .node-glow {
+            filter: drop-shadow(0 0 8px rgba(0, 255, 209, 0.4));
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+
+        input[type="range"]::-webkit-slider-runnable-track {
+            height: 2px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px;
+            width: 12px;
+            background: var(--accent);
+            border-radius: 0;
+            margin-top: -5px;
+            cursor: pointer;
+        }
+
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+
+        /* Custom Clip Paths for Lab Aesthetic */
+        .lab-panel {
+            clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+        }
+
+        @keyframes pulse-fast {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-scan {
+            animation: scan 4s linear infinite;
+        }
+        @keyframes scan {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(400%); }
+        }
+    </style>
+</head>
+<body x-data="ideState()" class="flex flex-col min-h-screen select-none">
+
+    <!-- TOP BAR: IDE HEADER -->
+    <header class="h-14 border-b border-[rgba(255,255,255,0.1)] bg-[var(--panel-bg)] flex items-center justify-between px-4 z-50">
+        <div class="flex items-center gap-6">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 bg-[var(--accent)] flex items-center justify-center">
+                    <div class="w-3 h-3 bg-black"></div>
+                </div>
+                <span class="font-extrabold tracking-tighter text-lg italic">YTDJ.AI</span>
+            </div>
+            
+            <div class="h-6 w-[1px] bg-white/10"></div>
+            
+            <div class="flex items-center gap-4">
+                <div class="flex flex-col">
+                    <input type="text" x-model="projectName" class="bg-transparent border-none outline-none text-sm font-bold text-white/80 focus:text-[var(--accent)] transition-colors" spellcheck="false">
+                    <div class="flex gap-2 items-center">
+                        <span class="text-[10px] mono text-white/30 uppercase tracking-widest">v1.0.4-stable</span>
+                        <div class="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.5)]"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <div class="flex bg-black/40 p-1 border border-white/5">
+                <button @click="view = 'arrangement'" :class="view === 'arrangement' ? 'bg-white/10 text-[var(--accent)]' : 'text-white/40 hover:text-white'" class="px-3 py-1 text-[10px] mono uppercase transition-all">Arrangement</button>
+                <button @click="view = 'session'" :class="view === 'session' ? 'bg-white/10 text-[var(--accent)]' : 'text-white/40 hover:text-white'" class="px-3 py-1 text-[10px] mono uppercase transition-all">Session</button>
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <button class="p-2 hover:bg-white/5 text-white/50 border border-transparent hover:border-white/10 transition-all">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M224,128a96,96,0,0,1-144.07,83.11l-37.39,12.47a8,8,0,0,1-10.12-10.12l12.47-37.39A96,96,0,1,1,224,128Z" opacity="0.2"></path><path d="M128,24A104,104,0,0,0,36.8,178.6l-13.4,40.17a16,16,0,0,0,20.23,20.23l40.17-13.4A104,104,0,1,0,128,24Zm0,192a87.87,87.87,0,0,1-44.06-11.81,8,8,0,0,0-5.91-.71L37.84,217.1l13.62-40.19a8,8,0,0,0-.71-5.91A88,88,0,1,1,128,216Z"></path></svg>
+                </button>
+                <button @click="isExporting = true" class="px-6 py-2 bg-[var(--accent)] text-black text-xs font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all">
+                    Export Set
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow flex overflow-hidden">
+        
+        <!-- LEFT SIDEBAR: AI & LIBRARY -->
+        <aside class="w-72 bg-[var(--panel-bg)] border-r border-[rgba(255,255,255,0.1)] flex flex-col z-40">
+            <div class="flex border-b border-white/5">
+                <button @click="leftTab = 'prompt'" :class="leftTab === 'prompt' ? 'border-b-2 border-[var(--accent)] text-white' : 'text-white/40'" class="flex-1 py-3 text-[10px] mono uppercase tracking-widest">AI Prompt</button>
+                <button @click="leftTab = 'library'" :class="leftTab === 'library' ? 'border-b-2 border-[var(--accent)] text-white' : 'text-white/40'" class="flex-1 py-3 text-[10px] mono uppercase tracking-widest">Library</button>
+            </div>
+
+            <div class="flex-grow overflow-y-auto p-4 space-y-6 scrollbar-hide">
+                <template x-if="leftTab === 'prompt'">
+                    <div class="space-y-6">
+                        <section>
+                            <label class="text-[10px] mono text-white/40 uppercase tracking-widest mb-3 block">Base Prompt</label>
+                            <textarea x-model="prompt" class="w-full h-32 bg-black/40 border border-white/10 p-3 text-sm focus:border-[var(--accent)] outline-none resize-none transition-all leading-relaxed"></textarea>
+                            <div class="flex flex-wrap gap-2 mt-3">
+                                <template x-for="tag in tags">
+                                    <span class="px-2 py-1 bg-white/5 border border-white/10 text-[10px] mono text-[var(--accent)]" x-text="tag"></span>
+                                </template>
+                            </div>
+                        </section>
+
+                        <section>
+                            <label class="text-[10px] mono text-white/40 uppercase tracking-widest mb-3 block">Arc Template</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <template x-for="arc in arcs">
+                                    <button 
+                                        @click="selectedArc = arc.id"
+                                        :class="selectedArc === arc.id ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-white' : 'border-white/10 text-white/40 hover:border-white/20'"
+                                        class="p-2 border text-left transition-all group"
+                                    >
+                                        <div class="text-[10px] mono uppercase mb-1" x-text="arc.name"></div>
+                                        <div class="h-6 w-full flex items-end gap-0.5">
+                                            <template x-for="h in arc.viz">
+                                                <div class="w-1 bg-current" :style="`height: ${h}%`" :class="selectedArc === arc.id ? 'opacity-100' : 'opacity-20'"></div>
+                                            </template>
+                                        </div>
+                                    </button>
+                                </template>
+                            </div>
+                        </section>
+
+                        <section class="space-y-4">
+                            <div>
+                                <div class="flex justify-between mb-2">
+                                    <span class="text-[10px] mono text-white/40 uppercase tracking-widest">BPM Tolerance</span>
+                                    <span class="text-[10px] mono text-[var(--accent)]" x-text="`±${tolerance} BPM`"></span>
+                                </div>
+                                <input type="range" min="1" max="15" x-model="tolerance" class="w-full">
+                            </div>
+                            <div>
+                                <div class="flex justify-between mb-2">
+                                    <span class="text-[10px] mono text-white/40 uppercase tracking-widest">Novelty Dial</span>
+                                    <span class="text-[10px] mono text-[var(--accent)]" x-text="`${novelty}%`"></span >
+                                </div>
+                                <input type="range" min="0" max="100" x-model="novelty" class="w-full">
+                            </div>
+                        </section>
+
+                        <button @click="generateSet()" class="w-full py-4 border border-[var(--accent)] bg-[var(--accent)]/5 text-[var(--accent)] mono text-xs uppercase tracking-widest font-bold hover:bg-[var(--accent)] hover:text-black transition-all relative overflow-hidden group">
+                            <span class="relative z-10">Regenerate Sequence</span>
+                            <div class="absolute inset-0 w-1/4 h-full bg-white/20 -skew-x-12 translate-x-[-200%] group-hover:animate-scan"></div>
+                        </button>
+                    </div>
+                </template>
+
+                <template x-if="leftTab === 'library'">
+                    <div class="space-y-4">
+                        <div class="relative">
+                            <input type="text" placeholder="Search Crates..." class="w-full bg-black/40 border border-white/10 p-2 pl-8 text-xs outline-none focus:border-[var(--accent)]">
+                            <svg class="absolute left-2 top-2 text-white/20" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"></path></svg>
+                        </div>
+                        <div class="space-y-1">
+                            <template x-for="i in 10">
+                                <div class="p-2 border border-white/5 hover:bg-white/5 flex items-center gap-3 cursor-pointer group">
+                                    <div class="w-8 h-8 bg-white/10 flex-shrink-0"></div>
+                                    <div class="flex-grow min-w-0">
+                                        <div class="text-[10px] font-bold truncate group-hover:text-[var(--accent)]">Data Stream Phase 04</div>
+                                        <div class="text-[8px] mono text-white/30 uppercase">Synthetic Dreams • 128 BPM</div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </aside>
+
+        <!-- CENTER: CANVAS (TEMPO GRAPH) -->
+        <section class="flex-grow relative micro-grid flex flex-col">
+            
+            <!-- Canvas Toolbar -->
+            <div class="absolute top-4 left-4 right-4 flex justify-between z-20 pointer-events-none">
+                <div class="flex items-center gap-4 pointer-events-auto">
+                    <div class="bg-black/80 backdrop-blur-md border border-white/10 p-1 flex">
+                        <button @click="editMode = 'node'" :class="editMode === 'node' ? 'bg-[var(--accent)] text-black' : 'text-white/40 hover:text-white'" class="p-2 transition-all">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Z"></path></svg>
+                        </button>
+                        <button @click="editMode = 'curve'" :class="editMode === 'curve' ? 'bg-[var(--accent)] text-black' : 'text-white/40 hover:text-white'" class="p-2 transition-all">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M232,128A104,104,0,0,1,79.12,219.82a8,8,0,0,1,1.76-11.18,88,88,0,0,0,94.24-148.64,8,8,0,0,1,1.76-11.18A103.74,103.74,0,0,1,232,128Z" opacity="0.2"></path><path d="M232,128a104,104,0,0,1-152.88,91.82,8,8,0,0,1,1.76-11.18l.1-.07a88,88,0,0,0,94.13-148.56,8,8,0,0,1,1.76-11.18l.1-.07A103.75,103.75,0,0,1,232,128ZM38.82,49.12a8,8,0,0,0-11.18,1.76l-.07.1A103.75,103.75,0,0,0,24,128a104,104,0,0,0,152.88,91.82,8,8,0,0,0-1.76-11.18l-.1-.07A88,88,0,0,1,80.89,60,88.13,88.13,0,0,1,168,144a8,8,0,0,0,16,0,104.11,104.11,0,0,0-104-104,103.7,103.7,0,0,0-41.18,9.12Z"></path></svg>
+                        </button>
+                    </div>
+                    <div class="bg-black/80 backdrop-blur-md border border-white/10 px-3 py-2 flex items-center gap-4 text-[10px] mono">
+                        <span class="text-white/20">TOTAL DURATION: <span class="text-white">44:12</span></span>
+                        <span class="text-white/20">ITEMS: <span class="text-white">12</span></span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 pointer-events-auto">
+                    <button class="bg-black/80 backdrop-blur-md border border-white/10 p-2 text-white/60 hover:text-white transition-all">
+                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M228.24,219.76a6,6,0,0,1-8.48,8.48l-18.42-18.42a86,86,0,1,1,8.48-8.48ZM42,128a74,74,0,1,0,74-74A74.08,74.08,0,0,0,42,128Z"></path></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- The Graph Canvas -->
+            <div 
+                class="flex-grow relative overflow-hidden" 
+                @mousemove="handleDrag($event)" 
+                @mouseup="stopDrag()"
+                @mouseleave="stopDrag()"
+                ref="canvas"
+            >
+                <!-- Y-Axis Labels -->
+                <div class="absolute left-0 top-0 bottom-0 w-12 flex flex-col justify-between py-8 px-2 z-10 pointer-events-none">
+                    <template x-for="bpm in [200, 180, 160, 140, 120, 100, 80, 60]">
+                        <div class="y-axis-label" x-text="bpm"></div>
+                    </template>
+                </div>
+
+                <!-- Spline Curve SVG -->
+                <svg class="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
+                    <path :d="curvePath" class="node-connection" />
+                </svg>
+
+                <!-- Track Nodes -->
+                <template x-for="(track, index) in tracks" :key="track.id">
+                    <div 
+                        class="absolute transition-transform duration-200 cursor-ns-resize"
+                        :style="`left: ${ (index + 0.5) * (100 / tracks.length) }%; top: ${ bpmToY(track.bpm) }%; transform: translate(-50%, -50%);`"
+                    >
+                        <!-- Node Component -->
+                        <div 
+                            @mousedown.prevent="startDrag(index, $event)"
+                            @click="selectTrack(index)"
+                            class="relative group"
+                            :class="selectedIndex === index ? 'z-30' : 'z-20'"
+                        >
+                            <!-- Visual Ring -->
+                            <div 
+                                class="w-12 h-12 rounded-full border-2 flex items-center justify-center bg-black transition-all duration-300 relative"
+                                :class="selectedIndex === index ? 'border-[var(--accent)] scale-125 node-glow' : (track.locked ? 'border-amber-400' : 'border-white/20 hover:border-white/60')"
+                            >
+                                <img :src="track.cover" class="w-10 h-10 rounded-full object-cover grayscale group-hover:grayscale-0 transition-all">
+                                
+                                <!-- Play Indicator Overlay -->
+                                <div x-show="playing && currentTrackIndex === index" class="absolute inset-0 bg-[var(--accent)]/40 rounded-full flex items-center justify-center animate-pulse">
+                                    <div class="w-2 h-2 bg-white rounded-full"></div>
+                                </div>
+                            </div>
+
+                            <!-- Floating Labels -->
+                            <div 
+                                class="absolute top-full mt-3 left-1/2 -translate-x-1/2 whitespace-nowrap pointer-events-none transition-opacity"
+                                :class="selectedIndex === index ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+                            >
+                                <div class="bg-black/90 px-2 py-1 border border-white/10 flex flex-col items-center">
+                                    <span class="text-[9px] mono text-[var(--accent)]" x-text="`${track.bpm} BPM`"></span>
+                                    <span class="text-[10px] font-bold text-white uppercase tracking-tighter" x-text="track.title"></span>
+                                </div>
+                            </div>
+                            
+                            <!-- Lock Icon -->
+                            <div x-show="track.locked" class="absolute -top-1 -right-1 bg-amber-400 text-black p-0.5 rounded-full">
+                                <svg width="10" height="10" fill="currentColor" viewBox="0 0 256 256"><path d="M208,80H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Z"></path></svg>
+                            </div>
+                        </div>
+
+                        <!-- Drag Tooltip (Only visible while dragging) -->
+                        <div x-show="isDragging && dragIndex === index" class="absolute bottom-full mb-4 left-1/2 -translate-x-1/2 bg-[var(--accent)] text-black font-black px-2 py-1 text-xs lab-panel z-50">
+                            <span x-text="`${tracks[dragIndex].bpm} BPM`"></span>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Transition Indicators -->
+                <div class="absolute inset-0 pointer-events-none">
+                    <template x-for="(track, index) in tracks.slice(0, -1)">
+                        <div 
+                            class="absolute flex items-center justify-center transform -translate-x-1/2"
+                            :style="`left: ${ (index + 1) * (100 / tracks.length) }%; top: ${ (bpmToY(track.bpm) + bpmToY(tracks[index+1].bpm)) / 2 }%;`"
+                        >
+                            <div 
+                                class="w-1.5 h-1.5 rounded-full"
+                                :class="Math.abs(track.bpm - tracks[index+1].bpm) > 10 ? 'bg-red-500 animate-pulse' : 'bg-white/10'"
+                            ></div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Transport/Player Console -->
+            <div class="h-20 bg-[var(--panel-bg)] border-t border-white/10 flex items-center px-4 gap-8">
+                <!-- Mini Player -->
+                <div class="flex items-center gap-3 w-64">
+                    <div class="w-14 h-14 bg-black border border-white/10 flex-shrink-0 relative group cursor-pointer overflow-hidden">
+                        <img :src="tracks[currentTrackIndex].cover" class="w-full h-full object-cover">
+                        <div class="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <svg width="24" height="24" fill="white" viewBox="0 0 256 256"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm36.44-94.66-48-32A8,8,0,0,0,104,96v64a8,8,0,0,0,12.44,6.66l48-32a8,8,0,0,0,0-13.32Z"></path></svg>
+                        </div>
+                    </div>
+                    <div class="min-w-0">
+                        <div class="text-[11px] font-black truncate text-white uppercase tracking-wider" x-text="tracks[currentTrackIndex].title"></div>
+                        <div class="text-[9px] mono text-white/40 uppercase tracking-tighter" x-text="tracks[currentTrackIndex].artist"></div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="flex-grow flex flex-col items-center gap-2">
+                    <div class="flex items-center gap-6">
+                        <button class="text-white/40 hover:text-white transition-colors">
+                            <svg width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M200,56V200a8,8,0,0,1-12.44,6.66l-112-74.66a8,8,0,0,1,0-13.32l112-74.66A8,8,0,0,1,200,56Z"></path></svg>
+                        </button>
+                        <button @click="playing = !playing" class="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center text-white hover:bg-white/5 transition-all">
+                            <template x-if="!playing">
+                                <svg width="24" height="24" fill="currentColor" viewBox="0 0 256 256"><path d="M228.44,121.34l-160-106.67A8,8,0,0,0,56,21.34V234.66a8,8,0,0,0,12.44,6.67l160-106.67a8,8,0,0,0,0-13.32Z"></path></svg>
+                            </template>
+                            <template x-if="playing">
+                                <svg width="24" height="24" fill="currentColor" viewBox="0 0 256 256"><path d="M200,32H152a16,16,0,0,0-16,16V208a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V48A16,16,0,0,0,200,32Zm0,176H152V48h48ZM104,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V48A16,16,0,0,0,104,32Zm0,176H56V48h48Z"></path></svg>
+                            </template>
+                        </button>
+                        <button class="text-white/40 hover:text-white transition-colors">
+                            <svg width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M204.44,121.34l-112-74.66A8,8,0,0,0,80,53.34V202.66a8,8,0,0,0,12.44,6.66l112-74.66a8,8,0,0,0,0-13.32Z"></path></svg>
+                        </button>
+                    </div>
+                    <div class="w-full max-w-xl h-1 bg-white/10 relative overflow-hidden">
+                        <div class="absolute inset-y-0 left-0 bg-[var(--accent)]" style="width: 35%"></div>
+                    </div>
+                </div>
+
+                <!-- Right Transport -->
+                <div class="w-64 flex justify-end items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <svg width="14" height="14" fill="white" viewBox="0 0 256 256"><path d="M155.51,24.81a8,8,0,0,0-8.42.88L77.21,80H32A16,16,0,0,0,16,96v64a16,16,0,0,0,16,16H77.21l69.88,54.31a8,8,0,0,0,12.91-6.31V31.12A8,8,0,0,0,155.51,24.81ZM144,203.43,84.79,157.38A8,8,0,0,0,80,156H32V100H80a8,8,0,0,0,4.79-1.38L144,52.57Z"></path></svg>
+                        <div class="w-20 h-1 bg-white/10 relative">
+                            <div class="absolute inset-y-0 left-0 bg-white/60 w-[80%]"></div>
+                        </div>
+                    </div>
+                    <button class="text-[var(--accent)] mono text-[10px] tracking-widest border border-[var(--accent)] px-2 py-1">LIVE</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- RIGHT SIDEBAR: INSPECTOR -->
+        <aside class="w-80 bg-[var(--panel-bg)] border-l border-[rgba(255,255,255,0.1)] flex flex-col z-40 transition-transform">
+            <template x-if="selectedIndex !== null">
+                <div class="flex flex-col h-full">
+                    <div class="p-6 border-b border-white/5 space-y-4">
+                        <div class="flex justify-between items-start">
+                            <span class="px-2 py-0.5 bg-[var(--accent)] text-black mono text-[9px] font-bold uppercase">Track Selection</span>
+                            <div class="flex gap-2">
+                                <button @click="tracks[selectedIndex].locked = !tracks[selectedIndex].locked" :class="tracks[selectedIndex].locked ? 'text-amber-400' : 'text-white/20 hover:text-white'" class="transition-colors">
+                                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M208,80H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Z"></path></svg>
+                                </button>
+                                <button class="text-white/20 hover:text-white"><svg width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M216,48V208a16,16,0,0,1-16,16H56a16,16,0,0,1-16-16V48A16,16,0,0,1,56,32H200A16,16,0,0,1,216,48Z" opacity="0.2"></path><path d="M200,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V48A16,16,0,0,0,200,32Zm0,176H56V48H200V208ZM160,80a8,8,0,0,1-8,8H104a8,8,0,0,1,0-16h48A8,8,0,0,1,160,80Zm0,48a8,8,0,0,1-8,8H104a8,8,0,0,1,0-16h48A8,8,0,0,1,160,128Zm0,48a8,8,0,0,1-8,8H104a8,8,0,0,1,0-16h48A8,8,0,0,1,160,176Z"></path></svg></button>
+                            </div>
+                        </div>
+
+                        <div class="space-y-1">
+                            <h2 class="text-lg font-black uppercase tracking-tighter leading-tight" x-text="tracks[selectedIndex].title"></h2>
+                            <p class="text-[10px] mono text-[var(--accent)]" x-text="tracks[selectedIndex].artist"></p>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 pt-2">
+                            <div class="bg-black/40 p-2 border border-white/5">
+                                <div class="text-[8px] mono text-white/30 uppercase mb-1">Target BPM</div>
+                                <div class="text-sm font-black" x-text="tracks[selectedIndex].bpm"></div>
+                            </div>
+                            <div class="bg-black/40 p-2 border border-white/5">
+                                <div class="text-[8px] mono text-white/30 uppercase mb-1">Runtime</div>
+                                <div class="text-sm font-black" x-text="tracks[selectedIndex].duration"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-6 flex-grow overflow-y-auto space-y-6 scrollbar-hide">
+                        <section>
+                            <label class="text-[10px] mono text-white/40 uppercase tracking-widest mb-3 block">Why AI chose this</label>
+                            <div class="p-3 bg-white/5 border-l-2 border-[var(--accent)] text-xs leading-relaxed text-white/70 italic">
+                                "Matches the 'neon night drive' prompt by utilizing high-frequency synth pads and a driving 4/4 kick pattern. Minimal BPM delta of <span class="text-[var(--accent)]">3ms</span> from previous track ensures structural cohesion."
+                            </div>
+                        </section>
+
+                        <section>
+                            <label class="text-[10px] mono text-white/40 uppercase tracking-widest mb-3 block">BPM Alternatives</label>
+                            <div class="space-y-2">
+                                <template x-for="alt in alternatives">
+                                    <div class="p-2 border border-white/5 hover:border-[var(--accent)] group cursor-pointer transition-all flex items-center gap-3">
+                                        <div class="w-8 h-8 bg-black"></div>
+                                        <div class="flex-grow min-w-0">
+                                            <div class="text-[10px] font-bold truncate text-white/60 group-hover:text-white" x-text="alt.title"></div>
+                                            <div class="text-[8px] mono text-white/20 uppercase" x-text="`${alt.bpm} BPM • ${alt.energy}`"></div>
+                                        </div>
+                                        <button class="opacity-0 group-hover:opacity-100 p-1 text-[var(--accent)] transition-opacity">
+                                            <svg width="14" height="14" fill="currentColor" viewBox="0 0 256 256"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm36.44-94.66-48-32A8,8,0,0,0,104,96v64a8,8,0,0,0,12.44,6.66l48-32a8,8,0,0,0,0-13.32Z"></path></svg>
+                                        </button>
+                                    </div>
+                                </template>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="p-4 border-t border-white/5">
+                        <button class="w-full py-3 bg-white text-black mono text-[10px] font-black uppercase tracking-widest hover:bg-[var(--accent)] transition-colors">Replace Track Manually</button>
+                    </div>
+                </div>
+            </template>
+            <template x-if="selectedIndex === null">
+                <div class="flex flex-col items-center justify-center h-full p-8 text-center opacity-30">
+                    <svg width="48" height="48" fill="currentColor" viewBox="0 0 256 256"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm36.44-94.66-48-32A8,8,0,0,0,104,96v64a8,8,0,0,0,12.44,6.66l48-32a8,8,0,0,0,0-13.32Z"></path></svg>
+                    <p class="mt-4 mono text-xs uppercase tracking-widest">Select a node to inspect track metadata</p>
+                </div>
+            </template>
+        </aside>
+    </main>
+
+    <!-- EXPORT MODAL -->
+    <div x-show="isExporting" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4" x-cloak>
+        <div class="w-full max-w-xl bg-[var(--panel-bg)] border border-white/10 p-8 lab-panel shadow-2xl" @click.away="isExporting = false">
+            <h2 class="text-3xl font-black italic tracking-tighter uppercase mb-2 text-[var(--accent)]">Finalizing Set</h2>
+            <p class="text-sm text-white/40 mb-8 mono uppercase tracking-widest">Preparing 12 tracks for YouTube Music Export</p>
+            
+            <div class="space-y-6">
+                <div class="flex flex-col gap-1">
+                    <label class="text-[10px] mono text-white/40 uppercase">Playlist Name</label>
+                    <input type="text" x-model="projectName" class="bg-black/60 border border-white/10 p-3 outline-none text-white focus:border-[var(--accent)]">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <button class="p-6 bg-black/60 border border-white/10 flex flex-col items-center gap-3 hover:border-[var(--accent)] hover:bg-[var(--accent)]/5 transition-all group">
+                        <div class="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <svg width="24" height="24" fill="white" viewBox="0 0 256 256"><path d="M234.49,111.07,90.41,22.94A20,20,0,0,0,60,39.87V216.13a20,20,0,0,0,30.41,16.93l144.08-88.13A20,20,0,0,0,234.49,111.07Z"></path></svg>
+                        </div>
+                        <span class="text-[10px] mono uppercase tracking-widest">Export to YTM</span>
+                    </button>
+                    <button class="p-6 bg-black/60 border border-white/10 flex flex-col items-center gap-3 hover:border-[var(--accent)] hover:bg-[var(--accent)]/5 transition-all group">
+                        <div class="w-10 h-10 bg-white/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <svg width="24" height="24" fill="white" viewBox="0 0 256 256"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V72a8,8,0,0,1,16,0v64a8,8,0,0,1-16,0Zm0,40V160a8,8,0,0,1,16,0v16a8,8,0,0,1-16,0Z"></path></svg>
+                        </div>
+                        <span class="text-[10px] mono uppercase tracking-widest">Share Link</span>
+                    </button>
+                </div>
+
+                <div class="flex justify-between items-center pt-4">
+                    <button @click="isExporting = false" class="text-[10px] mono text-white/30 hover:text-white transition-colors uppercase tracking-widest">Cancel</button>
+                    <span class="text-[8px] mono text-white/20">API SECURE CONNECTION: ESTABLISHED</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOTIFICATION -->
+    <div x-show="showToast" x-transition class="fixed bottom-24 right-8 bg-[var(--accent)] text-black font-bold px-4 py-2 mono text-[10px] uppercase tracking-widest z-[100]">
+        Set Regenerated Successfully
+    </div>
+
+    <script>
+        function ideState() {
+            return {
+                projectName: 'NEON_DRIVE_01.SET',
+                view: 'arrangement',
+                leftTab: 'prompt',
+                prompt: 'Industrial night drive with rhythmic synth stabs and heavy sub-bass. Cinematic peak energy in the second half.',
+                tags: ['SYNTHWAVE', 'INDUSTRIAL', 'CYBERPUNK', 'DRIVING'],
+                selectedArc: 'peak',
+                arcs: [
+                    { id: 'peak', name: 'Warmup → Peak', viz: [20, 30, 45, 60, 80, 100, 95, 90, 85, 70, 50, 40] },
+                    { id: 'linear', name: 'Steady Burn', viz: [70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81] },
+                    { id: 'desc', name: 'Chill-out', viz: [90, 85, 80, 75, 60, 55, 45, 40, 35, 30, 25, 20] }
+                ],
+                tolerance: 5,
+                novelty: 42,
+                tracks: [
+                    { id: 1, title: 'Hyperion', artist: 'Gessafelstein', bpm: 112, duration: '3:45', locked: false, cover: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100&q=80' },
+                    { id: 2, title: 'Nightcall', artist: 'Kavinsky', bpm: 118, duration: '4:12', locked: true, cover: 'https://images.unsplash.com/photo-1619983081563-430f63602796?w=100&q=80' },
+                    { id: 3, title: 'Turbulence', artist: 'Danger', bpm: 124, duration: '3:50', locked: false, cover: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100&q=80' },
+                    { id: 4, title: 'Odyssey', artist: 'Home', bpm: 132, duration: '5:02', locked: false, cover: 'https://images.unsplash.com/photo-1493225255756-d9584f8606e9?w=100&q=80' },
+                    { id: 5, title: 'Resonance', artist: 'Lorn', bpm: 140, duration: '4:33', locked: false, cover: 'https://images.unsplash.com/photo-1459749411177-042180ce673c?w=100&q=80' },
+                    { id: 6, title: 'Pulse Width', artist: 'Aphex Twin', bpm: 155, duration: '3:22', locked: false, cover: 'https://images.unsplash.com/photo-1514525253361-bee8718a74a2?w=100&q=80' },
+                    { id: 7, title: 'Contact', artist: 'Daft Punk', bpm: 168, duration: '6:21', locked: false, cover: 'https://images.unsplash.com/photo-1496293455970-f8581aae0e3c?w=100&q=80' },
+                    { id: 8, title: 'Overmono', artist: 'Bicep', bpm: 145, duration: '4:55', locked: false, cover: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=100&q=80' },
+                    { id: 9, title: 'The Blaze', artist: 'Virile', bpm: 130, duration: '3:45', locked: false, cover: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&q=80' },
+                    { id: 10, title: 'Strobe', artist: 'Deadmau5', bpm: 128, duration: '10:34', locked: false, cover: 'https://images.unsplash.com/photo-1420133965216-76421bb17389?w=100&q=80' },
+                    { id: 11, title: 'Adagio', artist: 'Tiësto', bpm: 110, duration: '5:20', locked: false, cover: 'https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=100&q=80' },
+                    { id: 12, title: 'Sun & Moon', artist: 'Above & Beyond', bpm: 128, duration: '4:15', locked: false, cover: 'https://images.unsplash.com/photo-1494232410401-ad00d5433cfa?w=100&q=80' }
+                ],
+                alternatives: [
+                    { title: 'Data Crystal', bpm: 134, energy: 'HIGH' },
+                    { title: 'Binary Sunset', bpm: 131, energy: 'MED' },
+                    { title: 'Neon Pulse', bpm: 136, energy: 'HIGH' },
+                    { title: 'Logic Bomb', bpm: 129, energy: 'LOW' }
+                ],
+                selectedIndex: 0,
+                currentTrackIndex: 0,
+                playing: false,
+                editMode: 'node',
+                isDragging: false,
+                dragIndex: null,
+                isExporting: false,
+                showToast: false,
+
+                bpmToY(bpm) {
+                    const min = 60;
+                    const max = 200;
+                    const range = max - min;
+                    const percent = ((max - bpm) / range) * 80 + 10;
+                    return percent;
+                },
+
+                startDrag(index, event) {
+                    this.isDragging = true;
+                    this.dragIndex = index;
+                    this.selectedIndex = index;
+                },
+
+                handleDrag(event) {
+                    if (!this.isDragging || this.dragIndex === null) return;
+                    
+                    const canvas = this.$refs.canvas;
+                    const rect = canvas.getBoundingClientRect();
+                    const y = event.clientY - rect.top;
+                    const percent = (y / rect.height) * 100;
+                    
+                    // Clamp BPM
+                    const min = 60;
+                    const max = 200;
+                    const range = max - min;
+                    
+                    // Calculate BPM based on Y position (reverse of bpmToY)
+                    // (bpmToY: ((max - bpm) / range) * 80 + 10 = percent)
+                    let bpm = Math.round(max - ((percent - 10) / 80) * range);
+                    bpm = Math.max(min, Math.min(max, bpm));
+                    
+                    this.tracks[this.dragIndex].bpm = bpm;
+                    
+                    // Logic Simulation: When BPM changes significantly, swap song title
+                    if (bpm % 10 === 0) {
+                        this.tracks[this.dragIndex].title = `GEN_TRK_${bpm}`;
+                    }
+                },
+
+                stopDrag() {
+                    this.isDragging = false;
+                    this.dragIndex = null;
+                },
+
+                selectTrack(index) {
+                    this.selectedIndex = index;
+                    this.currentTrackIndex = index;
+                },
+
+                generateSet() {
+                    this.showToast = true;
+                    setTimeout(() => this.showToast = false, 3000);
+                },
+
+                get curvePath() {
+                    const points = this.tracks.map((t, i) => ({
+                        x: (i + 0.5) * (100 / this.tracks.length),
+                        y: this.bpmToY(t.bpm)
+                    }));
+                    
+                    if (points.length < 2) return "";
+                    
+                    // Generate Bezier Curve
+                    let d = `M ${points[0].x}% ${points[0].y}%`;
+                    for (let i = 0; i < points.length - 1; i++) {
+                        const p0 = points[i];
+                        const p1 = points[i + 1];
+                        const cp1x = p0.x + (p1.x - p0.x) / 2;
+                        d += ` C ${cp1x}% ${p0.y}%, ${cp1x}% ${p1.y}%, ${p1.x}% ${p1.y}%`;
+                    }
+                    return d;
+                }
+            };
+        }
+    </script>
+</body>
+</html>

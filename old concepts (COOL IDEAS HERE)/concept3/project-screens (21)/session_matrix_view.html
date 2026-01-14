@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YTDJ.AI — Session Matrix View</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Google Fonts: Syne & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --accent: #00FFD1;
+            --bg-dark: #0A0A0C;
+            --panel-bg: #141417;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --grid-color: rgba(255, 255, 255, 0.03);
+            --cell-active: rgba(0, 255, 209, 0.15);
+        }
+
+        body {
+            font-family: 'Syne', sans-serif;
+            background-color: var(--bg-dark);
+            color: #E2E8F0;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Algorithmic Clarity - Grid Background */
+        .micro-grid {
+            background-image: 
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        /* Lab Aesthetic Panels */
+        .lab-panel {
+            clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+            border: 1px solid var(--border-color);
+            background: var(--panel-bg);
+        }
+
+        /* Session Matrix Custom Styling */
+        .matrix-cell {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .matrix-cell::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 2px;
+            width: 0%;
+            background: var(--accent);
+            transition: width 0.3s ease;
+        }
+
+        .matrix-cell.active::after {
+            width: 100%;
+        }
+
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        
+        /* Animating scan line for AI feel */
+        .scanline {
+            width: 100%;
+            height: 100px;
+            background: linear-gradient(0deg, rgba(0, 255, 209, 0) 0%, rgba(0, 255, 209, 0.05) 50%, rgba(0, 255, 209, 0) 100%);
+            position: absolute;
+            top: -100px;
+            left: 0;
+            animation: scan 8s linear infinite;
+            pointer-events: none;
+        }
+
+        @keyframes scan {
+            0% { top: -100px; }
+            100% { top: 100%; }
+        }
+
+        .active-pulse {
+            animation: pulse-border 2s infinite;
+        }
+
+        @keyframes pulse-border {
+            0% { border-color: rgba(0, 255, 209, 0.2); }
+            50% { border-color: rgba(0, 255, 209, 0.6); }
+            100% { border-color: rgba(0, 255, 209, 0.2); }
+        }
+    </style>
+</head>
+<body x-data="matrixState()" class="flex flex-col min-h-screen select-none">
+
+    <!-- TOP BAR: IDE HEADER -->
+    <header class="h-14 border-b border-[rgba(255,255,255,0.1)] bg-[var(--panel-bg)] flex items-center justify-between px-4 z-50">
+        <div class="flex items-center gap-6">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 bg-[var(--accent)] flex items-center justify-center">
+                    <div class="w-3 h-3 bg-black"></div>
+                </div>
+                <span class="font-extrabold tracking-tighter text-lg italic uppercase">YTDJ.AI</span>
+            </div>
+            
+            <div class="h-6 w-[1px] bg-white/10"></div>
+            
+            <div class="flex items-center gap-4">
+                <div class="flex flex-col">
+                    <input type="text" x-model="projectName" class="bg-transparent border-none outline-none text-sm font-bold text-white/80 focus:text-[var(--accent)] transition-colors" spellcheck="false">
+                    <div class="flex gap-2 items-center">
+                        <span class="text-[10px] mono text-white/30 uppercase tracking-widest">v1.0.4-stable</span>
+                        <div class="w-1.5 h-1.5 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <div class="flex bg-black/40 p-1 border border-white/5">
+                <button @click="view = 'arrangement'" class="px-3 py-1 text-[10px] mono uppercase transition-all text-white/40 hover:text-white">Arrangement</button>
+                <button @click="view = 'session'" class="px-3 py-1 text-[10px] mono uppercase transition-all bg-white/10 text-[var(--accent)]">Session</button>
+            </div>
+            
+            <div class="h-6 w-[1px] bg-white/10"></div>
+            
+            <button @click="isExporting = true" class="px-6 py-2 bg-[var(--accent)] text-black text-xs font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all">
+                Export Set
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-grow flex overflow-hidden">
+        
+        <!-- LEFT SIDEBAR: AI ENGINE CONTROLS -->
+        <aside class="w-72 bg-[var(--panel-bg)] border-r border-[rgba(255,255,255,0.1)] flex flex-col z-40">
+            <div class="p-4 border-b border-white/5 flex items-center justify-between">
+                <span class="text-[10px] mono text-white/40 uppercase tracking-widest">Matrix Controls</span>
+                <span class="text-[10px] mono text-[var(--accent)]">AUTO-SYNC ON</span>
+            </div>
+
+            <div class="flex-grow overflow-y-auto p-4 space-y-8 scrollbar-hide">
+                <section>
+                    <label class="text-[10px] mono text-white/40 uppercase tracking-widest mb-3 block">Suggestion Logic</label>
+                    <div class="space-y-2">
+                        <template x-for="mode in engineModes">
+                            <button @click="activeEngine = mode.id" 
+                                    :class="activeEngine === mode.id ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-white' : 'border-white/5 text-white/40 hover:border-white/20'"
+                                    class="w-full text-left p-3 border transition-all">
+                                <div class="text-[10px] font-bold uppercase mb-1" x-text="mode.title"></div>
+                                <div class="text-[9px] mono opacity-60 leading-tight" x-text="mode.desc"></div>
+                            </button>
+                        </template>
+                    </div>
+                </section>
+
+                <section>
+                    <label class="text-[10px] mono text-white/40 uppercase tracking-widest mb-3 block">Variance Depth</label>
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between mb-2">
+                                <span class="text-[9px] mono text-white/30">BPM RANGE</span>
+                                <span class="text-[9px] mono text-[var(--accent)]">±12 BPM</span>
+                            </div>
+                            <input type="range" class="w-full">
+                        </div>
+                        <div>
+                            <div class="flex justify-between mb-2">
+                                <span class="text-[9px] mono text-white/30">GENRE DRIFT</span>
+                                <span class="text-[9px] mono text-[var(--accent)]">24%</span>
+                            </div>
+                            <input type="range" class="w-full">
+                        </div>
+                    </div>
+                </section>
+
+                <section class="p-4 bg-black/40 border border-white/5">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-2 h-2 rounded-full bg-[var(--accent)] animate-pulse"></div>
+                        <span class="text-[10px] mono text-white uppercase tracking-widest">AI Status</span>
+                    </div>
+                    <div class="text-[9px] mono text-white/40 space-y-1">
+                        <div>&gt; Analyzing transitions...</div>
+                        <div>&gt; Indexing 4 candidate slots...</div>
+                        <div class="text-[var(--accent)]">&gt; Ready for launch.</div>
+                    </div>
+                </section>
+                
+                <button @click="regenerateMatrix()" class="w-full py-4 border border-[var(--accent)] bg-[var(--accent)]/5 text-[var(--accent)] mono text-xs uppercase tracking-widest font-bold hover:bg-[var(--accent)] hover:text-black transition-all">
+                    Re-Seed Grid
+                </button>
+            </div>
+        </aside>
+
+        <!-- CENTER: SESSION MATRIX VIEW -->
+        <section class="flex-grow relative micro-grid flex flex-col overflow-hidden">
+            <div class="scanline"></div>
+            
+            <!-- Matrix Header Labels -->
+            <div class="h-12 border-b border-white/10 flex items-center bg-black/40 backdrop-blur-sm sticky top-0 z-30">
+                <div class="w-16 border-r border-white/10 h-full flex items-center justify-center">
+                    <span class="text-[10px] mono text-white/20">POS</span>
+                </div>
+                <div class="flex-grow grid grid-cols-4 divide-x divide-white/10 h-full">
+                    <div class="flex items-center px-4 gap-2">
+                        <div class="w-2 h-2 bg-[var(--accent)] rounded-full shadow-[0_0_5px_var(--accent)]"></div>
+                        <span class="text-[10px] mono uppercase tracking-widest font-bold">Current Master</span>
+                    </div>
+                    <div class="flex items-center px-4">
+                        <span class="text-[10px] mono uppercase tracking-widest text-white/40">Alt: High Tempo</span>
+                    </div>
+                    <div class="flex items-center px-4">
+                        <span class="text-[10px] mono uppercase tracking-widest text-white/40">Alt: Energy Drift</span>
+                    </div>
+                    <div class="flex items-center px-4">
+                        <span class="text-[10px] mono uppercase tracking-widest text-white/40">Alt: Deep Cuts</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scrollable Grid Body -->
+            <div class="flex-grow overflow-y-auto scrollbar-hide bg-black/10">
+                <template x-for="(slot, slotIndex) in matrix" :key="slotIndex">
+                    <div class="flex border-b border-white/5 h-32 group">
+                        <!-- Row Header -->
+                        <div class="w-16 border-r border-white/10 flex flex-col items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
+                            <span class="text-xs font-black mono opacity-40 group-hover:opacity-100" x-text="slotIndex + 1"></span>
+                            <div class="w-4 h-[1px] bg-white/10 my-2"></div>
+                            <div class="text-[8px] mono text-white/20">TRK</div>
+                        </div>
+
+                        <!-- Matrix Cells -->
+                        <div class="flex-grow grid grid-cols-4 divide-x divide-white/5">
+                            <template x-for="(track, colIndex) in slot.tracks" :key="colIndex">
+                                <div 
+                                    @click="triggerCell(slotIndex, colIndex)"
+                                    class="matrix-cell p-3 cursor-pointer group/cell relative"
+                                    :class="slot.activeIndex === colIndex ? 'bg-[var(--accent)]/5 active border-l border-[var(--accent)]/20' : 'hover:bg-white/[0.02]'"
+                                >
+                                    <!-- Cell Meta -->
+                                    <div class="flex justify-between mb-2">
+                                        <span class="text-[9px] mono" :class="slot.activeIndex === colIndex ? 'text-[var(--accent)]' : 'text-white/20'" x-text="track.bpm + ' BPM'"></span>
+                                        <div x-show="slot.activeIndex === colIndex" class="w-1.5 h-1.5 bg-[var(--accent)] rounded-full"></div>
+                                    </div>
+
+                                    <!-- Cell Content -->
+                                    <div class="flex gap-3">
+                                        <div class="w-14 h-14 bg-black border border-white/10 flex-shrink-0 relative overflow-hidden">
+                                            <img :src="track.cover" class="w-full h-full object-cover grayscale opacity-60 group-hover/cell:grayscale-0 group-hover/cell:opacity-100 transition-all">
+                                            <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover/cell:opacity-100 bg-black/40">
+                                                <svg width="20" height="20" fill="white" viewBox="0 0 256 256"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm36.44-94.66-48-32A8,8,0,0,0,104,96v64a8,8,0,0,0,12.44,6.66l48-32a8,8,0,0,0,0-13.32Z"></path></svg>
+                                            </div>
+                                        </div>
+                                        <div class="min-w-0 flex flex-col justify-center">
+                                            <div class="text-[10px] font-black uppercase truncate group-hover/cell:text-[var(--accent)] transition-colors" x-text="track.title"></div>
+                                            <div class="text-[9px] mono text-white/40 truncate" x-text="track.artist"></div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Hover Status Bar -->
+                                    <div class="absolute top-0 right-0 p-1 opacity-0 group-hover/cell:opacity-100 transition-opacity">
+                                        <div class="text-[8px] mono px-1 bg-white/10 text-white/40">MATCH: 98%</div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Transport/Player Console -->
+            <div class="h-20 bg-[var(--panel-bg)] border-t border-white/10 flex items-center px-4 gap-8 z-50">
+                <div class="flex items-center gap-3 w-64">
+                    <div class="w-14 h-14 bg-black border border-white/10 flex-shrink-0 relative">
+                        <img :src="matrix[activeSlot].tracks[matrix[activeSlot].activeIndex].cover" class="w-full h-full object-cover">
+                    </div>
+                    <div class="min-w-0">
+                        <div class="text-[11px] font-black truncate text-white uppercase tracking-wider" x-text="matrix[activeSlot].tracks[matrix[activeSlot].activeIndex].title"></div>
+                        <div class="text-[9px] mono text-white/40 uppercase tracking-tighter" x-text="matrix[activeSlot].tracks[matrix[activeSlot].activeIndex].artist"></div>
+                    </div>
+                </div>
+
+                <div class="flex-grow flex flex-col items-center gap-2">
+                    <div class="flex items-center gap-6">
+                        <button class="text-white/40 hover:text-white"><svg width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M200,56V200a8,8,0,0,1-12.44,6.66l-112-74.66a8,8,0,0,1,0-13.32l112-74.66A8,8,0,0,1,200,56Z"></path></svg></button>
+                        <button @click="playing = !playing" class="w-12 h-12 rounded-full border border-[var(--accent)] flex items-center justify-center text-[var(--accent)] hover:bg-[var(--accent)]/10 transition-all">
+                            <template x-if="!playing">
+                                <svg width="24" height="24" fill="currentColor" viewBox="0 0 256 256"><path d="M228.44,121.34l-160-106.67A8,8,0,0,0,56,21.34V234.66a8,8,0,0,0,12.44,6.67l160-106.67a8,8,0,0,0,0-13.32Z"></path></svg>
+                            </template>
+                            <template x-if="playing">
+                                <svg width="24" height="24" fill="currentColor" viewBox="0 0 256 256"><path d="M200,32H152a16,16,0,0,0-16,16V208a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V48A16,16,0,0,0,200,32Zm0,176H152V48h48ZM104,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V48A16,16,0,0,0,104,32Zm0,176H56V48h48Z"></path></svg>
+                            </template>
+                        </button>
+                        <button class="text-white/40 hover:text-white"><svg width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M204.44,121.34l-112-74.66A8,8,0,0,0,80,53.34V202.66a8,8,0,0,0,12.44,6.66l112-74.66a8,8,0,0,0,0-13.32Z"></path></svg></button>
+                    </div>
+                    <div class="w-full max-w-xl h-1 bg-white/10 relative overflow-hidden">
+                        <div class="absolute inset-y-0 left-0 bg-[var(--accent)] transition-all duration-300" :style="`width: ${playProgress}%`"></div>
+                    </div>
+                </div>
+
+                <div class="w-64 flex justify-end items-center gap-4">
+                    <div class="text-right">
+                        <div class="text-[10px] mono text-white/40">MASTER BPM</div>
+                        <div class="text-lg font-black text-white" x-text="matrix[activeSlot].tracks[matrix[activeSlot].activeIndex].bpm"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- RIGHT SIDEBAR: SELECTION INSPECTOR -->
+        <aside class="w-80 bg-[var(--panel-bg)] border-l border-[rgba(255,255,255,0.1)] flex flex-col z-40">
+            <template x-if="inspectedTrack">
+                <div class="flex flex-col h-full">
+                    <!-- Top section -->
+                    <div class="p-6 border-b border-white/5 space-y-4">
+                        <div class="flex justify-between items-start">
+                            <span class="px-2 py-0.5 border border-[var(--accent)] text-[var(--accent)] mono text-[9px] font-bold uppercase">Candidate Profile</span>
+                            <button @click="inspectedTrack = null" class="text-white/20 hover:text-white">
+                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"></path></svg>
+                            </button>
+                        </div>
+                        
+                        <div class="aspect-video bg-black/60 border border-white/5 flex items-center justify-center relative overflow-hidden">
+                            <img :src="inspectedTrack.cover" class="absolute inset-0 w-full h-full object-cover opacity-40 blur-sm">
+                            <img :src="inspectedTrack.cover" class="w-24 h-24 shadow-2xl z-10 border border-white/10">
+                        </div>
+
+                        <div class="space-y-1">
+                            <h2 class="text-lg font-black uppercase tracking-tighter leading-tight" x-text="inspectedTrack.title"></h2>
+                            <p class="text-[10px] mono text-[var(--accent)]" x-text="inspectedTrack.artist"></p>
+                        </div>
+                    </div>
+
+                    <!-- AI Reasoning -->
+                    <div class="p-6 space-y-6 flex-grow overflow-y-auto scrollbar-hide">
+                        <section>
+                            <label class="text-[10px] mono text-white/40 uppercase tracking-widest mb-3 block">Selection Intelligence</label>
+                            <div class="space-y-3">
+                                <div class="p-3 bg-white/[0.03] border-l-2 border-[var(--accent)] text-[11px] leading-relaxed italic text-white/70">
+                                    "This candidate preserves the 'Industrial' tag while increasing rhythmic complexity. Suggested for this slot to maintain momentum before the planned peak."
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div class="p-2 border border-white/5 bg-black/20">
+                                        <div class="text-[8px] mono text-white/30 uppercase">Compatibility</div>
+                                        <div class="text-xs font-bold text-[var(--accent)]">94.8%</div>
+                                    </div>
+                                    <div class="p-2 border border-white/5 bg-black/20">
+                                        <div class="text-[8px] mono text-white/30 uppercase">Key Match</div>
+                                        <div class="text-xs font-bold">Bm (Perfect)</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section>
+                            <label class="text-[10px] mono text-white/40 uppercase tracking-widest mb-3 block">Energy Profile</label>
+                            <div class="h-16 flex items-end gap-1">
+                                <template x-for="i in 12">
+                                    <div class="flex-grow bg-[var(--accent)]/10 border-t border-[var(--accent)]/30" :style="`height: ${Math.random() * 100}%`"></div>
+                                </template>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="p-4 border-t border-white/5 space-y-2">
+                        <button @click="confirmTrigger()" class="w-full py-3 bg-[var(--accent)] text-black mono text-[10px] font-black uppercase tracking-widest hover:brightness-110 transition-all">Swap Into Main Mix</button>
+                        <button class="w-full py-3 border border-white/10 text-white/60 mono text-[10px] font-black uppercase tracking-widest hover:bg-white/5 transition-all">Preview Alternative</button>
+                    </div>
+                </div>
+            </template>
+            <template x-if="!inspectedTrack">
+                <div class="flex flex-col items-center justify-center h-full p-8 text-center opacity-30">
+                    <div class="w-12 h-12 border border-white/20 rounded-full flex items-center justify-center mb-4">
+                        <svg width="24" height="24" fill="currentColor" viewBox="0 0 256 256"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm36.44-94.66-48-32A8,8,0,0,0,104,96v64a8,8,0,0,0,12.44,6.66l48-32a8,8,0,0,0,0-13.32Z"></path></svg>
+                    </div>
+                    <p class="mono text-[10px] uppercase tracking-[0.2em] leading-relaxed">Select a matrix cell to reveal algorithmic properties</p>
+                </div>
+            </template>
+        </aside>
+    </main>
+
+    <!-- EXPORT MODAL -->
+    <div x-show="isExporting" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md px-4" x-cloak>
+        <div class="w-full max-w-xl bg-[var(--panel-bg)] border border-white/10 p-8 lab-panel shadow-2xl">
+            <h2 class="text-4xl font-black italic tracking-tighter uppercase mb-2 text-[var(--accent)]">Finalizing Sequence</h2>
+            <p class="text-[10px] text-white/40 mb-10 mono uppercase tracking-[0.3em]">Session Mode Active • Exporting Active Matrix Selections</p>
+            
+            <div class="space-y-6">
+                <div class="flex flex-col gap-1">
+                    <label class="text-[10px] mono text-white/40 uppercase mb-2">Project Package Name</label>
+                    <input type="text" x-model="projectName" class="bg-black/60 border border-white/10 p-4 outline-none text-white focus:border-[var(--accent)] mono text-sm tracking-widest">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <button class="p-8 border border-white/10 flex flex-col items-center gap-4 hover:border-[var(--accent)] hover:bg-[var(--accent)]/5 transition-all group">
+                        <div class="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <svg width="24" height="24" fill="white" viewBox="0 0 256 256"><path d="M234.49,111.07,90.41,22.94A20,20,0,0,0,60,39.87V216.13a20,20,0,0,0,30.41,16.93l144.08-88.13A20,20,0,0,0,234.49,111.07Z"></path></svg>
+                        </div>
+                        <span class="text-[10px] mono uppercase tracking-widest">Push to YTM</span>
+                    </button>
+                    <button class="p-8 border border-white/10 flex flex-col items-center gap-4 hover:border-[var(--accent)] hover:bg-[var(--accent)]/5 transition-all group">
+                        <div class="w-12 h-12 bg-white/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <svg width="24" height="24" fill="white" viewBox="0 0 256 256"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V72a8,8,0,0,1,16,0v64a8,8,0,0,1-16,0Zm0,40V160a8,8,0,0,1,16,0v16a8,8,0,0,1-16,0Z"></path></svg>
+                        </div>
+                        <span class="text-[10px] mono uppercase tracking-widest">Public Link</span>
+                    </button>
+                </div>
+
+                <div class="flex justify-between items-center pt-10 border-t border-white/5">
+                    <button @click="isExporting = false" class="text-[10px] mono text-white/30 hover:text-white transition-colors uppercase tracking-widest">Abort Process</button>
+                    <div class="text-[8px] mono text-[var(--accent)] px-2 py-1 bg-[var(--accent)]/10">SECURITY HANDSHAKE: VALID</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function matrixState() {
+            return {
+                projectName: 'SESSION_DRIVE_ALT.SET',
+                view: 'session',
+                activeEngine: 'momentum',
+                isExporting: false,
+                playing: false,
+                playProgress: 42,
+                activeSlot: 0,
+                inspectedTrack: null,
+                inspectedPos: { slot: 0, col: 0 },
+                
+                engineModes: [
+                    { id: 'momentum', title: 'Momentum Shift', desc: 'Focus on tracks that maintain current energy while shifting rhythm.' },
+                    { id: 'contrast', title: 'Max Contrast', desc: 'Drastically different textures while maintaining the BPM curve.' },
+                    { id: 'safe', title: 'Sonic Cohesion', desc: 'Highest mathematical match scores for smooth transitions.' }
+                ],
+
+                // Data structured for the Matrix Grid
+                matrix: [
+                    { 
+                        activeIndex: 0,
+                        tracks: [
+                            { title: 'Hyperion', artist: 'Gessafelstein', bpm: 112, cover: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=120&q=80' },
+                            { title: 'Control', artist: 'Zoe Nova', bpm: 115, cover: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=120&q=80' },
+                            { title: 'Dark Matter', artist: 'Vant', bpm: 110, cover: 'https://images.unsplash.com/photo-1459749411177-042180ce673c?w=120&q=80' },
+                            { title: 'Signal', artist: 'S-Core', bpm: 114, cover: 'https://images.unsplash.com/photo-1493225255756-d9584f8606e9?w=120&q=80' }
+                        ]
+                    },
+                    { 
+                        activeIndex: 0,
+                        tracks: [
+                            { title: 'Nightcall', artist: 'Kavinsky', bpm: 118, cover: 'https://images.unsplash.com/photo-1619983081563-430f63602796?w=120&q=80' },
+                            { title: 'Pacific', artist: 'Coastal', bpm: 122, cover: 'https://images.unsplash.com/photo-1514525253361-bee8718a74a2?w=120&q=80' },
+                            { title: 'Neon Drive', artist: 'Arcade', bpm: 116, cover: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=120&q=80' },
+                            { title: 'Shadow', artist: 'Noir', bpm: 120, cover: 'https://images.unsplash.com/photo-1496293455970-f8581aae0e3c?w=120&q=80' }
+                        ]
+                    },
+                    { 
+                        activeIndex: 0,
+                        tracks: [
+                            { title: 'Turbulence', artist: 'Danger', bpm: 124, cover: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=120&q=80' },
+                            { title: 'Voltage', artist: 'Static', bpm: 128, cover: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=120&q=80' },
+                            { title: 'Apex', artist: 'Hunter', bpm: 122, cover: 'https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=120&q=80' },
+                            { title: 'Drift', artist: 'Racer', bpm: 126, cover: 'https://images.unsplash.com/photo-1420133965216-76421bb17389?w=120&q=80' }
+                        ]
+                    },
+                    { 
+                        activeIndex: 1,
+                        tracks: [
+                            { title: 'Odyssey', artist: 'Home', bpm: 132, cover: 'https://images.unsplash.com/photo-1557683316-973673baf926?w=120&q=80' },
+                            { title: 'Starry', artist: 'Void', bpm: 135, cover: 'https://images.unsplash.com/photo-1618609373337-1119f4a030d7?w=120&q=80' },
+                            { title: 'Voyager', artist: 'Nasa', bpm: 130, cover: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=120&q=80' },
+                            { title: 'Horizon', artist: 'Line', bpm: 134, cover: 'https://images.unsplash.com/photo-1475721027785-f74dea327912?w=120&q=80' }
+                        ]
+                    },
+                    { 
+                        activeIndex: 0,
+                        tracks: [
+                            { title: 'Resonance', artist: 'Lorn', bpm: 140, cover: 'https://images.unsplash.com/photo-1510915361894-db8b60106cb1?w=120&q=80' },
+                            { title: 'Acid', artist: 'Rain', bpm: 145, cover: 'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?w=120&q=80' },
+                            { title: 'Echos', artist: 'Cave', bpm: 138, cover: 'https://images.unsplash.com/photo-1534239103216-352318459421?w=120&q=80' },
+                            { title: 'Pylon', artist: 'Grid', bpm: 142, cover: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=120&q=80' }
+                        ]
+                    },
+                    { 
+                        activeIndex: 0,
+                        tracks: [
+                            { title: 'Pulse Width', artist: 'Aphex Twin', bpm: 155, cover: 'https://images.unsplash.com/photo-1459749411177-042180ce673c?w=120&q=80' },
+                            { title: 'Twin', artist: 'Peak', bpm: 158, cover: 'https://images.unsplash.com/photo-1534239103216-352318459421?w=120&q=80' },
+                            { title: 'Window', artist: 'Licker', bpm: 152, cover: 'https://images.unsplash.com/photo-1510915361894-db8b60106cb1?w=120&q=80' },
+                            { title: 'Polygon', artist: 'Shape', bpm: 154, cover: 'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?w=120&q=80' }
+                        ]
+                    }
+                ],
+
+                triggerCell(slotIdx, colIdx) {
+                    this.inspectedTrack = this.matrix[slotIdx].tracks[colIdx];
+                    this.inspectedPos = { slot: slotIdx, col: colIdx };
+                },
+
+                confirmTrigger() {
+                    if (!this.inspectedTrack) return;
+                    this.matrix[this.inspectedPos.slot].activeIndex = this.inspectedPos.col;
+                    this.activeSlot = this.inspectedPos.slot;
+                    
+                    // Simple logic to show immediate feedback
+                    this.playing = true;
+                    this.playProgress = 0;
+                    
+                    // Close inspector after swap
+                    // this.inspectedTrack = null;
+                },
+
+                regenerateMatrix() {
+                    // Logic to simulate AI re-generation
+                    this.matrix.forEach(slot => {
+                        slot.tracks.forEach(track => {
+                            if (Math.random() > 0.8) {
+                                track.title = "NEW_GEN_" + Math.floor(Math.random() * 999);
+                            }
+                        });
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>

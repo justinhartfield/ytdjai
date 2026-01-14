@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YTDJ.AI - NEON_DRIVE_SET_V1 Story</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --neon-pink: #ff00ff;
+            --neon-cyan: #00ffff;
+            --neon-purple: #9d00ff;
+            --analog-orange: #ff8c00;
+            --crt-bg: #0a0a0f;
+        }
+
+        body {
+            font-family: 'Syne', sans-serif;
+            background-color: var(--crt-bg);
+            color: #e2e2e2;
+            min-height: 100vh;
+        }
+
+        .synth-grid {
+            background-image: 
+                linear-gradient(rgba(157, 0, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(157, 0, 255, 0.05) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+
+        .glass-panel {
+            background: rgba(15, 15, 25, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .neon-glow-pink { box-shadow: 0 0 20px rgba(255, 0, 255, 0.2); }
+        .neon-glow-cyan { box-shadow: 0 0 20px rgba(0, 255, 255, 0.2); }
+        
+        .scanlines {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 150, 0.02));
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .hero-curve-container {
+            mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+        }
+
+        .track-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .track-card:hover {
+            transform: translateX(8px);
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--neon-cyan);
+        }
+
+        .btn-retro {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.2s;
+        }
+        .btn-retro::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: 0.5s;
+        }
+        .btn-retro:hover::after { left: 100%; }
+
+        [x-cloak] { display: none !important; }
+
+        @keyframes pulse-cyan {
+            0%, 100% { filter: drop-shadow(0 0 5px var(--neon-cyan)); }
+            50% { filter: drop-shadow(0 0 15px var(--neon-cyan)); }
+        }
+        .animate-pulse-cyan { animation: pulse-cyan 2s infinite; }
+    </style>
+</head>
+<body x-data="storyApp()" class="flex flex-col synth-grid overflow-x-hidden">
+    <div class="scanlines"></div>
+
+    <!-- NAVIGATION -->
+    <nav class="h-20 flex items-center justify-between px-8 z-50 relative">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 bg-gradient-to-br from-pink-500 to-purple-700 rounded-xl flex items-center justify-center font-bold italic tracking-tighter text-white text-xl">YT</div>
+            <div>
+                <span class="text-2xl font-black tracking-tighter uppercase italic text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-500">YTDJ.AI</span>
+                <span class="block text-[8px] tracking-[0.4em] font-black uppercase text-cyan-500 -mt-1">Playlist Story</span>
+            </div>
+        </div>
+        <div class="flex items-center space-x-4">
+            <button @click="shareLink()" class="px-5 py-2 glass-panel rounded text-[10px] font-black uppercase tracking-[0.2em] hover:text-cyan-400 transition-colors">Copy Link</button>
+            <button class="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded text-[10px] font-black uppercase tracking-[0.2em] shadow-lg hover:scale-105 transition-all">Sign In</button>
+        </div>
+    </nav>
+
+    <main class="flex-grow container mx-auto px-6 pt-8 pb-32 z-10">
+        
+        <!-- HERO SECTION -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-end mb-20">
+            <div class="lg:col-span-7 space-y-6">
+                <div class="inline-flex items-center px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-[10px] font-black uppercase tracking-widest">
+                    Set ID: #ND-90210
+                </div>
+                <h1 class="text-6xl md:text-8xl font-black uppercase italic leading-[0.9] tracking-tighter text-white">
+                    NEON DRIVE <span class="text-transparent border-t-4 border-b-4 border-white">V.1</span>
+                </h1>
+                <div class="glass-panel p-6 rounded-2xl border-l-4 border-l-pink-500 max-w-2xl">
+                    <p class="text-xs font-black text-gray-500 uppercase tracking-[0.3em] mb-2">Prompt Input</p>
+                    <p class="text-xl md:text-2xl font-medium italic text-pink-100 leading-relaxed">
+                        "Synth-wave drive through a rain-soaked Tokyo, building confidence and energy."
+                    </p>
+                </div>
+            </div>
+            
+            <div class="lg:col-span-5 flex flex-col items-start lg:items-end space-y-8">
+                <div class="grid grid-cols-2 gap-8 w-full">
+                    <div>
+                        <span class="block text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-1">Duration</span>
+                        <span class="text-3xl font-bold tracking-tight">32:45</span>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-1">Total Tracks</span>
+                        <span class="text-3xl font-bold tracking-tight">08</span>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-1">Tempo Range</span>
+                        <span class="text-3xl font-bold tracking-tight">80-142</span>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-1">Vibe Match</span>
+                        <span class="text-3xl font-bold tracking-tight text-cyan-400">98%</span>
+                    </div>
+                </div>
+                <button class="w-full btn-retro bg-white text-black py-4 rounded font-black uppercase tracking-[0.3em] text-xs shadow-[0_0_30px_rgba(255,255,255,0.2)]">
+                    Play on YouTube Music
+                </button>
+            </div>
+        </section>
+
+        <!-- THE CURVE (Visual Centerpiece) -->
+        <section class="mb-24 relative overflow-hidden h-80 glass-panel rounded-3xl border border-white/10 flex items-center justify-center">
+            <div class="absolute inset-0 synth-grid opacity-20"></div>
+            
+            <!-- Tempo Scale Background -->
+            <div class="absolute inset-x-0 inset-y-8 flex flex-col justify-between px-6 pointer-events-none opacity-20">
+                <div class="border-t border-white/20 w-full flex justify-between items-center"><span class="text-[8px] font-bold">200 BPM</span></div>
+                <div class="border-t border-white/20 w-full flex justify-between items-center"><span class="text-[8px] font-bold">160 BPM</span></div>
+                <div class="border-t border-white/20 w-full flex justify-between items-center"><span class="text-[8px] font-bold">120 BPM</span></div>
+                <div class="border-t border-white/20 w-full flex justify-between items-center"><span class="text-[8px] font-bold">80 BPM</span></div>
+            </div>
+
+            <div class="relative w-full h-full hero-curve-container">
+                <svg class="w-full h-full p-12 overflow-visible">
+                    <defs>
+                        <linearGradient id="curveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" style="stop-color:var(--neon-pink);stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:var(--neon-purple);stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:var(--neon-cyan);stop-opacity:1" />
+                        </linearGradient>
+                        <filter id="glow">
+                            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                            <feMerge>
+                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    <path :d="curvePath" fill="none" stroke="url(#curveGrad)" stroke-width="6" filter="url(#glow)" stroke-linecap="round" class="opacity-80" />
+                    
+                    <!-- Interactive Nodes on Curve -->
+                    <template x-for="(track, index) in playlist" :key="index">
+                        <g @mouseenter="hoveredIndex = index" @mouseleave="hoveredIndex = null" class="cursor-pointer">
+                            <circle 
+                                :cx="(index + 1) * (100 / 9) + '%'" 
+                                :cy="track.y + '%'" 
+                                r="8" 
+                                :fill="hoveredIndex === index ? 'white' : 'var(--neon-cyan)'"
+                                class="transition-all duration-300"
+                            />
+                            <circle 
+                                x-show="hoveredIndex === index"
+                                :cx="(index + 1) * (100 / 9) + '%'" 
+                                :cy="track.y + '%'" 
+                                r="16" 
+                                fill="none" 
+                                stroke="white" 
+                                stroke-width="1"
+                                class="animate-ping"
+                            />
+                        </g>
+                    </template>
+                </svg>
+            </div>
+            
+            <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center space-x-2 bg-black/60 px-4 py-1.5 rounded-full border border-white/10 text-[9px] font-black tracking-widest uppercase text-gray-500">
+                <svg class="w-3 h-3 text-pink-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.334-.398-1.817a1 1 0 00-1.487-.876 6.723 6.723 0 00-4.432 6.041 3.666 3.666 0 015.075-1.058 1.288 1.288 0 001.537-1.942 15.96 15.96 0 00-.765-1.366c.23-.19.475-.346.736-.463.354-.158.739-.231 1.13-.213.391.017.77.124 1.114.331.345.207.614.485.822.787.21.306.337.645.438.989.101.344.17.712.242 1.11.147.813.33 1.826.58 2.807.255.996.587 1.929.985 2.702.2.391.415.744.64 1.029.226.286.491.507.778.65a1 1 0 001.069-1.687c-.23-.145-.379-.328-.48-.484-.101-.155-.207-.389-.323-.687a10.75 10.75 0 01-.527-1.89c-.181-.735-.359-1.591-.513-2.437-.155-.846-.3-1.642-.429-2.316a23.3 23.3 0 01-.42-2.454 24.757 24.757 0 01-.18-2.348z" clip-rule="evenodd"/></svg>
+                <span>The Signature Tempo Arc</span>
+            </div>
+        </section>
+
+        <!-- TRACKLIST SECTION -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-12">
+            
+            <div class="lg:col-span-2 space-y-4">
+                <div class="flex items-center justify-between mb-8">
+                    <h2 class="text-3xl font-black uppercase italic tracking-tighter">The Track Sequence</h2>
+                    <div class="text-[10px] font-black uppercase text-gray-500 tracking-widest">Scroll to explore</div>
+                </div>
+
+                <div class="space-y-3">
+                    <template x-for="(track, index) in playlist" :key="index">
+                        <div 
+                            class="track-card glass-panel rounded-xl p-4 flex items-center space-x-6 border border-white/5 cursor-default relative overflow-hidden"
+                            :class="hoveredIndex === index ? 'border-cyan-500/50 bg-white/5' : ''"
+                            @mouseenter="hoveredIndex = index"
+                            @mouseleave="hoveredIndex = null"
+                        >
+                            <div class="text-xs font-black text-gray-700 w-6" x-text="(index + 1).toString().padStart(2, '0')"></div>
+                            
+                            <div class="w-16 h-16 rounded overflow-hidden flex-shrink-0 shadow-lg relative group">
+                                <img :src="track.cover" class="w-full h-full object-cover">
+                                <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer">
+                                    <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/></svg>
+                                </div>
+                            </div>
+
+                            <div class="flex-grow">
+                                <h3 class="text-base font-black uppercase tracking-tight" x-text="track.title"></h3>
+                                <p class="text-[11px] font-bold text-cyan-500 uppercase tracking-widest" x-text="track.artist"></p>
+                            </div>
+
+                            <div class="hidden md:block w-48 px-4 border-l border-white/5">
+                                <div class="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">AI Reasoning</div>
+                                <p class="text-[10px] italic text-gray-400 line-clamp-2" x-text="track.why"></p>
+                            </div>
+
+                            <div class="text-right min-w-[80px]">
+                                <div class="text-[10px] font-black uppercase text-gray-500 mb-0.5">Tempo</div>
+                                <div class="text-lg font-bold tracking-tighter" :class="hoveredIndex === index ? 'text-white' : 'text-gray-300'"><span x-text="Math.round(200 - (track.y / 100 * 140))"></span> <span class="text-[10px]">BPM</span></div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- SIDEBAR: REMIX & SHARE -->
+            <div class="space-y-8">
+                <div class="glass-panel rounded-2xl p-8 border-2 border-dashed border-white/10 flex flex-col items-center text-center">
+                    <div class="w-16 h-16 bg-gradient-to-br from-pink-500/20 to-purple-700/20 rounded-full flex items-center justify-center mb-6">
+                        <svg class="w-8 h-8 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                    </div>
+                    <h3 class="text-xl font-black uppercase tracking-tighter mb-2">Remix this Set</h3>
+                    <p class="text-sm text-gray-500 mb-6">Love the tempo journey but want different tracks? Load this arc into the IDE and let AI re-roll the vibe.</p>
+                    <button @click="remix()" class="w-full py-4 bg-transparent border-2 border-white/20 rounded font-black uppercase tracking-[0.2em] text-xs hover:bg-white hover:text-black hover:border-white transition-all">Open in IDE</button>
+                </div>
+
+                <div class="glass-panel rounded-2xl p-8 space-y-6">
+                    <h3 class="text-xs font-black uppercase tracking-[0.4em] text-cyan-500 border-b border-white/10 pb-4">Energy Breakdown</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between text-[10px] font-black uppercase tracking-widest mb-2">
+                                <span class="text-gray-500">Nostalgia</span>
+                                <span class="text-white">82%</span>
+                            </div>
+                            <div class="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                                <div class="h-full bg-pink-500 w-[82%] shadow-[0_0_10px_rgba(255,0,255,0.5)]"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] font-black uppercase tracking-widest mb-2">
+                                <span class="text-gray-500">Aggression</span>
+                                <span class="text-white">45%</span>
+                            </div>
+                            <div class="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                                <div class="h-full bg-cyan-500 w-[45%] shadow-[0_0_10px_rgba(0,255,255,0.5)]"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] font-black uppercase tracking-widest mb-2">
+                                <span class="text-gray-500">Atmosphere</span>
+                                <span class="text-white">94%</span>
+                            </div>
+                            <div class="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                                <div class="h-full bg-purple-500 w-[94%] shadow-[0_0_10px_rgba(157,0,255,0.5)]"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DOWNLOAD AS IMAGE -->
+                <button class="w-full flex items-center justify-center space-x-3 text-gray-500 hover:text-white transition-colors py-2 text-[10px] font-black uppercase tracking-widest">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    <span>Download Cover Art</span>
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <!-- FOOTER PLAYER (Floating/Minimal) -->
+    <footer x-show="hoveredIndex !== null" x-transition.opacity class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-4">
+        <div class="glass-panel p-4 rounded-2xl border-2 border-cyan-500/30 flex items-center space-x-6 shadow-2xl animate-pulse-cyan">
+            <img :src="playlist[hoveredIndex].cover" class="w-12 h-12 rounded ring-2 ring-white/10">
+            <div class="flex-grow">
+                <div class="text-xs font-black uppercase truncate" x-text="playlist[hoveredIndex].title"></div>
+                <div class="text-[10px] text-gray-500 font-bold" x-text="playlist[hoveredIndex].artist"></div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button class="p-2 hover:bg-white/10 rounded-full transition-colors"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/></svg></button>
+                <div class="h-8 w-[1px] bg-white/10"></div>
+                <div class="text-right">
+                    <div class="text-[8px] font-black uppercase text-cyan-500 tracking-tighter">Previewing</div>
+                    <div class="text-[10px] font-bold text-gray-400">Node #<span x-text="hoveredIndex + 1"></span></div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- TOAST NOTIFICATION -->
+    <div x-show="showToast" x-transition x-cloak class="fixed top-24 right-8 z-[60] glass-panel border border-cyan-500/50 p-4 rounded-lg shadow-2xl">
+        <div class="flex items-center space-x-3">
+            <div class="w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></div>
+            <span class="text-[10px] font-black uppercase tracking-widest" x-text="toastMessage"></span>
+        </div>
+    </div>
+
+    <script>
+        function storyApp() {
+            return {
+                hoveredIndex: null,
+                showToast: false,
+                toastMessage: "",
+                playlist: [
+                    { title: "Resonance", artist: "Home", cover: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&w=300&q=80", y: 70, why: "Perfectly matches your prompt's 'night drive' opening vibe with its warm, pulsing synths." },
+                    { title: "Nightcall", artist: "Kavinsky", cover: "https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=300&q=80", y: 65, why: "Iconic cinematic energy that reinforces the 'Tokyo rain' aesthetic." },
+                    { title: "Turbo Killer", artist: "Carpenter Brut", cover: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=300&q=80", y: 35, why: "Selected for the energy peak of your curve. High aggression for building confidence." },
+                    { title: "Days of Thunder", artist: "The Midnight", cover: "https://images.unsplash.com/photo-1514525253361-bee8718a74a2?auto=format&fit=crop&w=300&q=80", y: 30, why: "Maintains momentum while adding an uplifting melodic layer to the set." },
+                    { title: "Tech Noir", artist: "Gunship", cover: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=300&q=80", y: 45, why: "Atmospheric bridge track to transition between the high energy peak and the smooth finish." },
+                    { title: "Pacific Coast", artist: "Lazerhawk", cover: "https://images.unsplash.com/photo-1493225255756-d9584f8606e9?auto=format&fit=crop&w=300&q=80", y: 55, why: "Steady driving rhythm that keeps the listener focused and confident." },
+                    { title: "Maximum Black", artist: "Perturbator", cover: "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=300&q=80", y: 25, why: "A final dark-energy surge before the set winds down." },
+                    { title: "Running in the Night", artist: "FM-84", cover: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=300&q=80", y: 40, why: "Ends the journey on a high, euphoric note of pure drive and confidence." }
+                ],
+                
+                get curvePath() {
+                    const widthFactor = 100 / 9; // Points spread across 0-100%
+                    let path = `M ${(1 * widthFactor)}% ${this.playlist[0].y}%`;
+                    for (let i = 1; i < this.playlist.length; i++) {
+                        const xPrev = (i * widthFactor);
+                        const xCurr = ((i + 1) * widthFactor);
+                        const cpX = (xPrev + xCurr) / 2;
+                        path += ` C ${cpX}% ${this.playlist[i-1].y}%, ${cpX}% ${this.playlist[i].y}%, ${xCurr}% ${this.playlist[i].y}%`;
+                    }
+                    return path;
+                },
+
+                shareLink() {
+                    this.toastMessage = "Share Link Copied to Clipboard";
+                    this.showToast = true;
+                    setTimeout(() => this.showToast = false, 3000);
+                },
+
+                remix() {
+                    this.toastMessage = "Opening in IDE... Prepare for Remix";
+                    this.showToast = true;
+                    setTimeout(() => {
+                        window.location.reload(); // Simulation
+                    }, 1500);
+                }
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YTDJ.AI // The Composer Wizard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Syne', sans-serif;
+            background-color: #0A0A0A;
+            color: #E5E5E5;
+            -webkit-font-smoothing: antialiased;
+        }
+        .carbon-bg { background-color: #121212; }
+        .carbon-border { border-color: #262626; }
+        .accent-text { color: #FF5500; }
+        .accent-bg { background-color: #FF5500; }
+        .accent-border { border-color: #FF5500; }
+        
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #121212; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #FF5500; }
+
+        .grid-pattern {
+            background-image: linear-gradient(#1a1a1a 1px, transparent 1px), linear-gradient(90deg, #1a1a1a 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        .glass-panel {
+            background: rgba(20, 20, 20, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .input-glow:focus-within {
+            box-shadow: 0 0 20px rgba(255, 85, 0, 0.15);
+            border-color: #FF5500;
+        }
+
+        .arc-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .arc-card.active {
+            border-color: #FF5500;
+            background: rgba(255, 85, 0, 0.05);
+        }
+
+        [x-cloak] { display: none !important; }
+
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+        .scanline {
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #FF5500, transparent);
+            animation: scanline 4s linear infinite;
+            opacity: 0.2;
+        }
+    </style>
+</head>
+<body x-data="wizardApp()" class="min-h-screen flex flex-col overflow-hidden">
+
+    <!-- TOP NAV / HEADER (Mirroring IDE) -->
+    <header class="h-14 border-b carbon-border carbon-bg flex items-center justify-between px-4 z-50">
+        <div class="flex items-center space-x-6">
+            <div class="flex items-center space-x-2 group cursor-pointer" @click="window.location.reload()">
+                <div class="w-8 h-8 accent-bg flex items-center justify-center rounded-sm rotate-45 transition-transform group-hover:scale-110">
+                    <span class="text-black font-extrabold -rotate-45">YT</span>
+                </div>
+                <h1 class="text-xl font-bold tracking-tighter">YTDJ<span class="accent-text italic">.AI</span></h1>
+            </div>
+            <div class="h-6 w-[1px] bg-neutral-800"></div>
+            <div class="flex items-center space-x-4 text-xs font-medium uppercase tracking-widest text-neutral-500">
+                <span class="text-white bg-neutral-800 px-2 py-1 rounded">Composer Wizard</span>
+                <span class="text-neutral-700">/</span>
+                <span class="hover:text-white cursor-pointer transition-colors">Step 01: The Blueprint</span>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-4">
+            <div class="hidden md:flex flex-col items-end mr-4">
+                <span class="text-[9px] font-bold text-neutral-600 uppercase tracking-[0.2em]">System Status</span>
+                <span class="text-[10px] font-bold accent-text uppercase tracking-widest">Neural Engine Ready</span>
+            </div>
+            <div class="w-8 h-8 rounded-full bg-neutral-800 border carbon-border overflow-hidden">
+                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User">
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN COMPOSER INTERFACE -->
+    <main class="flex-grow flex overflow-hidden grid-pattern relative">
+        <div class="absolute inset-0 bg-gradient-to-b from-transparent to-[#0A0A0A] pointer-events-none"></div>
+        
+        <div class="max-w-7xl mx-auto w-full flex flex-col lg:flex-row gap-6 p-6 overflow-y-auto lg:overflow-hidden relative z-10">
+            
+            <!-- LEFT COLUMN: THE PROMPT RACK -->
+            <div class="w-full lg:w-[400px] flex flex-col space-y-6 flex-shrink-0">
+                
+                <!-- Prompt Input -->
+                <div class="carbon-bg border carbon-border rounded-xl p-5 flex flex-col space-y-4 input-glow transition-all duration-300 relative overflow-hidden">
+                    <div class="scanline absolute top-0 left-0"></div>
+                    <div class="flex items-center justify-between">
+                        <label class="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.2em]">Neural Prompt</label>
+                        <span class="text-[9px] font-mono text-neutral-600">v1.04_PROMPT_ENGINE</span>
+                    </div>
+                    <textarea 
+                        x-model="prompt"
+                        class="bg-transparent border-none text-xl font-bold text-white placeholder-neutral-700 focus:ring-0 outline-none h-40 resize-none leading-tight"
+                        placeholder="e.g. A neon-drenched night drive through 1980s Tokyo, high-energy synthwave transitions into lo-fi beats..."></textarea>
+                    
+                    <div class="flex flex-wrap gap-2 pt-4 border-t carbon-border">
+                        <template x-for="chip in vibeChips" :key="chip">
+                            <button 
+                                @click="toggleChip(chip)"
+                                :class="selectedChips.includes(chip) ? 'accent-bg text-black border-transparent' : 'bg-neutral-900 text-neutral-400 border-neutral-800'"
+                                class="text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-sm border transition-all hover:scale-105"
+                                x-text="chip"></button>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Parameters Rack -->
+                <div class="carbon-bg border carbon-border rounded-xl p-5 space-y-6">
+                    <label class="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.2em]">Configuration</label>
+                    
+                    <div class="space-y-4">
+                        <div class="space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-[11px] font-bold uppercase tracking-widest text-neutral-300">Selection Novelty</span>
+                                <span class="text-[11px] font-mono accent-text" x-text="novelty + '%'">70%</span>
+                            </div>
+                            <input type="range" x-model="novelty" class="w-full accent-bg h-1 rounded-lg appearance-none cursor-pointer bg-neutral-800">
+                            <div class="flex justify-between text-[8px] font-bold text-neutral-600 uppercase">
+                                <span>Familiar</span>
+                                <span>Deep Cuts</span>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-[11px] font-bold uppercase tracking-widest text-neutral-300">Genre Diversity</span>
+                                <span class="text-[11px] font-mono accent-text" x-text="diversity + '%'">40%</span>
+                            </div>
+                            <input type="range" x-model="diversity" class="w-full accent-bg h-1 rounded-lg appearance-none cursor-pointer bg-neutral-800">
+                            <div class="flex justify-between text-[8px] font-bold text-neutral-600 uppercase">
+                                <span>Focused</span>
+                                <span>Eclectic</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 border-t carbon-border flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" checked class="w-4 h-4 rounded border-neutral-800 bg-neutral-900 text-orange-600 focus:ring-orange-600">
+                            <span class="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Explicit Allowed</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" class="w-4 h-4 rounded border-neutral-800 bg-neutral-900 text-orange-600 focus:ring-orange-600">
+                            <span class="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Instrumental Only</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CENTER COLUMN: THE ARC TEMPLATES -->
+            <div class="flex-grow flex flex-col space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-black tracking-tighter">SELECT TEMPO <span class="accent-text italic">ARC</span></h2>
+                        <p class="text-[11px] font-medium text-neutral-500 uppercase tracking-widest">Defines the chronological energy journey of your set.</p>
+                    </div>
+                    <div class="bg-neutral-900 border carbon-border rounded-sm px-3 py-1 text-[10px] font-bold text-neutral-500 uppercase">
+                        Current Arc: <span class="text-white" x-text="selectedArc?.name || 'None Selected'"></span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 flex-grow overflow-y-auto pr-2">
+                    <template x-for="arc in arcs" :key="arc.id">
+                        <div 
+                            @click="selectedArc = arc"
+                            :class="selectedArc?.id === arc.id ? 'active ring-2 ring-orange-500/20' : ''"
+                            class="arc-card carbon-bg border carbon-border rounded-xl p-5 cursor-pointer hover:accent-border group relative overflow-hidden">
+                            
+                            <div class="flex justify-between items-start mb-6">
+                                <div>
+                                    <h3 class="text-lg font-black group-hover:accent-text transition-colors" x-text="arc.name">The Mountain</h3>
+                                    <p class="text-[10px] text-neutral-500 font-bold uppercase tracking-wider" x-text="arc.desc">Gradual rise to peak, quick cooldown</p>
+                                </div>
+                                <div class="p-2 bg-neutral-800 rounded group-hover:bg-orange-500 transition-colors">
+                                    <svg class="w-4 h-4 group-hover:text-black" fill="currentColor" viewBox="0 0 24 24">
+                                        <path x-show="arc.type === 'mountain'" d="M14,6L10.25,11L13.1,14.8L11.5,16C9.81,13.75 7,10 7,10L1,18H23L14,6Z"/>
+                                        <path x-show="arc.type === 'burn'" d="M12,18H6V14H12V18M21,14H15V18H21V14M12,8H6V12H12V8M21,8H15V12H21V8M12,2H6V6H12V2M21,2H15V6H21V2Z"/>
+                                        <path x-show="arc.type === 'ramp'" d="M22,21H2V3H4V19H6V17H8V15H10V13H12V11H14V9H16V7H18V5H20V3H22V21Z"/>
+                                        <path x-show="arc.type === 'steady'" d="M2,14H22V10H2V14Z"/>
+                                    </svg>
+                                </div>
+                            </div>
+
+                            <!-- Mini-Visualization of the Curve -->
+                            <div class="h-24 w-full relative">
+                                <svg class="w-full h-full overflow-visible">
+                                    <path 
+                                        :d="arc.path" 
+                                        fill="none" 
+                                        stroke="currentColor" 
+                                        stroke-width="3" 
+                                        class="text-neutral-700 transition-all duration-500 group-hover:text-orange-500" />
+                                    <!-- Points -->
+                                    <circle :cx="arc.points[0].x" :cy="arc.points[0].y" r="4" fill="#FF5500" class="opacity-0 group-hover:opacity-100" />
+                                    <circle :cx="arc.points[1].x" :cy="arc.points[1].y" r="4" fill="#FF5500" class="opacity-0 group-hover:opacity-100" />
+                                    <circle :cx="arc.points[2].x" :cy="arc.points[2].y" r="4" fill="#FF5500" class="opacity-0 group-hover:opacity-100" />
+                                </svg>
+                                <div class="absolute inset-0 grid grid-cols-6 pointer-events-none opacity-20">
+                                    <div class="border-r border-dashed border-neutral-600"></div>
+                                    <div class="border-r border-dashed border-neutral-600"></div>
+                                    <div class="border-r border-dashed border-neutral-600"></div>
+                                    <div class="border-r border-dashed border-neutral-600"></div>
+                                    <div class="border-r border-dashed border-neutral-600"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-4 flex justify-between text-[8px] font-black text-neutral-600 uppercase tracking-widest">
+                                <span>Intro</span>
+                                <span>Midpoint</span>
+                                <span>Outro</span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: THE COMPILATION FEED -->
+            <div class="w-full lg:w-[320px] flex flex-col space-y-4">
+                <div class="carbon-bg border carbon-border rounded-xl p-5 flex-grow flex flex-col">
+                    <div class="flex items-center space-x-2 mb-6">
+                        <div class="w-2 h-2 rounded-full accent-bg animate-pulse"></div>
+                        <span class="text-[10px] font-bold text-neutral-300 uppercase tracking-[0.2em]">Live Generation Draft</span>
+                    </div>
+
+                    <div class="flex-grow space-y-4 overflow-y-auto max-h-[400px] lg:max-h-none pr-2">
+                        <!-- Preview Nodes (Fake generating data) -->
+                        <template x-for="i in 8">
+                            <div class="flex items-center space-x-4 group p-2 rounded hover:bg-neutral-900/50 transition-all">
+                                <div class="relative">
+                                    <div class="w-10 h-10 bg-neutral-800 rounded-sm overflow-hidden flex items-center justify-center border carbon-border">
+                                        <svg class="w-4 h-4 text-neutral-600 animate-spin" viewBox="0 0 24 24"><path fill="currentColor" d="M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z"/></svg>
+                                    </div>
+                                    <div class="absolute -top-1 -left-1 w-4 h-4 bg-neutral-900 text-[8px] font-bold flex items-center justify-center rounded-full border carbon-border" x-text="i">1</div>
+                                </div>
+                                <div class="flex-grow">
+                                    <div class="h-2 w-24 bg-neutral-800 rounded animate-pulse mb-2"></div>
+                                    <div class="h-1.5 w-16 bg-neutral-900 rounded animate-pulse"></div>
+                                </div>
+                                <div class="text-[9px] font-mono text-neutral-600">-- BPM</div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <div class="mt-6 pt-6 border-t carbon-border space-y-4">
+                        <div class="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest">
+                            <span class="text-neutral-500">Estimated Length</span>
+                            <span class="text-white">~42 Minutes</span>
+                        </div>
+                        <div class="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest">
+                            <span class="text-neutral-500">Track Density</span>
+                            <span class="text-white">12 - 14 Tracks</span>
+                        </div>
+                        
+                        <button 
+                            @click="startGeneration()"
+                            class="w-full py-4 accent-bg text-black font-black uppercase tracking-[0.2em] rounded-sm hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-orange-500/20 group">
+                            <span class="flex items-center justify-center space-x-2">
+                                <span>Launch Arrangement</span>
+                                <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="text-[9px] font-bold text-neutral-700 uppercase tracking-widest text-center px-4">
+                    YTDJ Neural Engine v4.2 // Optimized for YouTube Music Metadata Standards
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- LOADING OVERLAY -->
+    <div x-show="isGenerating" x-cloak class="fixed inset-0 z-[100] bg-black flex flex-center items-center justify-center">
+        <div class="text-center space-y-8">
+            <div class="relative w-24 h-24 mx-auto">
+                <div class="absolute inset-0 rounded-full border-4 border-neutral-900"></div>
+                <div class="absolute inset-0 rounded-full border-4 border-t-orange-500 animate-spin"></div>
+                <div class="absolute inset-4 accent-bg rounded-full flex items-center justify-center">
+                    <span class="text-black font-black text-xl italic">YT</span>
+                </div>
+            </div>
+            <div class="space-y-2">
+                <h2 class="text-3xl font-black italic tracking-tighter">GENERATING SET...</h2>
+                <div class="w-64 h-1 bg-neutral-900 mx-auto rounded-full overflow-hidden">
+                    <div class="h-full accent-bg animate-[progress_2s_ease-in-out_infinite]" style="width: 40%"></div>
+                </div>
+                <p class="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.3em]" x-text="loadingMsg">Auditing BPM metadata</p>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes progress {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(250%); }
+        }
+    </style>
+
+    <script>
+        function wizardApp() {
+            return {
+                prompt: '',
+                selectedChips: [],
+                novelty: 70,
+                diversity: 40,
+                isGenerating: false,
+                loadingMsg: 'Initializing neural weights',
+                vibeChips: ['Lo-fi', 'High Energy', 'Synthwave', 'Dark Techno', 'Acoustic', 'Future Bass', 'Cinematic', 'Aggressive'],
+                selectedArc: null,
+                arcs: [
+                    { 
+                        id: 1, 
+                        name: 'The Mountain', 
+                        type: 'mountain', 
+                        desc: 'Steady build to peak, cinematic cooldown',
+                        path: 'M 10 70 Q 50 10, 90 70',
+                        points: [{x: 10, y: 70}, {x: 50, y: 10}, {x: 90, y: 70}]
+                    },
+                    { 
+                        id: 2, 
+                        name: 'Slow Burn', 
+                        type: 'ramp', 
+                        desc: 'Linear energy increase throughout',
+                        path: 'M 10 80 L 90 20',
+                        points: [{x: 10, y: 80}, {x: 50, y: 50}, {x: 90, y: 20}]
+                    },
+                    { 
+                        id: 3, 
+                        name: 'Steady State', 
+                        type: 'steady', 
+                        desc: 'Maintain consistent tempo and mood',
+                        path: 'M 10 50 L 90 50',
+                        points: [{x: 10, y: 50}, {x: 50, y: 50}, {x: 90, y: 50}]
+                    },
+                    { 
+                        id: 4, 
+                        name: 'Pulse Wave', 
+                        type: 'mountain', 
+                        desc: 'Alternating energy spikes and valleys',
+                        path: 'M 10 50 Q 30 10, 50 50 T 90 50',
+                        points: [{x: 10, y: 50}, {x: 30, y: 10}, {x: 70, y: 10}]
+                    }
+                ],
+
+                init() {
+                    this.selectedArc = this.arcs[0];
+                },
+
+                toggleChip(chip) {
+                    if (this.selectedChips.includes(chip)) {
+                        this.selectedChips = this.selectedChips.filter(c => c !== chip);
+                    } else {
+                        this.selectedChips.push(chip);
+                    }
+                },
+
+                startGeneration() {
+                    if (!this.prompt) {
+                        alert("Please enter a prompt to guide the AI.");
+                        return;
+                    }
+                    this.isGenerating = true;
+                    
+                    const messages = [
+                        'Mapping BPM trajectory...',
+                        'Selecting primary candidates...',
+                        'Calculating transition energy...',
+                        'Analyzing harmonic keys...',
+                        'Finalizing arrangement view...'
+                    ];
+                    
+                    let i = 0;
+                    const interval = setInterval(() => {
+                        this.loadingMsg = messages[i];
+                        i++;
+                        if (i >= messages.length) {
+                            clearInterval(interval);
+                            setTimeout(() => {
+                                alert("AI Arrangement Complete. Redirecting to Editor...");
+                                this.isGenerating = false;
+                            }, 1000);
+                        }
+                    }, 800);
+                }
+            }
+        }
+    </script>
+</body>
+</html>

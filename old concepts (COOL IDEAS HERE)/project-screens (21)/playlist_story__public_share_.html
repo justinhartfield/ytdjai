@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YTDJ.AI // Playlist Story</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Syne', sans-serif;
+            background-color: #0A0A0A;
+            color: #E5E5E5;
+            -webkit-font-smoothing: antialiased;
+        }
+        .carbon-bg { background-color: #121212; }
+        .carbon-border { border-color: #262626; }
+        .accent-text { color: #FF5500; }
+        .accent-bg { background-color: #FF5500; }
+        .accent-border { border-color: #FF5500; }
+        
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #121212; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #FF5500; }
+
+        .grid-pattern {
+            background-image: linear-gradient(#1a1a1a 1px, transparent 1px), linear-gradient(90deg, #1a1a1a 1px, transparent 1px);
+            background-size: 60px 60px;
+        }
+
+        .glass-panel {
+            background: rgba(20, 20, 20, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .glow-orange {
+            box-shadow: 0 0 30px rgba(255, 85, 0, 0.2);
+        }
+
+        .hero-gradient {
+            background: radial-gradient(circle at top right, rgba(255, 85, 0, 0.15), transparent 60%);
+        }
+
+        [x-cloak] { display: none !important; }
+
+        .transition-all-slow { transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+    </style>
+</head>
+<body x-data="playlistStory()" class="min-h-screen flex flex-col relative overflow-x-hidden">
+
+    <!-- TOP NAV -->
+    <header class="h-16 border-b carbon-border carbon-bg flex items-center justify-between px-6 z-50 sticky top-0">
+        <div class="flex items-center space-x-2 group cursor-pointer" @click="window.location.reload()">
+            <div class="w-9 h-9 accent-bg flex items-center justify-center rounded-sm rotate-45 group-hover:rotate-90 transition-transform shadow-[0_0_15px_rgba(255,85,0,0.3)]">
+                <span class="text-black font-extrabold -rotate-45 group-hover:-rotate-90 transition-transform">YT</span>
+            </div>
+            <h1 class="text-2xl font-black tracking-tighter uppercase">YTDJ<span class="accent-text italic">.AI</span></h1>
+        </div>
+
+        <div class="flex items-center space-x-6">
+            <a href="#" class="text-xs font-bold text-neutral-400 hover:text-white transition-colors tracking-widest uppercase">Pricing</a>
+            <a href="#" class="text-xs font-bold text-neutral-400 hover:text-white transition-colors tracking-widest uppercase">Explore</a>
+            <button class="bg-white text-black text-[10px] font-black px-6 py-2.5 rounded-full uppercase tracking-widest hover:scale-105 transition-all">Sign In</button>
+        </div>
+    </header>
+
+    <!-- MAIN HERO SECTION -->
+    <main class="flex-grow hero-gradient grid-pattern relative">
+        
+        <div class="max-w-6xl mx-auto px-6 py-12 md:py-20 flex flex-col items-center text-center">
+            
+            <!-- Prompt Display -->
+            <div class="mb-6 flex items-center space-x-2 text-neutral-500 font-bold text-xs uppercase tracking-[0.3em]">
+                <span class="w-8 h-[1px] bg-neutral-800"></span>
+                <span>Prompt Inspired Journey</span>
+                <span class="w-8 h-[1px] bg-neutral-800"></span>
+            </div>
+            
+            <h2 class="text-5xl md:text-7xl font-black tracking-tighter mb-8 leading-[0.9] max-w-4xl" x-text="playlist.name">
+                NEON NIGHT <span class="accent-text">DRIVE</span> CONFIDENCE
+            </h2>
+            
+            <p class="text-xl md:text-2xl text-neutral-400 font-medium italic mb-12 max-w-2xl leading-relaxed" x-text="'“' + playlist.prompt + '”'">
+                "Vibrant city lights, energetic, bass-heavy future funk set for 2 AM highway cruising."
+            </p>
+
+            <!-- TEMPO JOURNEY GRAPHIC -->
+            <div class="w-full h-80 glass-panel rounded-3xl mb-16 relative overflow-hidden p-8 flex flex-col group">
+                <div class="absolute top-6 left-8 flex items-center space-x-3">
+                    <div class="w-2 h-2 rounded-full accent-bg animate-pulse"></div>
+                    <span class="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Tempo Evolution Graph (BPM)</span>
+                </div>
+                
+                <div class="flex-grow flex items-end justify-between relative px-10 mb-8 mt-12">
+                    <!-- SVG Curve -->
+                    <svg class="absolute inset-0 w-full h-full pointer-events-none px-10">
+                        <defs>
+                            <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stop-color="#FF5500" stop-opacity="0.2"/>
+                                <stop offset="50%" stop-color="#FF5500" stop-opacity="1"/>
+                                <stop offset="100%" stop-color="#FF5500" stop-opacity="0.2"/>
+                            </linearGradient>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+                        <path :d="svgPath" fill="none" stroke="url(#lineGrad)" stroke-width="4" filter="url(#glow)" stroke-linecap="round" />
+                    </svg>
+
+                    <!-- Data Points -->
+                    <template x-for="(track, index) in playlist.tracks" :key="index">
+                        <div class="flex flex-col items-center group/node relative z-10">
+                            <div class="w-3 h-3 rounded-full bg-black border-2 border-neutral-700 transition-all duration-300 group-hover/node:accent-border group-hover/node:scale-150"
+                                 :style="`margin-bottom: ${((track.bpm - 70) / 100) * 120}px`"
+                                 @mouseenter="hoveredIndex = index"
+                                 @mouseleave="hoveredIndex = null">
+                            </div>
+                            <span class="text-[9px] font-bold text-neutral-600 mt-2" x-text="track.bpm + ' BPM'"></span>
+
+                            <!-- Floating Card on Hover -->
+                            <div x-show="hoveredIndex === index" 
+                                 class="absolute -top-16 left-1/2 -translate-x-1/2 glass-panel p-2 rounded border accent-border whitespace-nowrap pointer-events-none"
+                                 x-transition:enter="transition ease-out duration-200"
+                                 x-transition:enter-start="opacity-0 translate-y-2"
+                                 x-transition:enter-end="opacity-100 translate-y-0">
+                                <div class="text-[10px] font-black text-white" x-text="track.title"></div>
+                                <div class="text-[8px] font-bold text-neutral-500 uppercase" x-text="track.artist"></div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="flex items-center justify-between text-neutral-600 text-[10px] font-bold uppercase tracking-widest border-t carbon-border pt-4">
+                    <div class="flex space-x-12">
+                        <span>Start: Chilled Intro</span>
+                        <span>Peak: Energy Rush</span>
+                        <span>Outro: Fade Out</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-neutral-400">Total Duration:</span>
+                        <span class="text-white">42:15</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PRIMARY ACTIONS -->
+            <div class="flex flex-col md:flex-row items-center gap-4 mb-24">
+                <a href="#" class="w-full md:w-auto px-10 py-5 bg-[#FF0000] text-white font-black rounded-2xl flex items-center justify-center space-x-4 hover:scale-105 transition-all glow-orange group">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z"/></svg>
+                    <span class="tracking-widest uppercase text-sm">LISTEN ON YT MUSIC</span>
+                </a>
+                
+                <button @click="showRemixNotice = true" class="w-full md:w-auto px-10 py-5 bg-white text-black font-black rounded-2xl flex items-center justify-center space-x-4 hover:bg-neutral-200 transition-all group">
+                    <svg class="w-6 h-6 group-hover:rotate-180 transition-transform duration-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    <span class="tracking-widest uppercase text-sm">REMIX THIS SET</span>
+                </button>
+            </div>
+
+            <!-- TRACK LIST SECTION -->
+            <div class="w-full max-w-4xl text-left">
+                <h3 class="text-2xl font-black mb-8 border-b-2 border-neutral-900 pb-4 inline-block">TRACK SELECTION</h3>
+                
+                <div class="space-y-2">
+                    <template x-for="(track, index) in playlist.tracks" :key="index">
+                        <div class="group flex items-center justify-between p-4 carbon-bg border carbon-border rounded-xl hover:accent-border transition-all cursor-pointer">
+                            <div class="flex items-center space-x-6">
+                                <span class="text-xs font-mono text-neutral-600 group-hover:accent-text" x-text="(index+1).toString().padStart(2, '0')">01</span>
+                                <div class="w-12 h-12 rounded-lg bg-neutral-800 overflow-hidden relative border carbon-border">
+                                    <img :src="track.artwork" class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity">
+                                    <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40">
+                                        <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="font-bold text-white text-lg leading-tight" x-text="track.title">Midnight City</div>
+                                    <div class="text-xs font-bold text-neutral-500 uppercase tracking-widest" x-text="track.artist">M83</div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center space-x-12">
+                                <div class="hidden md:flex flex-col items-end">
+                                    <span class="text-[10px] font-bold text-neutral-600 uppercase">Tempo</span>
+                                    <span class="text-sm font-black accent-text" x-text="track.bpm + ' BPM'">105</span>
+                                </div>
+                                <div class="w-10 h-10 flex items-center justify-center rounded-full border carbon-border hover:accent-bg transition-colors group/btn">
+                                    <svg class="w-4 h-4 text-neutral-500 group-hover/btn:text-black" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21l-8.2-8.2c-2.4-2.4-2.4-6.3 0-8.7 2.4-2.4 6.3-2.4 8.7 0l8.2 8.2c2.4 2.4 2.4 6.3 0 8.7-2.4 2.4-6.3 2.4-8.7 0z"/></svg>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- FOOTER INFO -->
+            <footer class="mt-32 w-full pt-12 border-t carbon-border text-center pb-20">
+                <div class="flex justify-center items-center space-x-4 mb-6">
+                    <span class="text-xs font-bold text-neutral-500">Curated with</span>
+                    <div class="px-3 py-1 bg-neutral-900 border carbon-border rounded text-[10px] font-black accent-text">YTDJ CLOUD AI v1.2</div>
+                </div>
+                <p class="text-[10px] text-neutral-600 font-bold uppercase tracking-[0.5em]">2024 © YTDJ.AI - THE MUSIC PLAYLIST IDE</p>
+            </footer>
+
+        </div>
+    </main>
+
+    <!-- REMIX TOAST/DRAWER -->
+    <div x-show="showRemixNotice" 
+         x-cloak
+         @click.away="showRemixNotice = false"
+         class="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] glass-panel p-6 rounded-2xl border accent-border w-full max-w-md shadow-2xl animate-bounce"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 translate-y-20"
+         x-transition:enter-end="opacity-100 translate-y-0">
+        <div class="flex flex-col text-center">
+            <h4 class="text-lg font-black tracking-tight mb-2 uppercase">Unlock your inner DJ</h4>
+            <p class="text-sm text-neutral-400 mb-6">Create an account to start editing this tempo curve or generate your own sets from AI prompts.</p>
+            <div class="flex gap-3">
+                <button class="flex-grow py-3 accent-bg text-black font-black uppercase text-xs rounded-xl hover:brightness-110">Get Started Free</button>
+                <button @click="showRemixNotice = false" class="px-6 py-3 carbon-bg border carbon-border text-neutral-400 font-black uppercase text-xs rounded-xl">Dismiss</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BACKGROUND EFFECTS -->
+    <div class="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#FF5500] opacity-[0.03] blur-[120px] pointer-events-none -z-10"></div>
+    <div class="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#FF5500] opacity-[0.03] blur-[120px] pointer-events-none -z-10"></div>
+
+    <script>
+        function playlistStory() {
+            return {
+                showRemixNotice: false,
+                hoveredIndex: null,
+                playlist: {
+                    name: 'NEON NIGHT DRIVE CONFIDENCE',
+                    prompt: 'Vibrant city lights, energetic, bass-heavy future funk set for 2 AM highway cruising.',
+                    tracks: [
+                        { title: 'Nightcall', artist: 'Kavinsky', bpm: 85, artwork: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=200&h=200&fit=crop' },
+                        { title: 'Midnight City', artist: 'M83', bpm: 105, artwork: 'https://images.unsplash.com/photo-1493225255756-d9584f8606e9?w=200&h=200&fit=crop' },
+                        { title: 'Genesis', artist: 'Justice', bpm: 118, artwork: 'https://images.unsplash.com/photo-1459749411177-042180ce673c?w=200&h=200&fit=crop' },
+                        { title: 'Blinding Lights', artist: 'The Weeknd', bpm: 171, artwork: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200&h=200&fit=crop' },
+                        { title: 'Sunset', artist: 'The Midnight', bpm: 140, artwork: 'https://images.unsplash.com/photo-1514525253361-bee8718a300a?w=200&h=200&fit=crop' },
+                        { title: 'Pacific Coast Highway', artist: 'Kavinsky', bpm: 115, artwork: 'https://images.unsplash.com/photo-1496293455970-f8581aae0e3c?w=200&h=200&fit=crop' },
+                        { title: 'Resonance', artist: 'Home', bpm: 95, artwork: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&h=200&fit=crop' },
+                        { title: 'Anoraak', artist: 'Nightdrive', bpm: 80, artwork: 'https://images.unsplash.com/photo-1453090927415-5f45085b65c0?w=200&h=200&fit=crop' }
+                    ]
+                },
+
+                get svgPath() {
+                    const count = this.playlist.tracks.length;
+                    const points = this.playlist.tracks.map((t, i) => {
+                        // normalized coordinates for path
+                        const x = (i / (count - 1)) * 1000;
+                        const y = 300 - (((t.bpm - 70) / 110) * 200); // Inverse for SVG coordinate system
+                        return { x, y };
+                    });
+
+                    let d = `M ${points[0].x} ${points[0].y}`;
+                    for (let i = 0; i < points.length - 1; i++) {
+                        const cp1x = points[i].x + (points[i+1].x - points[i].x) / 3;
+                        const cp2x = points[i].x + (2 * (points[i+1].x - points[i].x)) / 3;
+                        d += ` C ${cp1x} ${points[i].y}, ${cp2x} ${points[i+1].y}, ${points[i+1].x} ${points[i+1].y}`;
+                    }
+                    return d;
+                },
+
+                init() {
+                    // Update SVG viewBox correctly once points are projected
+                    this.$nextTick(() => {
+                        const svg = document.querySelector('svg');
+                        if (svg) svg.setAttribute('viewBox', '0 0 1000 300');
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YTDJ.AI // Music Playlist IDE</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Syne', sans-serif;
+            background-color: #0A0A0A;
+            color: #E5E5E5;
+            -webkit-font-smoothing: antialiased;
+        }
+        .carbon-bg { background-color: #121212; }
+        .carbon-border { border-color: #262626; }
+        .accent-text { color: #FF5500; }
+        .accent-bg { background-color: #FF5500; }
+        .accent-border { border-color: #FF5500; }
+        
+        /* Custom scrollbar for IDE feel */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #121212; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #FF5500; }
+
+        .node-pulse {
+            animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(255, 85, 0, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 85, 0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 85, 0, 0); }
+        }
+
+        .grid-pattern {
+            background-image: linear-gradient(#1a1a1a 1px, transparent 1px), linear-gradient(90deg, #1a1a1a 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        .glass-panel {
+            background: rgba(20, 20, 20, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        [x-cloak] { display: none !important; }
+
+        /* Draggable Node Styling */
+        .track-node {
+            transition: transform 0.1s ease-out, box-shadow 0.2s ease;
+            cursor: grab;
+        }
+        .track-node:active { cursor: grabbing; }
+
+        /* Custom Input Styling */
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px;
+            width: 12px;
+            background: #FF5500;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body x-data="ideApp()" class="min-h-screen flex flex-col overflow-hidden select-none">
+
+    <!-- TOP NAV / HEADER -->
+    <header class="h-14 border-b carbon-border carbon-bg flex items-center justify-between px-4 z-50">
+        <div class="flex items-center space-x-6">
+            <div class="flex items-center space-x-2 group cursor-pointer" @click="view = 'launchpad'">
+                <div class="w-8 h-8 accent-bg flex items-center justify-center rounded-sm rotate-45 group-hover:rotate-90 transition-transform">
+                    <span class="text-black font-extrabold -rotate-45 group-hover:-rotate-90 transition-transform">YT</span>
+                </div>
+                <h1 class="text-xl font-bold tracking-tighter">YTDJ<span class="accent-text italic">.AI</span></h1>
+            </div>
+            <div class="h-6 w-[1px] bg-neutral-800"></div>
+            <div class="flex items-center space-x-4 text-xs font-medium uppercase tracking-widest text-neutral-500">
+                <span class="hover:text-white cursor-pointer transition-colors" @click="view = 'launchpad'">Projects</span>
+                <span class="text-neutral-700">/</span>
+                <span class="text-white bg-neutral-800 px-2 py-1 rounded" x-text="currentProject.name">Neon Night Drive</span>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-4">
+            <div class="flex items-center bg-neutral-900 rounded px-2 py-1 border carbon-border space-x-3">
+                <button class="text-neutral-400 hover:text-white"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg></button>
+                <button class="text-neutral-400 hover:text-white"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M18.4 10.6C16.55 8.99 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.92 16c1.05-3.19 4.05-5.5 7.58-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg></button>
+            </div>
+            <button @click="showExportModal = true" class="accent-bg text-black text-xs font-bold px-4 py-2 rounded uppercase tracking-widest hover:brightness-110 transition-all shadow-[0_0_15px_rgba(255,85,0,0.3)]">
+                Export Set
+            </button>
+            <div class="w-8 h-8 rounded-full bg-neutral-800 border carbon-border overflow-hidden ring-1 ring-neutral-700 hover:ring-accent-border transition-all cursor-pointer">
+                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User">
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="flex-grow flex overflow-hidden relative">
+
+        <!-- SCREEN: LAUNCHPAD (Hidden unless triggered) -->
+        <template x-if="view === 'launchpad'">
+            <div class="w-full h-full p-12 overflow-y-auto bg-[#080808]">
+                <div class="max-w-6xl mx-auto">
+                    <div class="flex justify-between items-end mb-12">
+                        <div>
+                            <h2 class="text-5xl font-black tracking-tighter mb-2">WELCOME BACK, <span class="accent-text">PRODUCER</span></h2>
+                            <p class="text-neutral-500 font-medium tracking-wide">Ready to design your next sonic journey?</p>
+                        </div>
+                        <button @click="createNewProject()" class="group flex items-center space-x-3 bg-white text-black px-8 py-5 rounded-full font-bold transition-all hover:scale-105 active:scale-95">
+                            <span class="tracking-widest uppercase text-sm">START NEW SET</span>
+                            <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <template x-for="project in projects" :key="project.id">
+                            <div @click="openProject(project)" class="carbon-bg border carbon-border p-6 rounded-xl cursor-pointer hover:accent-border hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] transition-all group relative overflow-hidden">
+                                <div class="absolute top-0 left-0 w-1 h-full bg-neutral-800 group-hover:accent-bg transition-colors"></div>
+                                <div class="flex justify-between mb-8">
+                                    <div class="p-2 bg-neutral-800 rounded group-hover:bg-neutral-700">
+                                        <svg class="w-6 h-6 accent-text" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
+                                    </div>
+                                    <span class="text-[10px] text-neutral-600 font-bold uppercase tracking-tighter" x-text="project.updatedAt">2 HOURS AGO</span>
+                                </div>
+                                <h3 class="text-xl font-bold mb-1 group-hover:accent-text transition-colors" x-text="project.name">Tokyo Drift Confidence</h3>
+                                <p class="text-xs text-neutral-500 mb-6 line-clamp-1 italic" x-text="project.prompt">Vibrant city lights, energetic, bass-heavy future funk</p>
+                                <div class="flex items-center justify-between border-t border-neutral-800/50 pt-4">
+                                    <div class="flex -space-x-2">
+                                        <template x-for="i in 3">
+                                            <div class="w-6 h-6 rounded-full border-2 border-[#121212] bg-neutral-700"></div>
+                                        </template>
+                                    </div>
+                                    <span class="text-[10px] font-black text-neutral-400 uppercase tracking-widest" x-text="project.trackCount + ' TRACKS'">12 TRACKS</span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- SCREEN: EDITOR -->
+        <template x-if="view === 'editor'">
+            <div class="w-full h-full flex overflow-hidden">
+                
+                <!-- LEFT SIDEBAR: PROMPT & CONTROLS -->
+                <aside class="w-72 carbon-bg border-r carbon-border flex flex-col z-20 shrink-0" x-show="sidebarLeft">
+                    <div class="p-4 space-y-6 overflow-y-auto">
+                        <!-- Prompt Section -->
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <label class="text-[10px] font-bold text-neutral-500 uppercase tracking-widest block">AI Generator</label>
+                                <button class="text-[9px] accent-text font-black uppercase hover:underline">History</button>
+                            </div>
+                            <textarea x-model="currentProject.prompt" class="w-full bg-black border carbon-border rounded p-3 text-xs focus:accent-border outline-none transition-all h-28 resize-none font-medium leading-relaxed" placeholder="e.g. Neon night drive, heavy synths, high confidence..."></textarea>
+                            <div class="mt-3 flex flex-wrap gap-1">
+                                <span class="text-[9px] bg-neutral-800 text-neutral-400 px-2 py-1 rounded uppercase font-bold border carbon-border">#NightDrive</span>
+                                <span class="text-[9px] bg-neutral-800 text-neutral-400 px-2 py-1 rounded uppercase font-bold border carbon-border">#Synthwave</span>
+                                <span class="text-[9px] bg-neutral-800 text-neutral-400 px-2 py-1 rounded uppercase font-bold border carbon-border">#HighEnergy</span>
+                            </div>
+                        </div>
+
+                        <!-- Template Picker -->
+                        <div>
+                            <label class="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-3 block">BPM Arc Preset</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button class="p-2.5 text-[10px] font-black carbon-bg border accent-border accent-text rounded-sm hover:bg-neutral-800 transition-colors">SLOW BURN</button>
+                                <button class="p-2.5 text-[10px] font-black carbon-bg border carbon-border text-neutral-500 rounded-sm hover:text-white transition-colors">PEAK POWER</button>
+                                <button class="p-2.5 text-[10px] font-black carbon-bg border carbon-border text-neutral-500 rounded-sm hover:text-white transition-colors">WAVE FORM</button>
+                                <button class="p-2.5 text-[10px] font-black carbon-bg border carbon-border text-neutral-500 rounded-sm hover:text-white transition-colors">RANDOM</button>
+                            </div>
+                        </div>
+
+                        <hr class="border-neutral-800">
+
+                        <!-- Sliders -->
+                        <div class="space-y-6">
+                            <div>
+                                <div class="flex justify-between mb-2">
+                                    <label class="text-[10px] font-bold text-neutral-500 uppercase tracking-tighter">AI Novelty (Obscurity)</label>
+                                    <span class="text-[10px] font-black accent-text">70%</span>
+                                </div>
+                                <input type="range" class="w-full accent-bg h-1 rounded-lg appearance-none cursor-pointer bg-neutral-800">
+                            </div>
+                            <div>
+                                <div class="flex justify-between mb-2">
+                                    <label class="text-[10px] font-bold text-neutral-500 uppercase tracking-tighter">BPM Snap Tolerance</label>
+                                    <span class="text-[10px] font-black accent-text">±5</span>
+                                </div>
+                                <input type="range" class="w-full accent-bg h-1 rounded-lg appearance-none cursor-pointer bg-neutral-800">
+                            </div>
+                            <div>
+                                <div class="flex justify-between mb-2">
+                                    <label class="text-[10px] font-bold text-neutral-500 uppercase tracking-tighter">Genre Diversity</label>
+                                    <span class="text-[10px] font-black accent-text">40%</span>
+                                </div>
+                                <input type="range" class="w-full accent-bg h-1 rounded-lg appearance-none cursor-pointer bg-neutral-800">
+                            </div>
+                        </div>
+
+                        <div class="pt-2">
+                            <button @click="regenerate()" class="w-full py-4 border-2 accent-border text-[11px] font-black uppercase tracking-widest hover:accent-bg hover:text-black transition-all shadow-[0_5px_15px_rgba(255,85,0,0.1)]">
+                                Regenerate Set
+                            </button>
+                            <p class="text-[8px] text-center text-neutral-600 mt-2 font-bold uppercase tracking-widest">RESPECTS LOCKED TRACKS</p>
+                        </div>
+                    </div>
+                </aside>
+
+                <!-- CENTER: THE CANVAS -->
+                <section class="flex-grow relative flex flex-col bg-[#0d0d0d] overflow-hidden">
+                    
+                    <!-- Canvas Toolbar -->
+                    <div class="h-10 border-b carbon-border carbon-bg flex items-center justify-between px-4 text-[10px] font-bold uppercase tracking-widest text-neutral-500 relative z-30">
+                        <div class="flex items-center space-x-6">
+                            <button class="text-white flex items-center space-x-2 border-b-2 border-orange-500 h-10 px-1">
+                                <span class="w-1.5 h-1.5 rounded-full accent-bg"></span>
+                                <span>Arrangement View</span>
+                            </button>
+                            <button class="hover:text-white transition-colors h-10 px-1">Session List</button>
+                            <button class="hover:text-white transition-colors h-10 px-1">Mix Table</button>
+                        </div>
+                        <div class="flex items-center space-x-6">
+                            <div class="flex items-center space-x-2 border-r carbon-border pr-4 h-6">
+                                <span class="text-[8px] opacity-60">Zoom</span>
+                                <input type="range" class="w-16 accent-bg h-[2px] rounded-lg appearance-none bg-neutral-800">
+                            </div>
+                            <button @click="editMode = (editMode === 'node' ? 'curve' : 'node')" 
+                                    :class="editMode === 'curve' ? 'accent-text scale-110' : 'hover:text-white'"
+                                    class="flex items-center space-x-2 transition-all">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 013 0m-6 3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3.922M9 11.5a1.5 1.5 0 013 0V14"/></svg>
+                                <span>Automation Mode</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Graph Area -->
+                    <div class="flex-grow relative overflow-hidden grid-pattern" 
+                         @mousemove="handleCanvasMouseMove($event)"
+                         @mouseup="stopDragging()">
+                        
+                        <!-- Y-Axis Labels -->
+                        <div class="absolute left-0 top-0 bottom-0 w-14 border-r carbon-border flex flex-col justify-between py-10 text-[9px] font-mono text-neutral-600 bg-black/40 z-20 pointer-events-none text-right pr-2">
+                            <div class="flex items-center justify-end space-x-1"><span>200</span><span class="opacity-30">bpm</span></div>
+                            <div class="flex items-center justify-end space-x-1"><span>170</span><span class="opacity-30">bpm</span></div>
+                            <div class="flex items-center justify-end space-x-1"><span>140</span><span class="opacity-30">bpm</span></div>
+                            <div class="flex items-center justify-end space-x-1"><span>110</span><span class="opacity-30">bpm</span></div>
+                            <div class="flex items-center justify-end space-x-1"><span>80</span><span class="opacity-30">bpm</span></div>
+                            <div class="flex items-center justify-end space-x-1"><span>50</span><span class="opacity-30">bpm</span></div>
+                        </div>
+
+                        <!-- Grid Markers -->
+                        <div class="absolute inset-0 pointer-events-none opacity-20">
+                            <div class="w-full h-[1px] bg-neutral-800 absolute top-1/4"></div>
+                            <div class="w-full h-[1px] bg-neutral-800 absolute top-2/4"></div>
+                            <div class="w-full h-[1px] bg-neutral-800 absolute top-3/4"></div>
+                        </div>
+
+                        <!-- SVG Curve Layer -->
+                        <svg class="absolute inset-0 w-full h-full pointer-events-none ml-14">
+                            <defs>
+                                <linearGradient id="curveGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" stop-color="#FF5500" stop-opacity="0.1" />
+                                    <stop offset="50%" stop-color="#FF5500" stop-opacity="0.6" />
+                                    <stop offset="100%" stop-color="#FF5500" stop-opacity="0.1" />
+                                </linearGradient>
+                                <filter id="blurFilter">
+                                    <feGaussianBlur stdDeviation="3" />
+                                </filter>
+                            </defs>
+                            <!-- Glow Line -->
+                            <path :d="curvePath" fill="none" stroke="#FF5500" stroke-width="8" opacity="0.15" filter="url(#blurFilter)" />
+                            <!-- Main Path -->
+                            <path :d="curvePath" fill="none" stroke="url(#curveGradient)" stroke-width="2" stroke-dasharray="10 4" opacity="0.8" />
+                            <!-- Solid Node Linker -->
+                            <path :d="nodePath" fill="none" stroke="#FF5500" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+
+                        <!-- Nodes Layer -->
+                        <div class="absolute inset-0 ml-14">
+                            <template x-for="(node, index) in currentProject.nodes" :key="node.id">
+                                <div class="absolute transform -translate-x-1/2 -translate-y-1/2 track-node"
+                                     :style="`left: ${((index + 0.5) / currentProject.nodes.length) * 100}%; top: ${getBpmY(node.bpm)}%;`"
+                                     @mousedown="startDragging(index, $event)"
+                                     @click="selectedNodeIndex = index"
+                                     :class="{'z-40 scale-125': selectedNodeIndex === index}">
+                                    
+                                    <!-- Node Body -->
+                                    <div class="relative group">
+                                        <!-- Transition Indicator -->
+                                        <template x-if="index < currentProject.nodes.length - 1">
+                                            <div class="absolute left-full top-1/2 w-4 h-4 -translate-y-1/2 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                                <div class="w-2 h-2 rounded-full" :class="getTransitionScore(index) > 80 ? 'bg-green-500' : 'bg-yellow-500'"></div>
+                                            </div>
+                                        </template>
+
+                                        <!-- The Bubble (Node) -->
+                                        <div class="w-14 h-14 rounded-full border-4 flex items-center justify-center bg-black transition-all shadow-2xl"
+                                             :class="[
+                                                selectedNodeIndex === index ? 'accent-border ring-8 ring-orange-500/10' : 'carbon-border',
+                                                node.isPlaying ? 'node-pulse border-orange-400' : ''
+                                             ]">
+                                            <div class="w-full h-full rounded-full overflow-hidden relative">
+                                                <img :src="node.artwork" class="w-full h-full object-cover transition-opacity"
+                                                     :class="node.isPlaying ? 'opacity-100 animate-[spin_10s_linear_infinite]' : 'opacity-50 group-hover:opacity-90'">
+                                                
+                                                <!-- Play Overlay -->
+                                                <div class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                                    <svg @click.stop="togglePlay(index)" class="w-7 h-7 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
+                                                        <path x-show="!node.isPlaying" d="M8 5v14l11-7z"/>
+                                                        <path x-show="node.isPlaying" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                                                    </svg>
+                                                </div>
+                                            </div>
+
+                                            <!-- States -->
+                                            <template x-if="node.locked">
+                                                <div class="absolute -top-1 -right-1 bg-white text-black p-1 rounded-full border border-black shadow-lg">
+                                                    <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+                                                </div>
+                                            </template>
+                                        </div>
+
+                                        <!-- Meta Info -->
+                                        <div class="absolute top-full mt-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-center pointer-events-none">
+                                            <div class="text-[11px] font-black text-white leading-none mb-1 group-hover:accent-text transition-colors" x-text="node.title">Song Title</div>
+                                            <div class="text-[9px] font-bold text-neutral-500 uppercase tracking-tighter">
+                                                <span class="accent-text bg-neutral-900 px-1 rounded" x-text="Math.round(node.bpm)">128</span> <span class="opacity-50">BPM</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Drag HUD -->
+                                        <div x-show="draggingIndex === index" class="absolute -top-20 left-1/2 -translate-x-1/2 glass-panel px-4 py-2 rounded-xl border-2 accent-border animate-pulse z-50 shadow-2xl">
+                                            <div class="text-[18px] font-black accent-text leading-none text-center" x-text="Math.round(node.bpm)"></div>
+                                            <div class="text-[8px] uppercase font-black text-white text-center mt-1">SNAP TARGET</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- TRANSPORT BAR -->
+                    <div class="h-20 carbon-bg border-t carbon-border flex items-center px-6 z-40 shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
+                        <div class="flex items-center space-x-6 w-1/4">
+                            <div class="flex items-center space-x-2">
+                                <button class="w-8 h-8 flex items-center justify-center text-neutral-500 hover:text-white transition-colors"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
+                                <button @click="globalPlaying = !globalPlaying" class="w-11 h-11 rounded-full border-2 carbon-border bg-neutral-900 flex items-center justify-center hover:accent-border group transition-all active:scale-90">
+                                    <svg class="w-5 h-5 transition-colors" :class="globalPlaying ? 'accent-text' : 'text-white'" fill="currentColor" viewBox="0 0 24 24">
+                                        <path x-show="!globalPlaying" d="M8 5v14l11-7z"/>
+                                        <path x-show="globalPlaying" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                                    </svg>
+                                </button>
+                                <button class="w-8 h-8 flex items-center justify-center text-neutral-500 hover:text-white transition-colors"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+                            </div>
+                            <div class="flex flex-col min-w-0">
+                                <span class="text-[12px] font-black text-white truncate w-32 tracking-tight" x-text="currentProject.nodes[selectedNodeIndex].title">Select a track</span>
+                                <span class="text-[9px] font-bold text-neutral-500 uppercase tracking-widest truncate" x-text="currentProject.nodes[selectedNodeIndex].artist">Artist Name</span>
+                            </div>
+                        </div>
+
+                        <!-- Mini Visualizer / Timeline -->
+                        <div class="flex-grow px-10 flex flex-col justify-center">
+                            <div class="flex items-center space-x-4">
+                                <span class="text-[9px] font-mono text-neutral-600">01:45</span>
+                                <div class="h-1.5 w-full bg-neutral-900 rounded-full relative overflow-hidden group cursor-pointer">
+                                    <div class="absolute top-0 left-0 h-full accent-bg shadow-[0_0_10px_rgba(255,85,0,0.5)]" style="width: 38%"></div>
+                                    <div class="absolute top-0 left-[38%] h-full w-4 bg-white/20 blur-sm"></div>
+                                </div>
+                                <span class="text-[9px] font-mono text-neutral-600">04:20</span>
+                            </div>
+                            <div class="flex justify-between mt-2 px-10">
+                                <div class="flex space-x-6 text-[8px] font-black text-neutral-600 uppercase tracking-[0.2em]">
+                                    <span class="flex items-center space-x-1"><span class="w-1 h-1 rounded-full bg-green-500"></span><span>Sync Stable</span></span>
+                                    <span>Key: <span class="text-neutral-400">A Minor</span></span>
+                                    <span>Energy: <span class="text-neutral-400">78%</span></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Volume & Toggle -->
+                        <div class="w-1/4 flex items-center justify-end space-x-8">
+                            <div class="flex items-center space-x-3">
+                                <svg class="w-4 h-4 text-neutral-600" fill="currentColor" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+                                <div class="w-20 h-1 bg-neutral-900 rounded-full overflow-hidden">
+                                    <div class="w-3/4 h-full accent-bg"></div>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-4 border-l carbon-border pl-6">
+                                <div class="group relative">
+                                    <img src="https://upload.wikimedia.org/wikipedia/commons/0/09/YouTube_full-color_icon_%282017%29.svg" class="w-5 grayscale opacity-50 hover:grayscale-0 hover:opacity-100 cursor-pointer transition-all">
+                                    <div class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-black text-[8px] font-black px-2 py-1 border carbon-border rounded-sm hidden group-hover:block whitespace-nowrap">YOUTUBE SOURCE</div>
+                                </div>
+                                <button class="text-neutral-500 hover:text-white"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"/></svg></button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- RIGHT SIDEBAR: INSPECTOR -->
+                <aside class="w-80 carbon-bg border-l carbon-border flex flex-col z-20 shrink-0" x-show="sidebarRight">
+                    <div class="p-4 space-y-6 overflow-y-auto h-full">
+                        
+                        <!-- Selected Track Detail -->
+                        <div class="space-y-4">
+                            <div class="aspect-square bg-black rounded-xl overflow-hidden border carbon-border shadow-2xl relative group">
+                                <img :src="currentProject.nodes[selectedNodeIndex].artwork" class="w-full h-full object-cover">
+                                <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-4">
+                                    <span class="text-[10px] font-black accent-text uppercase tracking-widest">Selected Slot 0<span x-text="selectedNodeIndex + 1"></span></span>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-2xl font-black leading-tight tracking-tighter" x-text="currentProject.nodes[selectedNodeIndex].title">Track Title</h3>
+                                <p class="text-neutral-500 font-bold uppercase text-[11px] tracking-widest mt-1" x-text="currentProject.nodes[selectedNodeIndex].artist">Artist Name</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button class="flex-grow py-3 bg-neutral-900 border carbon-border text-[10px] font-black uppercase rounded-lg hover:bg-neutral-800 transition-all hover:text-white">Preview HQ</button>
+                                <button @click="currentProject.nodes[selectedNodeIndex].locked = !currentProject.nodes[selectedNodeIndex].locked" 
+                                        :class="currentProject.nodes[selectedNodeIndex].locked ? 'accent-bg text-black' : 'bg-neutral-900 border carbon-border text-neutral-500'"
+                                        class="px-5 py-3 text-[10px] font-black uppercase rounded-lg transition-all">
+                                    <span x-text="currentProject.nodes[selectedNodeIndex].locked ? 'LOCKED' : 'LOCK'"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <hr class="border-neutral-800">
+
+                        <!-- Why AI Chose This -->
+                        <div class="bg-black/40 p-4 border border-neutral-800 rounded-xl relative overflow-hidden group">
+                            <div class="absolute top-0 right-0 w-16 h-16 bg-orange-500/5 blur-2xl rounded-full"></div>
+                            <div class="flex items-center space-x-2 mb-3">
+                                <div class="p-1 bg-neutral-900 rounded">
+                                    <svg class="w-3.5 h-3.5 accent-text" fill="currentColor" viewBox="0 0 24 24"><path d="M21 16.5C21 16.88 20.79 17.21 20.47 17.38L12.57 21.82C12.41 21.94 12.21 22 12 22C11.79 22 11.59 21.94 11.43 21.82L3.53 17.38C3.21 17.21 3 16.88 3 16.5V7.5C3 7.12 3.21 6.79 3.53 6.62L11.43 2.18C11.59 2.06 11.79 2 12 2C12.21 2 12.41 2.06 12.57 2.18L20.47 6.62C20.79 6.79 21 7.12 21 7.5V16.5Z"/></svg>
+                                </div>
+                                <span class="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">AI Recommendation Reasoning</span>
+                            </div>
+                            <p class="text-xs text-neutral-300 leading-relaxed font-medium" x-text="currentProject.nodes[selectedNodeIndex].why">Matches your 'Neon Night' prompt with heavy synthesis and drive.</p>
+                            <div class="mt-4 pt-4 border-t border-neutral-800/50 space-y-2">
+                                <div class="flex items-center justify-between text-[9px] font-bold text-neutral-500 uppercase">
+                                    <span>Sync Accuracy</span>
+                                    <span class="text-green-500">98% Match</span>
+                                </div>
+                                <div class="w-full h-1 bg-neutral-900 rounded-full">
+                                    <div class="w-[98%] h-full bg-green-500"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Alternatives -->
+                        <div>
+                            <div class="flex items-center justify-between mb-4">
+                                <label class="text-[10px] font-black text-neutral-500 uppercase tracking-widest">BPM Substitutes</label>
+                                <span class="text-[8px] text-neutral-700 font-bold">6 RESULTS</span>
+                            </div>
+                            <div class="space-y-2">
+                                <template x-for="i in 3">
+                                    <div class="flex items-center justify-between p-2 rounded-lg hover:bg-neutral-800 cursor-pointer group transition-colors border border-transparent hover:border-neutral-700">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-10 h-10 bg-neutral-900 rounded border carbon-border overflow-hidden">
+                                                <img :src="`https://api.dicebear.com/7.x/identicon/svg?seed=track${i}`" class="w-full h-full p-2 opacity-50">
+                                            </div>
+                                            <div>
+                                                <div class="text-[10px] font-black text-white leading-none">Sub-Alternative</div>
+                                                <div class="text-[8px] font-bold text-neutral-500 uppercase mt-1">AI Curated Flow</div>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="text-[9px] font-black accent-text">128 BPM</div>
+                                            <button class="opacity-0 group-hover:opacity-100 text-[8px] font-black text-white uppercase bg-accent-bg px-2 py-1 rounded-sm mt-1 transition-all">SWAP</button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                            <button class="w-full mt-4 py-2 text-[9px] font-black text-neutral-500 border border-dashed border-neutral-800 rounded uppercase hover:text-white transition-colors">Load More Options</button>
+                        </div>
+
+                    </div>
+                </aside>
+            </div>
+        </template>
+    </main>
+
+    <!-- EXPORT MODAL -->
+    <div x-show="showExportModal" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-md">
+        <div class="glass-panel w-full max-w-xl p-10 border-2 accent-border rounded-3xl relative" @click.away="showExportModal = false">
+            <button @click="showExportModal = false" class="absolute top-8 right-8 text-neutral-500 hover:text-white transition-colors p-2 hover:bg-neutral-900 rounded-full">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+            <div class="text-center mb-10">
+                <div class="inline-block px-3 py-1 bg-neutral-900 border carbon-border rounded-full text-[10px] font-black accent-text uppercase tracking-widest mb-4">Finalizing Master</div>
+                <h2 class="text-4xl font-black tracking-tighter mb-4 uppercase">READY FOR <span class="accent-text italic underline">PUBLISH</span></h2>
+                <p class="text-neutral-500 font-medium max-w-sm mx-auto">Your 12-track sonic arrangement is ready to be etched into the YouTube ecosystem.</p>
+            </div>
+            
+            <div class="space-y-3 mb-12">
+                <div class="flex items-center justify-between p-5 carbon-bg rounded-2xl border-2 accent-border group cursor-pointer transition-all">
+                    <div class="flex items-center space-x-5">
+                        <div class="w-14 h-14 bg-black rounded-xl flex items-center justify-center font-black text-[#FF0000] text-2xl border-2 border-neutral-800 shadow-xl">YM</div>
+                        <div>
+                            <div class="text-sm font-black uppercase tracking-tight">YouTube Music</div>
+                            <div class="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">Sync as Master Playlist</div>
+                        </div>
+                    </div>
+                    <div class="w-6 h-6 rounded-full border-4 border-accent-bg bg-black"></div>
+                </div>
+                <div class="flex items-center justify-between p-5 carbon-bg rounded-2xl border-2 carbon-border opacity-50 group cursor-not-allowed">
+                    <div class="flex items-center space-x-5">
+                        <div class="w-14 h-14 bg-black rounded-xl flex items-center justify-center font-black text-white text-2xl border-2 border-neutral-800">YT</div>
+                        <div>
+                            <div class="text-sm font-black uppercase tracking-tight">YouTube Standard</div>
+                            <div class="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">Video Gallery Sync</div>
+                        </div>
+                    </div>
+                    <div class="w-6 h-6 rounded-full border-2 border-neutral-800 bg-black"></div>
+                </div>
+            </div>
+
+            <button @click="showExportModal = false; alert('Syncing nodes to YouTube Music API...')" class="w-full py-6 accent-bg text-black font-black uppercase tracking-[0.3em] rounded-2xl hover:brightness-110 active:scale-95 transition-all shadow-[0_10px_40px_rgba(255,85,0,0.3)]">
+                Sync to Library
+            </button>
+            <p class="text-[8px] text-center text-neutral-600 font-black uppercase tracking-[0.4em] mt-6">Secure OAuth Connection Established</p>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATIONS (Simplified) -->
+    <div class="fixed bottom-24 right-6 space-y-2 z-[60]">
+        <div x-show="draggingIndex !== null" x-transition class="glass-panel px-6 py-3 rounded-full border-2 accent-border flex items-center space-x-4 shadow-2xl">
+            <div class="relative w-3 h-3">
+                <div class="absolute inset-0 rounded-full accent-bg animate-ping opacity-50"></div>
+                <div class="absolute inset-0 rounded-full accent-bg"></div>
+            </div>
+            <span class="text-[11px] font-black uppercase tracking-widest">AI is auditing tracks for BPM match...</span>
+        </div>
+    </div>
+
+    <script>
+        function ideApp() {
+            return {
+                view: 'editor', // 'launchpad' or 'editor'
+                sidebarLeft: true,
+                sidebarRight: true,
+                editMode: 'node', // 'node' or 'curve'
+                globalPlaying: false,
+                selectedNodeIndex: 0,
+                draggingIndex: null,
+                showExportModal: false,
+
+                projects: [
+                    { id: 1, name: 'Tokyo Drift Confidence', prompt: 'Neon lights, futuristic, bass heavy', trackCount: 12, updatedAt: '2H AGO' },
+                    { id: 2, name: 'Lakeside Morning', prompt: 'Acoustic, calm, sunrise vibes', trackCount: 8, updatedAt: '1D AGO' },
+                    { id: 3, name: 'Cyberpunk Gym', prompt: 'Industrial, aggressive, fast bpm', trackCount: 15, updatedAt: '3D AGO' },
+                    { id: 4, name: 'Midnight Deep House', prompt: 'Minimalist, hypnotic, pulsing', trackCount: 10, updatedAt: '1W AGO' }
+                ],
+
+                currentProject: {
+                    name: 'Tokyo Drift Confidence',
+                    prompt: 'Vibrant city lights, energetic, bass-heavy future funk set for 2 AM highway cruising.',
+                    nodes: [
+                        { id: 1, title: 'Nightcall', artist: 'Kavinsky', bpm: 85, artwork: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=200&h=200&fit=crop', locked: false, isPlaying: false, why: 'Iconic synth hook defines the "neon" prompt aesthetic perfectly.' },
+                        { id: 2, title: 'Midnight City', artist: 'M83', bpm: 105, artwork: 'https://images.unsplash.com/photo-1493225255756-d9584f8606e9?w=200&h=200&fit=crop', locked: false, isPlaying: false, why: 'Maintains the cinematic late-night atmosphere while bumping the energy.' },
+                        { id: 3, title: 'Genesis', artist: 'Justice', bpm: 118, artwork: 'https://images.unsplash.com/photo-1459749411177-042180ce673c?w=200&h=200&fit=crop', locked: true, isPlaying: false, why: 'High tempo peak for the mid-set energy transition.' },
+                        { id: 4, title: 'Blinding Lights', artist: 'The Weeknd', bpm: 171, artwork: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200&h=200&fit=crop', locked: false, isPlaying: false, why: 'A driving rhythm that bridges the high tempo back to groovy city vibes.' },
+                        { id: 5, title: 'Resonance', artist: 'Home', bpm: 95, artwork: 'https://images.unsplash.com/photo-1514525253361-bee8718a300a?w=200&h=200&fit=crop', locked: false, isPlaying: false, why: 'The quintessential synthwave cooldown track to end the journey.' },
+                        { id: 6, title: 'Nightdrive', artist: 'Anoraak', bpm: 80, artwork: 'https://images.unsplash.com/photo-1496293455970-f8581aae0e3c?w=200&h=200&fit=crop', locked: false, isPlaying: false, why: 'Final atmospheric fade-out for the neon cruise vibe.' },
+                    ]
+                },
+
+                getTransitionScore(idx) {
+                    const diff = Math.abs(this.currentProject.nodes[idx].bpm - this.currentProject.nodes[idx+1].bpm);
+                    return diff < 10 ? 95 : 65;
+                },
+
+                getBpmY(bpm) {
+                    const minBpm = 50;
+                    const maxBpm = 200;
+                    const percentage = (bpm - minBpm) / (maxBpm - minBpm);
+                    return 100 - (percentage * 100);
+                },
+
+                get curvePath() {
+                    const points = this.currentProject.nodes.map((node, i) => {
+                        const x = ((i + 0.5) / this.currentProject.nodes.length) * 100;
+                        const y = this.getBpmY(node.bpm);
+                        return { x, y };
+                    });
+                    
+                    if (points.length === 0) return "";
+                    let d = `M ${points[0].x} ${points[0].y}`;
+                    for (let i = 0; i < points.length - 1; i++) {
+                        const midX = (points[i].x + points[i + 1].x) / 2;
+                        d += ` C ${midX} ${points[i].y}, ${midX} ${points[i+1].y}, ${points[i+1].x} ${points[i+1].y}`;
+                    }
+                    return d;
+                },
+
+                get nodePath() {
+                    const points = this.currentProject.nodes.map((node, i) => {
+                        return `${((i + 0.5) / this.currentProject.nodes.length) * 100},${this.getBpmY(node.bpm)}`;
+                    });
+                    return "M " + points.join(" L ");
+                },
+
+                startDragging(index, event) {
+                    if (this.editMode === 'curve') return;
+                    this.draggingIndex = index;
+                    this.selectedNodeIndex = index;
+                },
+
+                handleCanvasMouseMove(event) {
+                    if (this.draggingIndex === null) return;
+                    
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const y = event.clientY - rect.top;
+                    const h = rect.height;
+                    
+                    // Convert Y pixel to BPM (50-200 range)
+                    const percentage = 1 - (y / h);
+                    let newBpm = 50 + (percentage * 150);
+                    
+                    // Clamp
+                    newBpm = Math.max(50, Math.min(200, newBpm));
+                    
+                    this.currentProject.nodes[this.draggingIndex].bpm = newBpm;
+                },
+
+                stopDragging() {
+                    if (this.draggingIndex !== null) {
+                        this.draggingIndex = null;
+                        // Simulated track replacement effect
+                        const node = this.currentProject.nodes[this.selectedNodeIndex];
+                        node.why = "Re-indexed to match your manual BPM override. Selection updated from global library.";
+                    }
+                },
+
+                togglePlay(index) {
+                    this.currentProject.nodes.forEach((n, i) => {
+                        if (i !== index) n.isPlaying = false;
+                    });
+                    this.currentProject.nodes[index].isPlaying = !this.currentProject.nodes[index].isPlaying;
+                    this.globalPlaying = this.currentProject.nodes[index].isPlaying;
+                },
+
+                createNewProject() {
+                    this.view = 'editor';
+                },
+
+                openProject(proj) {
+                    this.view = 'editor';
+                },
+
+                regenerate() {
+                    // Micro-interaction simulation
+                    const btn = event.currentTarget;
+                    btn.innerText = "PROCESSING...";
+                    setTimeout(() => {
+                        btn.innerText = "REGENERATE SET";
+                        alert("AI Engine: Recalculating unlocked slots to fit new prompt constraints.");
+                    }, 800);
+                }
+            }
+        }
+    </script>
+</body>
+</html></html>

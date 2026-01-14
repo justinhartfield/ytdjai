@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YTDJ.AI - Track Inspector & Alternatives</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --neon-pink: #ff00ff;
+            --neon-cyan: #00ffff;
+            --neon-purple: #9d00ff;
+            --analog-orange: #ff8c00;
+            --crt-bg: #0a0a0f;
+            --panel-bg: rgba(15, 15, 25, 0.85);
+        }
+
+        body {
+            font-family: 'Syne', sans-serif;
+            background-color: var(--crt-bg);
+            color: #e2e2e2;
+            overflow: hidden;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .synth-grid {
+            background-image: 
+                linear-gradient(rgba(157, 0, 255, 0.08) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(157, 0, 255, 0.08) 1px, transparent 1px);
+            background-size: 50px 50px;
+            background-position: center;
+        }
+
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .neon-glow-pink { box-shadow: 0 0 15px rgba(255, 0, 255, 0.4); }
+        .neon-glow-cyan { box-shadow: 0 0 15px rgba(0, 255, 255, 0.4); }
+        .neon-text-pink { text-shadow: 0 0 8px rgba(255, 0, 255, 0.8); }
+        .neon-text-cyan { text-shadow: 0 0 8px rgba(0, 255, 255, 0.8); }
+
+        .scanlines {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 3px, 4px 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--neon-purple); }
+
+        input[type=range] {
+            appearance: none;
+            background: #1a1a25;
+            height: 4px;
+            border-radius: 10px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            appearance: none;
+            width: 14px; height: 14px;
+            background: var(--neon-cyan);
+            border: 2px solid white;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--neon-cyan);
+        }
+
+        .node-active {
+            filter: drop-shadow(0 0 12px var(--neon-cyan));
+            border: 2px solid white !important;
+        }
+
+        .curve-path {
+            stroke-dasharray: 2000;
+            stroke-dashoffset: 0;
+            transition: d 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .knob-container {
+            position: relative;
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle, #2a2a35 0%, #111 100%);
+            border-radius: 50%;
+            border: 2px solid #333;
+        }
+        
+        .knob-indicator {
+            position: absolute;
+            top: 5px;
+            left: 50%;
+            width: 3px;
+            height: 8px;
+            background: var(--neon-pink);
+            transform-origin: bottom center;
+            transform: translateX(-50%);
+        }
+
+        [x-cloak] { display: none !important; }
+
+        @keyframes pulse-cyan {
+            0% { box-shadow: 0 0 0 0 rgba(0, 255, 255, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(0, 255, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 255, 255, 0); }
+        }
+        .playing-pulse { animation: pulse-cyan 2s infinite; }
+    </style>
+</head>
+<body x-data="ytdjApp()" class="flex flex-col h-screen select-none">
+    <div class="scanlines"></div>
+
+    <!-- TOP HEADER -->
+    <header class="h-16 glass-panel border-b border-white/10 flex items-center justify-between px-8 z-[60]">
+        <div class="flex items-center space-x-10">
+            <div class="flex items-center space-x-3 group cursor-pointer">
+                <div class="w-10 h-10 bg-gradient-to-tr from-purple-600 via-pink-600 to-orange-500 rounded-xl flex items-center justify-center font-black italic text-xl text-white shadow-lg group-hover:rotate-3 transition-transform">
+                    YJ
+                </div>
+                <div class="flex flex-col">
+                    <span class="text-xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-500 uppercase">YTDJ.AI</span>
+                    <span class="text-[9px] font-black tracking-[0.3em] text-pink-500 -mt-1 uppercase">Playlist IDE v1.0</span>
+                </div>
+            </div>
+
+            <div class="h-8 w-[1px] bg-white/10"></div>
+
+            <div class="flex items-center space-x-6">
+                <div class="relative">
+                    <input type="text" x-model="projectName" class="bg-black/40 border border-white/10 rounded px-3 py-1.5 text-xs font-bold text-cyan-400 focus:border-cyan-500 outline-none w-64 tracking-widest">
+                    <div class="absolute right-2 top-1/2 -translate-y-1/2 flex space-x-1">
+                        <div class="w-1 h-1 bg-green-500 rounded-full animate-pulse"></div>
+                        <span class="text-[8px] text-gray-500 font-bold uppercase">Live</span>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button class="text-gray-500 hover:text-white transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg></button>
+                    <button class="text-gray-500 hover:text-white transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg></button>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-8">
+            <div class="flex bg-black/60 rounded-lg p-1 border border-white/5 shadow-inner">
+                <button @click="view = 'arrangement'" :class="view === 'arrangement' ? 'bg-purple-600/20 text-purple-400 border border-purple-500/50' : 'text-gray-500'" class="px-5 py-1.5 rounded text-[10px] font-black uppercase tracking-widest transition-all">Arrangement</button>
+                <button @click="view = 'session'" :class="view === 'session' ? 'bg-purple-600/20 text-purple-400 border border-purple-500/50' : 'text-gray-500'" class="px-5 py-1.5 rounded text-[10px] font-black uppercase tracking-widest transition-all">Session</button>
+            </div>
+            <button class="relative group">
+                <div class="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-blue-600 rounded blur opacity-25 group-hover:opacity-60 transition duration-1000 group-hover:duration-200"></div>
+                <div class="relative px-8 py-2 bg-black border border-white/20 rounded text-[10px] font-black uppercase tracking-[0.2em] text-white hover:border-cyan-500/50">Export Mix</div>
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-grow flex overflow-hidden">
+        
+        <!-- LEFT SIDEBAR: AI CONFIG -->
+        <aside class="w-80 glass-panel border-r border-white/10 flex flex-col z-50 overflow-y-auto custom-scrollbar">
+            <div class="p-6 space-y-8">
+                <section>
+                    <div class="flex items-center justify-between mb-4">
+                        <label class="text-[10px] uppercase font-black text-gray-400 tracking-[0.2em]">AI Directive</label>
+                        <span class="text-[9px] bg-pink-500/20 text-pink-500 px-2 py-0.5 rounded font-bold uppercase">Active</span>
+                    </div>
+                    <textarea x-model="promptText" rows="4" class="w-full bg-black/60 border border-white/10 rounded-lg p-4 text-sm font-medium focus:border-pink-500 focus:ring-1 focus:ring-pink-500/30 outline-none text-pink-100 placeholder-gray-700 leading-relaxed shadow-inner"></textarea>
+                    <div class="mt-2 flex flex-wrap gap-1">
+                        <template x-for="tag in ['Night Drive', 'Synth', 'Neon', 'Cinematic']">
+                            <span class="px-2 py-1 bg-white/5 border border-white/10 rounded text-[8px] font-bold uppercase text-gray-400" x-text="tag"></span>
+                        </template>
+                    </div>
+                </section>
+
+                <section>
+                    <label class="text-[10px] uppercase font-black text-gray-400 tracking-[0.2em] mb-4 block">Arc Profile</label>
+                    <div class="grid grid-cols-1 gap-2">
+                        <template x-for="arc in arcTemplates" :key="arc.id">
+                            <button @click="selectedArc = arc.id" :class="selectedArc === arc.id ? 'border-cyan-500 bg-cyan-500/10 text-cyan-400' : 'border-white/5 bg-black/20 text-gray-500'" class="flex items-center justify-between border p-3 rounded-lg text-xs font-black uppercase tracking-widest hover:border-cyan-500/40 transition-all">
+                                <span x-text="arc.name"></span>
+                                <div class="flex space-x-0.5 items-end h-3">
+                                    <template x-for="i in 5">
+                                        <div class="w-1 bg-current opacity-30" :style="`height: ${Math.random()*100}%`"></div>
+                                    </template>
+                                </div>
+                            </button>
+                        </template>
+                    </div>
+                </section>
+
+                <section class="space-y-6">
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-end">
+                            <label class="text-[10px] uppercase font-black text-gray-500 tracking-widest">Novelty Depth</label>
+                            <span class="text-[11px] font-black text-cyan-500 uppercase">Deep Cuts</span>
+                        </div>
+                        <input type="range" class="w-full" min="0" max="100" value="75">
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-end">
+                            <label class="text-[10px] uppercase font-black text-gray-500 tracking-widest">BPM Elasticity</label>
+                            <span class="text-[11px] font-black text-pink-500 uppercase">±8 BPM</span>
+                        </div>
+                        <input type="range" class="w-full" min="2" max="20" value="8">
+                    </div>
+                </section>
+
+                <button @click="regenerate()" class="w-full py-5 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-xl text-xs font-black uppercase tracking-[0.3em] shadow-xl hover:brightness-110 active:scale-[0.98] transition-all border border-white/20">
+                    Regenerate Mix
+                </button>
+            </div>
+
+            <div class="mt-auto p-6 border-t border-white/10 bg-black/40">
+                <div class="flex items-center space-x-4 opacity-50">
+                    <div class="knob-container">
+                        <div class="knob-indicator" style="transform: translateX(-50%) rotate(45deg);"></div>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-[8px] font-black text-gray-500 uppercase tracking-widest">Master Saturation</span>
+                        <span class="text-xs font-bold text-gray-300">Analog Tape II</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- CENTER: ARRANGEMENT VIEW -->
+        <section class="flex-grow relative synth-grid flex flex-col bg-[#0d0d15] overflow-hidden">
+            <!-- X-Axis Timeline -->
+            <div class="h-10 border-b border-white/5 flex items-center px-4 bg-black/60 relative z-20">
+                <div class="flex items-center space-x-[76px] ml-[80px]">
+                    <template x-for="i in 12">
+                        <div class="flex flex-col items-center">
+                            <span class="text-[9px] font-black text-gray-600 tracking-tighter uppercase" x-text="'Slot ' + (i < 10 ? '0' + i : i)"></span>
+                            <div class="w-[1px] h-2 bg-white/10 mt-1"></div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Main Canvas Area -->
+            <div class="flex-grow relative overflow-x-auto custom-scrollbar pb-20" id="canvas-container">
+                <!-- Y-Axis (BPM) -->
+                <div class="sticky left-0 top-0 bottom-0 w-20 border-r border-white/10 bg-black/80 backdrop-blur-md flex flex-col justify-between py-10 text-[10px] font-black text-gray-600 px-3 z-30">
+                    <span class="text-pink-500">200 BPM</span>
+                    <span>180 BPM</span>
+                    <span>160 BPM</span>
+                    <span>140 BPM</span>
+                    <span class="text-cyan-500">120 BPM</span>
+                    <span>100 BPM</span>
+                    <span>80 BPM</span>
+                    <span>60 BPM</span>
+                </div>
+
+                <div class="relative min-w-[1500px] h-full">
+                    <!-- The Spline Curve Path -->
+                    <svg class="absolute inset-0 w-full h-full pointer-events-none">
+                        <defs>
+                            <linearGradient id="pathGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" style="stop-color:var(--neon-pink);stop-opacity:0.6" />
+                                <stop offset="100%" style="stop-color:var(--neon-cyan);stop-opacity:0.6" />
+                            </linearGradient>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+                        <path :d="curvePath" fill="none" stroke="url(#pathGradient)" stroke-width="4" filter="url(#glow)" class="curve-path" />
+                        
+                        <!-- Connecting Dashed lines for transition state -->
+                        <template x-for="(track, index) in playlist" :key="'line-'+index">
+                            <line x1="0" :y1="track.y + '%'" :x2="2000" :y2="track.y + '%'" stroke="white" stroke-opacity="0.03" stroke-width="1" />
+                        </template>
+                    </svg>
+
+                    <!-- Nodes -->
+                    <template x-for="(track, index) in playlist" :key="index">
+                        <div 
+                            class="absolute transform -translate-x-1/2 -translate-y-1/2 z-40 transition-all duration-75"
+                            :style="`left: ${(index + 1) * 120}px; top: ${track.y}%`"
+                        >
+                            <!-- Drag HUD -->
+                            <div x-show="draggingIndex === index" class="absolute -top-14 left-1/2 -translate-x-1/2 bg-white text-black px-3 py-1 rounded shadow-2xl z-50 flex items-center space-x-2 animate-bounce">
+                                <span class="text-[10px] font-black uppercase tracking-tighter" x-text="calculateBPM(track.y) + ' BPM'"></span>
+                                <div class="w-1.5 h-1.5 bg-pink-500 rounded-full"></div>
+                            </div>
+
+                            <div 
+                                @mousedown="startDragging($event, index)"
+                                @click="selectNode(index)"
+                                class="relative group cursor-grab active:cursor-grabbing"
+                            >
+                                <!-- The Track Node -->
+                                <div 
+                                    class="w-16 h-16 rounded-2xl p-1 bg-black/40 border-2 transition-all duration-300 flex items-center justify-center overflow-hidden"
+                                    :class="[
+                                        selectedIndex === index ? 'border-white scale-110 shadow-[0_0_30px_rgba(255,255,255,0.2)]' : 'border-white/10 hover:border-white/40',
+                                        track.locked ? 'ring-2 ring-orange-500/50 ring-offset-2 ring-offset-black' : '',
+                                        activePlaybackIndex === index && isPlaying ? 'playing-pulse border-cyan-500' : ''
+                                    ]"
+                                >
+                                    <img :src="track.cover" class="w-full h-full object-cover rounded-xl opacity-80 group-hover:opacity-100 transition-opacity">
+                                    
+                                    <!-- Play Overlay -->
+                                    <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                        <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/></svg>
+                                    </div>
+
+                                    <!-- Status Icons -->
+                                    <div x-show="track.locked" class="absolute top-1 right-1 bg-orange-500 text-black p-0.5 rounded-md">
+                                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/></svg>
+                                    </div>
+                                </div>
+
+                                <!-- Label -->
+                                <div class="absolute -bottom-10 left-1/2 -translate-x-1/2 w-32 text-center pointer-events-none">
+                                    <div class="text-[9px] font-black uppercase tracking-tighter truncate" :class="selectedIndex === index ? 'text-white' : 'text-gray-500'" x-text="track.title"></div>
+                                    <div class="text-[8px] font-bold text-gray-600 truncate uppercase" x-text="track.artist"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Canvas Bottom Controls -->
+            <div class="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center space-x-3 z-50 bg-black/80 backdrop-blur-xl border border-white/10 rounded-full p-2 px-6 shadow-2xl">
+                <button class="flex items-center space-x-2 text-[10px] font-black uppercase text-gray-400 hover:text-white transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                    <span>Edit Curve</span>
+                </button>
+                <div class="w-[1px] h-4 bg-white/10 mx-2"></div>
+                <button @click="refillMix()" class="flex items-center space-x-2 text-[10px] font-black uppercase text-cyan-500 hover:neon-text-cyan transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    <span>Auto-Refill</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- RIGHT SIDEBAR: INSPECTOR (THE CORE REQUEST) -->
+        <aside class="w-96 glass-panel border-l border-white/10 flex flex-col z-50">
+            <template x-if="selectedIndex !== null">
+                <div class="flex flex-col h-full">
+                    <!-- Inspector Header -->
+                    <div class="p-8 pb-4">
+                        <div class="flex justify-between items-start mb-6">
+                            <span class="text-[10px] uppercase font-black tracking-[0.3em] text-cyan-500">Track Inspector</span>
+                            <div class="flex space-x-2">
+                                <button @click="playlist[selectedIndex].locked = !playlist[selectedIndex].locked" :class="playlist[selectedIndex].locked ? 'text-orange-500' : 'text-gray-600 hover:text-white'" class="transition-colors">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                                </button>
+                                <button @click="selectedIndex = null" class="text-gray-600 hover:text-white">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="relative group mb-6">
+                            <div class="absolute -inset-1 bg-gradient-to-br from-pink-500 to-cyan-500 rounded-2xl blur-lg opacity-20 group-hover:opacity-40 transition duration-500"></div>
+                            <div class="relative aspect-square bg-gray-900 rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
+                                <img :src="playlist[selectedIndex].cover" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700">
+                                <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button @click="togglePlay()" class="w-16 h-16 rounded-full bg-white/20 backdrop-blur flex items-center justify-center hover:bg-white hover:text-black transition-all">
+                                        <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-1">
+                            <h2 class="text-2xl font-black uppercase tracking-tighter leading-none" x-text="playlist[selectedIndex].title"></h2>
+                            <p class="text-pink-500 font-bold tracking-widest text-sm uppercase" x-text="playlist[selectedIndex].artist"></p>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 mt-8">
+                            <div class="bg-black/40 border border-white/5 p-3 rounded-xl">
+                                <span class="text-[9px] font-black text-gray-500 uppercase block mb-1">Target Tempo</span>
+                                <span class="text-lg font-black text-white italic" x-text="calculateBPM(playlist[selectedIndex].y) + ' BPM'"></span>
+                            </div>
+                            <div class="bg-black/40 border border-white/5 p-3 rounded-xl">
+                                <span class="text-[9px] font-black text-gray-500 uppercase block mb-1">Duration</span>
+                                <span class="text-lg font-black text-white italic">04:32</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Explainability Block -->
+                    <div class="flex-grow overflow-y-auto custom-scrollbar px-8 pb-8 space-y-8">
+                        <section>
+                            <div class="flex items-center space-x-2 mb-4">
+                                <svg class="w-4 h-4 text-pink-500" fill="currentColor" viewBox="0 0 20 20"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                <h3 class="text-[10px] uppercase font-black text-gray-400 tracking-[0.2em]">Why AI Chose This</h3>
+                            </div>
+                            <div class="bg-gradient-to-br from-pink-500/10 via-transparent to-cyan-500/10 border border-white/10 rounded-2xl p-5 relative">
+                                <p class="text-xs leading-relaxed text-gray-300 italic font-medium" x-text="playlist[selectedIndex].why"></p>
+                                <div class="mt-4 flex flex-wrap gap-2">
+                                    <span class="px-2 py-1 bg-black/40 text-[9px] font-black uppercase text-pink-400 border border-pink-500/20 rounded">BPM Match: 99%</span>
+                                    <span class="px-2 py-1 bg-black/40 text-[9px] font-black uppercase text-cyan-400 border border-cyan-500/20 rounded">Style: Heavy Synth</span>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Alternative Ladder -->
+                        <section>
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center space-x-2">
+                                    <svg class="w-4 h-4 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                                    <h3 class="text-[10px] uppercase font-black text-gray-400 tracking-[0.2em]">Alternative Ladder</h3>
+                                </div>
+                                <span class="text-[9px] font-bold text-gray-600 uppercase">6 Matches</span>
+                            </div>
+                            <div class="space-y-3">
+                                <template x-for="(alt, i) in alternatives" :key="i">
+                                    <div class="group relative flex items-center p-3 bg-black/40 border border-white/5 rounded-xl hover:border-cyan-500/40 transition-all cursor-pointer overflow-hidden">
+                                        <div class="absolute left-0 inset-y-0 w-1 bg-cyan-500 scale-y-0 group-hover:scale-y-100 transition-transform"></div>
+                                        <div class="w-10 h-10 rounded-lg overflow-hidden mr-4 border border-white/10 shrink-0">
+                                            <img :src="alt.cover" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all">
+                                        </div>
+                                        <div class="flex-grow min-w-0">
+                                            <div class="text-[10px] font-black uppercase text-gray-100 truncate" x-text="alt.title"></div>
+                                            <div class="text-[9px] font-bold text-gray-500 uppercase" x-text="alt.artist"></div>
+                                        </div>
+                                        <div class="text-right ml-4 shrink-0 flex flex-col items-end">
+                                            <div class="text-[10px] font-black text-cyan-500 italic" x-text="alt.bpm + ' BPM'"></div>
+                                            <button @click.stop="swapTrack(i)" class="mt-1 text-[8px] font-black uppercase bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">Swap</button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </template>
+            <template x-if="selectedIndex === null">
+                <div class="h-full flex flex-col items-center justify-center p-12 text-center opacity-40">
+                    <div class="w-24 h-24 mb-6 relative">
+                        <div class="absolute inset-0 border-2 border-dashed border-gray-600 rounded-full animate-spin-slow"></div>
+                        <div class="absolute inset-4 border-2 border-gray-700 rounded-full"></div>
+                        <div class="absolute inset-0 flex items-center justify-center text-gray-500">
+                            <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/></svg>
+                        </div>
+                    </div>
+                    <h3 class="text-sm font-black uppercase tracking-widest text-gray-400 mb-2">Node Not Selected</h3>
+                    <p class="text-[11px] font-bold text-gray-600 leading-relaxed uppercase">Select a node from the arrangement view to inspect its AI parameters and alternatives.</p>
+                </div>
+            </template>
+        </aside>
+    </main>
+
+    <!-- TRANSPORT BAR -->
+    <footer class="h-28 glass-panel border-t border-white/10 px-10 flex items-center z-[60]">
+        <!-- Current Track Info -->
+        <div class="w-1/4 flex items-center space-x-5">
+            <template x-if="activePlaybackIndex !== null">
+                <div class="flex items-center space-x-4">
+                    <div class="w-14 h-14 bg-gray-800 rounded-xl overflow-hidden border border-white/20 shadow-lg relative">
+                        <img :src="playlist[activePlaybackIndex].cover" class="w-full h-full object-cover">
+                        <div x-show="isPlaying" class="absolute bottom-1 right-1">
+                            <div class="flex space-x-0.5 items-end h-3">
+                                <div class="w-0.5 bg-cyan-400 animate-[bounce_0.6s_infinite_0.1s]"></div>
+                                <div class="w-0.5 bg-cyan-400 animate-[bounce_0.6s_infinite_0.3s]"></div>
+                                <div class="w-0.5 bg-cyan-400 animate-[bounce_0.6s_infinite_0.5s]"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex flex-col overflow-hidden max-w-[180px]">
+                        <span class="text-xs font-black uppercase tracking-tighter truncate text-white" x-text="playlist[activePlaybackIndex].title"></span>
+                        <span class="text-[10px] font-bold text-gray-500 uppercase truncate" x-text="playlist[activePlaybackIndex].artist"></span>
+                        <div class="flex items-center space-x-2 mt-1">
+                            <span class="text-[8px] font-black text-cyan-500 px-1.5 py-0.5 bg-cyan-500/10 rounded uppercase">Synth-Wave</span>
+                            <span class="text-[8px] font-black text-gray-500 uppercase italic" x-text="calculateBPM(playlist[activePlaybackIndex].y) + ' BPM'"></span>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Player Controls -->
+        <div class="w-2/4 flex flex-col items-center">
+            <div class="flex items-center space-x-12 mb-4">
+                <button class="text-gray-600 hover:text-white transition-colors"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M8.445 14.832A1 1 0 0010 14v-2.798l5.445 3.63A1 1 0 0017 14V6a1 1 0 00-1.555-.832L10 8.798V6a1 1 0 00-1.555-.832l-6 4a1 1 0 000 1.664l6 4z"/></svg></button>
+                <button @click="togglePlay()" class="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-[0_0_20px_rgba(255,255,255,0.4)]">
+                    <svg x-show="!isPlaying" class="w-8 h-8 ml-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/></svg>
+                    <svg x-show="isPlaying" class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+                </button>
+                <button class="text-gray-600 hover:text-white transition-colors"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M4.555 5.168A1 1 0 003 6v8a1 1 0 001.555.832L10 11.202V14a1 1 0 001.555.832l6-4a1 1 0 000-1.664l-6-4A1 1 0 0010 6v2.798L4.555 5.168z"/></svg></button>
+            </div>
+            <div class="w-full flex items-center space-x-4">
+                <span class="text-[10px] font-black text-gray-600 tabular-nums">02:45</span>
+                <div class="flex-grow h-1.5 bg-white/5 rounded-full relative group cursor-pointer overflow-hidden">
+                    <div class="absolute inset-y-0 left-0 w-[42%] bg-gradient-to-r from-pink-500 to-cyan-500"></div>
+                    <div class="absolute left-[42%] top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-[0_0_10px_white]"></div>
+                </div>
+                <span class="text-[10px] font-black text-gray-600 tabular-nums">04:32</span>
+            </div>
+        </div>
+
+        <!-- Master / Volume -->
+        <div class="w-1/4 flex items-center justify-end space-x-8">
+            <div class="flex items-center space-x-3">
+                <svg class="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828a1 1 0 010-1.415z" clip-rule="evenodd"/></svg>
+                <input type="range" class="w-32 accent-cyan-500" value="80">
+            </div>
+            <button class="p-3 bg-black/40 border border-white/10 rounded-xl hover:border-pink-500/40 text-pink-500 transition-all">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+            </button>
+        </div>
+    </footer>
+
+    <script>
+        function ytdjApp() {
+            return {
+                projectName: "NEON_HIGHWAY_SET_V1",
+                view: 'arrangement',
+                promptText: "Late-night Tokyo high-speed drive. Pulsing synths, melodic basslines, building from a moody start to a euphoric, neon-lit peak.",
+                selectedArc: 'mountain',
+                selectedIndex: 2,
+                activePlaybackIndex: 2,
+                isPlaying: false,
+                draggingIndex: null,
+                arcTemplates: [
+                    { id: 'warmup', name: 'Warm-up → Peak' },
+                    { id: 'slowburn', name: 'Slow Burn' },
+                    { id: 'mountain', name: 'The Mountain' },
+                    { id: 'steady', name: 'Steady Flow' }
+                ],
+                playlist: [
+                    { title: "Nightcall", artist: "Kavinsky", cover: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=200&q=80", y: 70, locked: false, why: "Iconic cinematic entry point. The slow-burn 116 BPM tempo perfectly initializes the mood established in your prompt's 'moody start'." },
+                    { title: "Resonance", artist: "Home", cover: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&w=200&q=80", y: 62, locked: false, why: "Maintains atmospheric consistency while subtly increasing energy. Key compatibility with previous track ensures a seamless blend." },
+                    { title: "Turbo Killer", artist: "Carpenter Brut", cover: "https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=200&q=80", y: 30, locked: false, why: "The defining 'Neon Peak' track. Selected for its aggressive synth leads and driving 155 BPM percussion that matches the apex of your curve." },
+                    { title: "Days of Thunder", artist: "The Midnight", cover: "https://images.unsplash.com/photo-1514525253361-bee8718a74a2?auto=format&fit=crop&w=200&q=80", y: 45, locked: true, why: "Emotional transition point. Locked by user to ensure the melodic core of the set remains stable during BPM fluctuations." },
+                    { title: "Maximum Black", artist: "Perturbator", cover: "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=200&q=80", y: 55, locked: false, why: "Dark energy dip. Bridges the gap between the euphoric peak and the technical finale without losing the 'drive' sensation." },
+                    { title: "Tech Noir", artist: "Gunship", cover: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=200&q=80", y: 40, locked: false, why: "Neon-soaked melodic finish. High confidence match for the 142 BPM target. Its lush textures wrap up the Tokyo narrative perfectly." }
+                ],
+                alternatives: [
+                    { title: "Pacific Coast", artist: "Lazerhawk", bpm: 154, cover: "https://images.unsplash.com/photo-1493225255756-d9584f8606e9?auto=format&fit=crop&w=100&q=80" },
+                    { title: "Running In Night", artist: "FM-84", bpm: 156, cover: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=100&q=80" },
+                    { title: "Roller Mobster", artist: "Carpenter Brut", bpm: 158, cover: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=100&q=80" },
+                    { title: "Overdrive", artist: "Lazerhawk", bpm: 155, cover: "https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=100&q=80" },
+                    { title: "Testarossa", artist: "Kavinsky", bpm: 153, cover: "https://images.unsplash.com/photo-1514525253361-bee8718a74a2?auto=format&fit=crop&w=100&q=80" },
+                    { title: "Neo-Tokyo", artist: "Scandroid", bpm: 160, cover: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=100&q=80" }
+                ],
+
+                get curvePath() {
+                    if (this.playlist.length === 0) return "";
+                    let path = `M 120 ${this.playlist[0].y * (document.getElementById('canvas-container').offsetHeight / 100)}`;
+                    const height = document.getElementById('canvas-container')?.offsetHeight || 600;
+                    
+                    for (let i = 0; i < this.playlist.length; i++) {
+                        const currentX = (i + 1) * 120;
+                        const currentY = (this.playlist[i].y / 100) * height;
+                        
+                        if (i === 0) {
+                            path = `M ${currentX} ${currentY}`;
+                        } else {
+                            const prevX = i * 120;
+                            const prevY = (this.playlist[i-1].y / 100) * height;
+                            const cp1x = prevX + (currentX - prevX) / 2;
+                            path += ` C ${cp1x} ${prevY}, ${cp1x} ${currentY}, ${currentX} ${currentY}`;
+                        }
+                    }
+                    return path;
+                },
+
+                calculateBPM(y) {
+                    // Y: 0 = 200, Y: 100 = 60
+                    return Math.round(200 - (y / 100 * 140));
+                },
+
+                selectNode(index) {
+                    this.selectedIndex = index;
+                    this.activePlaybackIndex = index;
+                },
+
+                startDragging(event, index) {
+                    this.draggingIndex = index;
+                    this.selectedIndex = index;
+                    const container = document.getElementById('canvas-container');
+                    const rect = container.getBoundingClientRect();
+
+                    const onMouseMove = (e) => {
+                        if (this.draggingIndex === null) return;
+                        let newY = ((e.clientY - rect.top) / rect.height) * 100;
+                        newY = Math.max(5, Math.min(95, newY));
+                        this.playlist[this.draggingIndex].y = newY;
+                    };
+
+                    const onMouseUp = () => {
+                        if (this.draggingIndex !== null) {
+                            this.simulateSwap(this.draggingIndex);
+                        }
+                        this.draggingIndex = null;
+                        window.removeEventListener('mousemove', onMouseMove);
+                        window.removeEventListener('mouseup', onMouseUp);
+                    };
+
+                    window.addEventListener('mousemove', onMouseMove);
+                    window.addEventListener('mouseup', onMouseUp);
+                },
+
+                simulateSwap(index) {
+                    const track = this.playlist[index];
+                    if (track.locked) return;
+                    
+                    const newBPM = this.calculateBPM(track.y);
+                    track.title = "ANALYZING...";
+                    
+                    setTimeout(() => {
+                        const randomAlt = this.alternatives[Math.floor(Math.random() * this.alternatives.length)];
+                        track.title = randomAlt.title;
+                        track.artist = randomAlt.artist;
+                        track.cover = randomAlt.cover;
+                        track.why = `AI updated track to match your ${newBPM} BPM shift. Chosen for its ${newBPM > 140 ? 'high energy' : 'smooth flow'} and synth consistency.`;
+                    }, 800);
+                },
+
+                swapTrack(altIndex) {
+                    const alt = this.alternatives[altIndex];
+                    const current = this.playlist[this.selectedIndex];
+                    current.title = alt.title;
+                    current.artist = alt.artist;
+                    current.cover = alt.cover;
+                    current.why = "Manually swapped from alternative ladder. Matches target BPM and maintains the intended set arc.";
+                },
+
+                togglePlay() {
+                    this.isPlaying = !this.isPlaying;
+                },
+
+                refillMix() {
+                    this.playlist.forEach((track, i) => {
+                        if (!track.locked) this.simulateSwap(i);
+                    });
+                },
+
+                regenerate() {
+                    this.refillMix();
+                }
+            }
+        }
+    </script>
+</body>
+</html>

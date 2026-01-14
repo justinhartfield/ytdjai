@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YTDJ.AI — Playlist Story: NEON_DRIVE_01</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Google Fonts: Syne & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --accent: #00FFD1;
+            --bg-dark: #0A0A0C;
+            --panel-bg: #141417;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --grid-color: rgba(255, 255, 255, 0.03);
+            --danger: #FF3D00;
+        }
+
+        body {
+            font-family: 'Syne', sans-serif;
+            background-color: var(--bg-dark);
+            color: #E2E8F0;
+            min-height: 100vh;
+        }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Algorithmic Clarity - Grid Background */
+        .micro-grid {
+            background-image: 
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        /* DAW Node Styling */
+        .node-connection {
+            stroke: var(--accent);
+            stroke-width: 2;
+            fill: none;
+            filter: drop-shadow(0 0 12px rgba(0, 255, 209, 0.3));
+        }
+
+        .node-glow {
+            filter: drop-shadow(0 0 15px rgba(0, 255, 209, 0.5));
+        }
+
+        .lab-panel {
+            clip-path: polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%);
+            border: 1px solid var(--border-color);
+            background: var(--panel-bg);
+        }
+
+        .curve-container::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(to bottom, transparent 90%, var(--bg-dark));
+            pointer-events: none;
+        }
+
+        /* Scanline Animation */
+        @keyframes scan {
+            from { transform: translateY(-100%); }
+            to { transform: translateY(1000%); }
+        }
+        .scanline {
+            width: 100%;
+            height: 2px;
+            background: rgba(0, 255, 209, 0.1);
+            position: absolute;
+            animation: scan 8s linear infinite;
+            z-index: 1;
+        }
+
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body x-data="storyState()" class="flex flex-col min-h-screen overflow-x-hidden">
+
+    <!-- TOP NAV -->
+    <header class="h-16 border-b border-white/10 bg-black/50 backdrop-blur-xl flex items-center justify-between px-6 sticky top-0 z-[100]">
+        <div class="flex items-center gap-6">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 bg-[var(--accent)] flex items-center justify-center">
+                    <div class="w-3 h-3 bg-black"></div>
+                </div>
+                <span class="font-extrabold tracking-tighter text-lg italic">YTDJ.AI</span>
+            </div>
+            <div class="h-4 w-[1px] bg-white/10 hidden md:block"></div>
+            <div class="hidden md:flex items-center gap-2">
+                <span class="text-[10px] mono text-white/30 uppercase tracking-widest">Public Set</span>
+                <span class="text-[10px] mono text-[var(--accent)] uppercase tracking-widest">#001-ALPHA</span>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <button class="px-4 py-2 border border-white/10 text-[10px] mono uppercase tracking-widest hover:bg-white hover:text-black transition-all">
+                Copy Link
+            </button>
+            <a href="#" class="px-6 py-2 bg-[var(--accent)] text-black text-xs font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all">
+                Create Your Own
+            </a>
+        </div>
+    </header>
+
+    <main class="flex-grow flex flex-col items-center">
+        
+        <!-- HERO SECTION: THE CURVE -->
+        <section class="w-full h-[60vh] relative micro-grid overflow-hidden curve-container">
+            <div class="scanline"></div>
+            
+            <!-- Metadata Floating Top Left -->
+            <div class="absolute top-12 left-8 z-20 max-w-md">
+                <div class="bg-black/80 backdrop-blur-md p-6 border-l-4 border-[var(--accent)] lab-panel">
+                    <h1 class="text-4xl font-black italic tracking-tighter uppercase mb-4 leading-none" x-text="projectName"></h1>
+                    <div class="space-y-4">
+                        <div>
+                            <span class="text-[10px] mono text-white/30 uppercase block mb-1">Original Prompt</span>
+                            <p class="text-sm text-white/70 leading-relaxed italic">"Industrial night drive with rhythmic synth stabs and heavy sub-bass. Cinematic peak energy in the second half."</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <template x-for="tag in ['SYNTHWAVE', 'INDUSTRIAL', 'CYBERPUNK']">
+                                <span class="px-2 py-1 bg-white/5 border border-white/10 text-[9px] mono text-[var(--accent)]" x-text="tag"></span>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Bar Floating Top Right -->
+            <div class="absolute top-12 right-8 z-20 hidden lg:block">
+                <div class="bg-black/80 backdrop-blur-md p-4 flex gap-8 border border-white/10 mono text-[10px]">
+                    <div class="flex flex-col">
+                        <span class="text-white/30 uppercase tracking-widest">Set Length</span>
+                        <span class="text-lg font-bold text-white uppercase">44:12</span>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-white/30 uppercase tracking-widest">Avg Tempo</span>
+                        <span class="text-lg font-bold text-white uppercase">132 BPM</span>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-white/30 uppercase tracking-widest">Nodes</span>
+                        <span class="text-lg font-bold text-white uppercase">12 Tracks</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visualization Canvas -->
+            <div class="absolute inset-0 flex items-center justify-center p-20 pt-32">
+                <div class="relative w-full h-full" ref="canvas">
+                    <!-- Y Axis Labels -->
+                    <div class="absolute -left-12 inset-y-0 flex flex-col justify-between py-2 text-[10px] mono text-white/20">
+                        <span>200</span>
+                        <span>160</span>
+                        <span>120</span>
+                        <span>80</span>
+                    </div>
+
+                    <!-- SVG Curve -->
+                    <svg class="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
+                        <path :d="curvePath" class="node-connection" />
+                    </svg>
+
+                    <!-- Static Nodes -->
+                    <template x-for="(track, index) in tracks" :key="track.id">
+                        <div 
+                            class="absolute transform -translate-x-1/2 -translate-y-1/2 group cursor-pointer"
+                            :style="`left: ${ (index + 0.5) * (100 / tracks.length) }%; top: ${ bpmToY(track.bpm) }%;`"
+                            @click="playTrack(index)"
+                        >
+                            <!-- Node Circle -->
+                            <div 
+                                class="w-10 h-10 rounded-full border-2 bg-black flex items-center justify-center transition-all duration-500"
+                                :class="currentTrackIndex === index ? 'border-[var(--accent)] scale-125 node-glow' : 'border-white/10 hover:border-white/40'"
+                            >
+                                <img :src="track.cover" class="w-8 h-8 rounded-full object-cover grayscale opacity-50 group-hover:opacity-100 transition-opacity">
+                                
+                                <!-- Active Indicator -->
+                                <div x-show="playing && currentTrackIndex === index" class="absolute -inset-2 border border-[var(--accent)] rounded-full animate-ping opacity-20"></div>
+                            </div>
+                            
+                            <!-- BPM Label -->
+                            <div class="absolute top-full mt-2 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] mono text-white/40 font-bold group-hover:text-[var(--accent)] transition-colors">
+                                <span x-text="track.bpm"></span> BPM
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </section>
+
+        <!-- PLAYER HUD (FLOATING STICKY) -->
+        <div class="sticky top-20 z-[90] w-full max-w-4xl px-6 -mt-8">
+            <div class="bg-black/90 backdrop-blur-2xl border border-white/10 p-4 shadow-2xl flex items-center gap-6 lab-panel">
+                <div class="w-16 h-16 bg-white/5 flex-shrink-0 relative overflow-hidden group">
+                    <img :src="tracks[currentTrackIndex].cover" class="w-full h-full object-cover">
+                    <button @click="playing = !playing" class="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <template x-if="!playing">
+                            <svg width="24" height="24" fill="white" viewBox="0 0 256 256"><path d="M234.49,111.07,90.41,22.94A20,20,0,0,0,60,39.87V216.13a20,20,0,0,0,30.41,16.93l144.08-88.13A20,20,0,0,0,234.49,111.07Z"></path></svg>
+                        </template>
+                        <template x-if="playing">
+                            <svg width="24" height="24" fill="white" viewBox="0 0 256 256"><path d="M200,32H152a16,16,0,0,0-16,16V208a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V48A16,16,0,0,0,200,32Zm-48,176h48V48H152ZM104,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V48A16,16,0,0,0,104,32ZM56,208h48V48H56Z"></path></svg>
+                        </template>
+                    </button>
+                </div>
+                <div class="flex-grow min-w-0">
+                    <div class="flex items-center gap-3 mb-1">
+                        <span class="text-[9px] mono text-[var(--accent)] border border-[var(--accent)] px-1.5 py-0.5 leading-none uppercase">Now Auditioning</span>
+                        <span class="text-[9px] mono text-white/20 uppercase tracking-widest" x-text="`Track ${currentTrackIndex + 1} of 12`"></span>
+                    </div>
+                    <h2 class="text-xl font-black uppercase tracking-tighter truncate leading-tight" x-text="tracks[currentTrackIndex].title"></h2>
+                    <p class="text-[10px] mono text-white/40 uppercase" x-text="tracks[currentTrackIndex].artist"></p>
+                </div>
+                <div class="hidden md:flex flex-col items-end gap-2 text-right">
+                    <div class="text-[10px] mono text-white/40 uppercase">BPM Alignment</div>
+                    <div class="flex gap-1 h-3 items-end">
+                        <template x-for="i in 10">
+                            <div class="w-1 bg-[var(--accent)]" :style="`height: ${Math.random() * 100}%`" :class="i > 7 ? 'opacity-30' : ''"></div>
+                        </template>
+                    </div>
+                    <span class="text-[9px] mono text-[var(--accent)]">98.4% Confidence</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- TRACKLIST SECTION -->
+        <section class="w-full max-w-5xl px-6 py-20 space-y-12">
+            <div class="flex flex-col gap-2 border-b border-white/5 pb-8">
+                <h3 class="text-[10px] mono text-[var(--accent)] uppercase tracking-[0.4em]">The Arrangement</h3>
+                <h2 class="text-5xl font-black italic tracking-tighter uppercase">Chronological Flow</h2>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4">
+                <template x-for="(track, index) in tracks" :key="track.id">
+                    <div 
+                        @click="playTrack(index)"
+                        class="group relative flex items-center gap-6 p-4 border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-[var(--accent)]/30 transition-all cursor-pointer"
+                        :class="currentTrackIndex === index ? 'bg-white/[0.08] border-[var(--accent)]' : ''"
+                    >
+                        <!-- Index Label -->
+                        <div class="w-12 mono text-2xl font-black text-white/10 group-hover:text-[var(--accent)] transition-colors" x-text="String(index + 1).padStart(2, '0')"></div>
+                        
+                        <!-- Thumbnail -->
+                        <div class="w-16 h-16 flex-shrink-0 bg-black overflow-hidden border border-white/5">
+                            <img :src="track.cover" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110">
+                        </div>
+
+                        <!-- Info -->
+                        <div class="flex-grow min-w-0">
+                            <div class="flex items-center gap-3 mb-1">
+                                <h4 class="text-lg font-bold uppercase tracking-tight truncate text-white/90 group-hover:text-white" x-text="track.title"></h4>
+                                <span class="text-[10px] mono text-[var(--accent)]" x-text="`${track.bpm} BPM`"></span>
+                            </div>
+                            <p class="text-xs mono text-white/30 uppercase tracking-widest" x-text="track.artist"></p>
+                        </div>
+
+                        <!-- AI Rationale (Desktop) -->
+                        <div class="hidden lg:block w-72 text-[10px] leading-relaxed text-white/40 italic pr-8 border-l border-white/10 pl-6">
+                            "Selected for its <span class="text-white">cinematic resonance</span> and rhythmic alignment to the desired tempo curve gradient."
+                        </div>
+
+                        <!-- Action/Link -->
+                        <div class="flex-shrink-0">
+                            <div class="w-10 h-10 border border-white/10 flex items-center justify-center text-white/20 group-hover:text-[var(--accent)] group-hover:border-[var(--accent)] transition-all">
+                                <svg width="18" height="18" fill="currentColor" viewBox="0 0 256 256"><path d="M224,128a96,96,0,1,1-96-96A96,96,0,0,1,224,128Z" opacity="0.1"></path><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm36.44-94.66-48-32A8,8,0,0,0,104,96v64a8,8,0,0,0,12.44,6.66l48-32a8,8,0,0,0,0-13.32Z"></path></svg>
+                            </div>
+                        </div>
+
+                        <!-- Playing Indicator Bar -->
+                        <div x-show="currentTrackIndex === index" class="absolute left-0 top-0 bottom-0 w-1 bg-[var(--accent)] shadow-[0_0_10px_var(--accent)]"></div>
+                    </div>
+                </template>
+            </div>
+        </section>
+
+        <!-- CTA SECTION -->
+        <section class="w-full bg-[var(--panel-bg)] border-t border-white/10 py-24 flex flex-col items-center justify-center relative overflow-hidden px-6">
+            <div class="absolute inset-0 micro-grid opacity-20"></div>
+            
+            <div class="relative z-10 text-center space-y-8 max-w-2xl">
+                <div class="inline-block px-3 py-1 border border-[var(--accent)] text-[10px] mono text-[var(--accent)] uppercase tracking-widest mb-4">
+                    Ready to Export?
+                </div>
+                <h2 class="text-5xl md:text-7xl font-black italic tracking-tighter uppercase leading-none">Take this journey to YouTube Music</h2>
+                <p class="text-white/40 text-lg">Your generated playlist is ready. One click to create it in your library or generate your own version with a unique tempo arc.</p>
+                
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+                    <button class="w-full sm:w-auto px-10 py-5 bg-white text-black font-black uppercase italic tracking-tighter text-xl hover:bg-[var(--accent)] transition-all transform hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(0,255,209,0.2)]">
+                        Save to YT Music
+                    </button>
+                    <button class="w-full sm:w-auto px-10 py-5 bg-black border border-white/20 text-white font-black uppercase italic tracking-tighter text-xl hover:bg-white/5 transition-all">
+                        Edit this Set
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="bg-black border-t border-white/5 py-12 px-6">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
+            <div class="flex items-center gap-3">
+                <div class="w-5 h-5 bg-white/20"></div>
+                <span class="font-bold tracking-tighter italic uppercase text-white/40">YTDJ.AI</span>
+            </div>
+            
+            <div class="flex gap-8 text-[10px] mono uppercase tracking-widest text-white/20">
+                <a href="#" class="hover:text-[var(--accent)] transition-colors">Privacy Laboratory</a>
+                <a href="#" class="hover:text-[var(--accent)] transition-colors">Algorithmic Ethics</a>
+                <a href="#" class="hover:text-[var(--accent)] transition-colors">API Status</a>
+            </div>
+
+            <div class="text-[9px] mono text-white/10">
+                &copy; 2024 YTDJ.AI INSTRUMENTS. ALL RIGHTS RESERVED.
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        function storyState() {
+            return {
+                projectName: 'NEON_DRIVE_01.SET',
+                currentTrackIndex: 0,
+                playing: false,
+                tracks: [
+                    { id: 1, title: 'Hyperion', artist: 'Gessafelstein', bpm: 112, duration: '3:45', cover: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=200&q=80' },
+                    { id: 2, title: 'Nightcall', artist: 'Kavinsky', bpm: 118, duration: '4:12', cover: 'https://images.unsplash.com/photo-1619983081563-430f63602796?w=200&q=80' },
+                    { id: 3, title: 'Turbulence', artist: 'Danger', bpm: 124, duration: '3:50', cover: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200&q=80' },
+                    { id: 4, title: 'Odyssey', artist: 'Home', bpm: 132, duration: '5:02', cover: 'https://images.unsplash.com/photo-1493225255756-d9584f8606e9?w=200&q=80' },
+                    { id: 5, title: 'Resonance', artist: 'Lorn', bpm: 140, duration: '4:33', cover: 'https://images.unsplash.com/photo-1459749411177-042180ce673c?w=200&q=80' },
+                    { id: 6, title: 'Pulse Width', artist: 'Aphex Twin', bpm: 155, duration: '3:22', cover: 'https://images.unsplash.com/photo-1514525253361-bee8718a74a2?w=200&q=80' },
+                    { id: 7, title: 'Contact', artist: 'Daft Punk', bpm: 168, duration: '6:21', cover: 'https://images.unsplash.com/photo-1496293455970-f8581aae0e3c?w=200&q=80' },
+                    { id: 8, title: 'Overmono', artist: 'Bicep', bpm: 145, duration: '4:55', cover: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=200&q=80' },
+                    { id: 9, title: 'The Blaze', artist: 'Virile', bpm: 130, duration: '3:45', cover: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&q=80' },
+                    { id: 10, title: 'Strobe', artist: 'Deadmau5', bpm: 128, duration: '10:34', cover: 'https://images.unsplash.com/photo-1420133965216-76421bb17389?w=200&q=80' },
+                    { id: 11, title: 'Adagio', artist: 'Tiësto', bpm: 110, duration: '5:20', cover: 'https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=200&q=80' },
+                    { id: 12, title: 'Sun & Moon', artist: 'Above & Beyond', bpm: 128, duration: '4:15', cover: 'https://images.unsplash.com/photo-1494232410401-ad00d5433cfa?w=200&q=80' }
+                ],
+
+                bpmToY(bpm) {
+                    const min = 60;
+                    const max = 200;
+                    const range = max - min;
+                    // Scale to fit visualization area (leaving padding)
+                    return ((max - bpm) / range) * 80 + 10;
+                },
+
+                playTrack(index) {
+                    this.currentTrackIndex = index;
+                    this.playing = true;
+                },
+
+                get curvePath() {
+                    const points = this.tracks.map((t, i) => ({
+                        x: (i + 0.5) * (100 / this.tracks.length),
+                        y: this.bpmToY(t.bpm)
+                    }));
+                    
+                    if (points.length < 2) return "";
+                    
+                    let d = `M ${points[0].x}% ${points[0].y}%`;
+                    for (let i = 0; i < points.length - 1; i++) {
+                        const p0 = points[i];
+                        const p1 = points[i + 1];
+                        const cp1x = p0.x + (p1.x - p0.x) / 2;
+                        d += ` C ${cp1x}% ${p0.y}%, ${cp1x}% ${p1.y}%, ${p1.x}% ${p1.y}%`;
+                    }
+                    return d;
+                }
+            };
+        }
+    </script>
+</body>
+</html>

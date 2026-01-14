@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YTDJ.AI // Music Playlist IDE - Inspector View</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Syne', sans-serif;
+            background-color: #0A0A0A;
+            color: #E5E5E5;
+            -webkit-font-smoothing: antialiased;
+        }
+        .carbon-bg { background-color: #121212; }
+        .carbon-border { border-color: #262626; }
+        .accent-text { color: #FF5500; }
+        .accent-bg { background-color: #FF5500; }
+        .accent-border { border-color: #FF5500; }
+        
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: #0A0A0A; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: #FF5500; }
+
+        .grid-pattern {
+            background-image: linear-gradient(#161616 1px, transparent 1px), linear-gradient(90deg, #161616 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+
+        .glass-panel {
+            background: rgba(18, 18, 18, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .node-pulse {
+            animation: pulse-ring 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(255, 85, 0, 0.3); }
+            70% { box-shadow: 0 0 0 12px rgba(255, 85, 0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 85, 0, 0); }
+        }
+
+        .inspector-row:hover { background: rgba(255, 85, 0, 0.03); }
+
+        [x-cloak] { display: none !important; }
+
+        .rack-label {
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: #555;
+            border-bottom: 1px solid #262626;
+            padding-bottom: 4px;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .transition-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body x-data="ideApp()" class="min-h-screen flex flex-col overflow-hidden select-none">
+
+    <!-- TOP NAV -->
+    <header class="h-14 border-b carbon-border carbon-bg flex items-center justify-between px-4 z-50">
+        <div class="flex items-center space-x-6">
+            <div class="flex items-center space-x-2 group cursor-pointer" @click="view = 'launchpad'">
+                <div class="w-8 h-8 accent-bg flex items-center justify-center rounded-sm rotate-45 group-hover:rotate-90 transition-transform">
+                    <span class="text-black font-extrabold -rotate-45 group-hover:-rotate-90 transition-transform">YT</span>
+                </div>
+                <h1 class="text-xl font-bold tracking-tighter">YTDJ<span class="accent-text italic">.AI</span></h1>
+            </div>
+            <div class="h-6 w-[1px] bg-neutral-800"></div>
+            <div class="flex items-center space-x-4 text-xs font-medium uppercase tracking-widest text-neutral-500">
+                <span class="hover:text-white cursor-pointer transition-colors">Sets</span>
+                <span class="text-neutral-700">/</span>
+                <div class="flex items-center space-x-2">
+                    <span class="text-white" x-text="currentProject.name">Neon Night Drive</span>
+                    <svg class="w-3 h-3 text-neutral-600" fill="currentColor" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-4">
+            <div class="flex items-center bg-neutral-950 rounded px-2 py-1 border carbon-border space-x-4">
+                <div class="flex items-center space-x-1">
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                    <span class="text-[10px] font-bold text-neutral-400">AI SYNC</span>
+                </div>
+                <div class="h-4 w-[1px] bg-neutral-800"></div>
+                <button class="text-neutral-500 hover:text-white transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M3 10h10a8 8 0 018 8v2M3 10l5 5m-5-5l5-5"/></svg></button>
+                <button class="text-neutral-500 hover:text-white transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 10H11a8 8 0 00-8 8v2M21 10l-5 5m5-5l-5-5"/></svg></button>
+            </div>
+            <button @click="showExportModal = true" class="accent-bg text-black text-[10px] font-black px-5 py-2 rounded-sm uppercase tracking-widest hover:brightness-110 shadow-lg shadow-orange-950/20 transition-all">
+                Export & Sync
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-grow flex overflow-hidden relative">
+
+        <!-- LEFT SIDEBAR: GENERATION CONTROLS -->
+        <aside class="w-72 carbon-bg border-r carbon-border flex flex-col z-20 overflow-y-auto">
+            <div class="p-6 space-y-8">
+                <div>
+                    <span class="rack-label">Generator Input</span>
+                    <div class="relative">
+                        <textarea x-model="currentProject.prompt" class="w-full bg-neutral-950 border carbon-border rounded-lg p-4 text-xs font-medium leading-relaxed focus:accent-border outline-none transition-all h-32 resize-none text-neutral-300" placeholder="Describe the journey..."></textarea>
+                        <div class="absolute bottom-3 right-3 flex space-x-1">
+                             <span class="text-[9px] bg-neutral-800 px-1.5 py-0.5 rounded border carbon-border text-neutral-500 font-bold">128 CHARS</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <span class="rack-label">Arrangement Curve</span>
+                    <div class="grid grid-cols-2 gap-2">
+                        <template x-for="arc in arcs" :key="arc.name">
+                            <button @click="currentArc = arc.name" 
+                                    :class="currentArc === arc.name ? 'accent-border accent-text bg-orange-500/5' : 'carbon-border text-neutral-500'"
+                                    class="p-3 border rounded flex flex-col items-center justify-center space-y-2 group transition-all">
+                                <svg class="w-8 h-4" viewBox="0 0 40 10" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path :d="arc.path" stroke-linecap="round"/>
+                                </svg>
+                                <span class="text-[9px] font-black uppercase tracking-tighter" x-text="arc.name"></span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+
+                <div>
+                    <span class="rack-label">Engine Constraints</span>
+                    <div class="space-y-6 px-1">
+                        <div>
+                            <div class="flex justify-between mb-2">
+                                <label class="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Novelty</label>
+                                <span class="text-[10px] font-mono accent-text">74%</span>
+                            </div>
+                            <input type="range" class="w-full accent-bg h-1 rounded-lg appearance-none cursor-pointer bg-neutral-800">
+                            <div class="flex justify-between mt-1 text-[8px] text-neutral-600 font-bold uppercase">
+                                <span>Familiar</span>
+                                <span>Deep Cuts</span>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between mb-2">
+                                <label class="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">BPM Variance</label>
+                                <span class="text-[10px] font-mono accent-text">±4</span>
+                            </div>
+                            <input type="range" class="w-full accent-bg h-1 rounded-lg appearance-none cursor-pointer bg-neutral-800">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-4">
+                    <button @click="regenerate()" class="w-full py-4 bg-neutral-950 border border-neutral-800 text-[11px] font-black uppercase tracking-[0.2em] hover:accent-bg hover:text-black hover:border-transparent transition-all flex items-center justify-center space-x-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        <span>Regenerate</span>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- CENTER: CANVAS GRAPH -->
+        <section class="flex-grow relative flex flex-col bg-[#080808] overflow-hidden">
+            <!-- Graph Toolbar -->
+            <div class="h-12 border-b carbon-border carbon-bg flex items-center justify-between px-6">
+                <div class="flex items-center space-x-8">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-2 h-2 rounded-full accent-bg"></div>
+                        <span class="text-[10px] font-black uppercase tracking-widest text-white">Arrangement View</span>
+                    </div>
+                    <button class="text-[10px] font-black uppercase tracking-widest text-neutral-500 hover:text-neutral-300">Session View</button>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button @click="editMode = 'node'" :class="editMode === 'node' ? 'text-white' : 'text-neutral-500'" class="p-2"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg></button>
+                    <button @click="editMode = 'curve'" :class="editMode === 'curve' ? 'text-white' : 'text-neutral-500'" class="p-2"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 17.08l1.5 1.41z"/></svg></button>
+                </div>
+            </div>
+
+            <!-- The Graph Surface -->
+            <div class="flex-grow relative overflow-hidden grid-pattern" 
+                 @mousemove="handleCanvasMouseMove($event)"
+                 @mouseup="stopDragging()">
+                
+                <!-- BPM RULER -->
+                <div class="absolute left-0 top-0 bottom-0 w-16 border-r carbon-border bg-neutral-950/80 z-20 flex flex-col justify-between py-12 items-center text-[9px] font-mono text-neutral-600">
+                    <span>200</span>
+                    <span>180</span>
+                    <span>160</span>
+                    <span class="text-neutral-400 font-bold">140</span>
+                    <span>120</span>
+                    <span>100</span>
+                    <span>80</span>
+                    <span>60</span>
+                </div>
+
+                <!-- SVG CURVE -->
+                <svg class="absolute inset-0 w-full h-full pointer-events-none">
+                    <defs>
+                        <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#FF5500" stop-opacity="0.2" />
+                            <stop offset="50%" stop-color="#FF5500" stop-opacity="1" />
+                            <stop offset="100%" stop-color="#FF5500" stop-opacity="0.2" />
+                        </linearGradient>
+                    </defs>
+                    <path :d="curvePath" fill="none" stroke="url(#lineGrad)" stroke-width="1" stroke-dasharray="8 4" opacity="0.4" />
+                    <path :d="nodePath" fill="none" stroke="#FF5500" stroke-width="3" stroke-linecap="round" />
+                </svg>
+
+                <!-- NODES LAYER -->
+                <div class="absolute inset-0 ml-16">
+                    <template x-for="(node, index) in currentProject.nodes" :key="node.id">
+                        <div class="absolute transform -translate-x-1/2 -translate-y-1/2 group"
+                             :style="`left: ${((index + 0.5) / currentProject.nodes.length) * 100}%; top: ${getBpmY(node.bpm)}%;`"
+                             @mousedown="startDragging(index, $event)"
+                             @click="selectedNodeIndex = index">
+                            
+                            <!-- Connecting Line Connector (Transition Score) -->
+                            <template x-if="index < currentProject.nodes.length - 1">
+                                <div class="absolute left-1/2 top-1/2 h-1 bg-white/5 origin-left"
+                                     :style="`width: calc(100vw / ${currentProject.nodes.length}); transform: rotate(${getAngle(index)}deg)`">
+                                     <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-full bg-neutral-900 border carbon-border text-[8px] font-bold text-green-400">
+                                        94%
+                                     </div>
+                                </div>
+                            </template>
+
+                            <!-- Node Visual -->
+                            <div class="relative flex flex-col items-center">
+                                <div class="w-14 h-14 rounded-full border-4 flex items-center justify-center bg-black transition-all cursor-grab active:cursor-grabbing hover:scale-110 shadow-2xl"
+                                     :class="[
+                                        selectedNodeIndex === index ? 'accent-border ring-4 ring-orange-500/10' : 'carbon-border',
+                                        node.isPlaying ? 'node-pulse' : ''
+                                     ]">
+                                    <img :src="node.artwork" class="w-full h-full rounded-full object-cover" :class="selectedNodeIndex === index ? 'opacity-100' : 'opacity-40'">
+                                    
+                                    <template x-if="node.locked">
+                                        <div class="absolute -top-1 -right-1 bg-white text-black p-1 rounded-full border border-black scale-75">
+                                            <svg class="w-2 h-2" fill="currentColor" viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div class="mt-4 text-center pointer-events-none">
+                                    <span class="block text-[10px] font-black text-white leading-none mb-1 truncate w-24" x-text="node.title"></span>
+                                    <span class="text-[9px] font-mono accent-text" x-text="Math.round(node.bpm) + ' BPM'"></span>
+                                </div>
+                            </div>
+
+                            <!-- Drag HUD Overlay -->
+                            <div x-show="draggingIndex === index" class="absolute -top-20 left-1/2 -translate-x-1/2 glass-panel p-3 rounded-lg border accent-border min-w-[120px] text-center shadow-2xl animate-in fade-in zoom-in">
+                                <div class="text-[14px] font-black accent-text" x-text="Math.round(node.bpm) + ' BPM'"></div>
+                                <div class="text-[8px] font-bold text-neutral-400 uppercase">Finding match...</div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Bottom Control Dock -->
+            <div class="h-20 carbon-bg border-t carbon-border flex items-center px-8 space-x-10 z-30">
+                <div class="flex items-center space-x-6">
+                    <button class="text-neutral-600 hover:text-white"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
+                    <button @click="globalPlaying = !globalPlaying" class="w-12 h-12 rounded-full border-2 carbon-border bg-neutral-900 flex items-center justify-center hover:accent-border group transition-all">
+                        <svg class="w-6 h-6 transition-colors group-hover:accent-text" :class="globalPlaying ? 'accent-text' : 'text-white'" fill="currentColor" viewBox="0 0 24 24">
+                            <path x-show="!globalPlaying" d="M8 5v14l11-7z"/>
+                            <path x-show="globalPlaying" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                        </svg>
+                    </button>
+                    <button class="text-neutral-600 hover:text-white"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+                </div>
+
+                <div class="flex-grow flex items-center space-x-4">
+                    <div class="w-full flex flex-col space-y-2">
+                        <div class="h-1.5 w-full bg-neutral-900 rounded-full overflow-hidden">
+                            <div class="h-full accent-bg w-1/4"></div>
+                        </div>
+                        <div class="flex justify-between text-[9px] font-mono text-neutral-600 tracking-widest">
+                            <span>01:12:45</span>
+                            <div class="flex space-x-4">
+                                <span>12 TRACKS</span>
+                                <span>48:20 TOTAL</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-6">
+                    <div class="flex items-center space-x-3 bg-neutral-950 px-3 py-2 rounded-lg border carbon-border">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/0/09/YouTube_full-color_icon_%282017%29.svg" class="w-5 grayscale opacity-50">
+                        <div class="w-20 h-1 bg-neutral-800 rounded-full">
+                            <div class="w-3/4 h-full accent-bg"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- RIGHT SIDEBAR: INSPECTOR & LOGIC PANEL -->
+        <aside class="w-80 carbon-bg border-l carbon-border flex flex-col z-20">
+            <div class="flex-grow overflow-y-auto p-6 space-y-8">
+                
+                <!-- Track Meta -->
+                <div class="space-y-4">
+                    <div class="relative group">
+                        <div class="aspect-square bg-neutral-950 rounded-xl overflow-hidden border-2 carbon-border shadow-2xl">
+                            <img :src="currentProject.nodes[selectedNodeIndex].artwork" class="w-full h-full object-cover">
+                            <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer">
+                                <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                            </div>
+                        </div>
+                        <div class="absolute -bottom-2 -right-2 w-10 h-10 accent-bg flex items-center justify-center rounded-lg shadow-xl border-4 border-[#121212]">
+                            <svg class="w-4 h-4 text-black" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-black leading-none mb-2 tracking-tight" x-text="currentProject.nodes[selectedNodeIndex].title">Nightcall</h3>
+                        <p class="text-neutral-500 font-bold uppercase text-[10px] tracking-widest" x-text="currentProject.nodes[selectedNodeIndex].artist">Kavinsky</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="flex-grow py-3 bg-neutral-950 border carbon-border rounded text-[9px] font-black uppercase hover:border-neutral-500 transition-all tracking-widest">Preview on YT</button>
+                        <button @click="currentProject.nodes[selectedNodeIndex].locked = !currentProject.nodes[selectedNodeIndex].locked" 
+                                :class="currentProject.nodes[selectedNodeIndex].locked ? 'accent-bg text-black' : 'bg-neutral-950 text-neutral-500'"
+                                class="w-12 flex items-center justify-center rounded border carbon-border transition-all">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6z"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Logic Panel -->
+                <div class="space-y-6">
+                    <div>
+                        <span class="rack-label">AI REASONING</span>
+                        <div class="bg-neutral-950 rounded-lg p-4 border carbon-border relative overflow-hidden">
+                            <div class="absolute top-0 right-0 w-16 h-16 bg-orange-500/5 -rotate-45 translate-x-8 -translate-y-8"></div>
+                            <p class="text-[11px] text-neutral-300 font-medium leading-relaxed italic" x-text="'&ldquo;' + currentProject.nodes[selectedNodeIndex].why + '&rdquo;'"></p>
+                            <div class="mt-4 space-y-2">
+                                <div class="flex items-center space-x-2">
+                                    <div class="w-1.5 h-1.5 rounded-full accent-bg"></div>
+                                    <span class="text-[9px] font-bold text-neutral-500 uppercase tracking-tighter">Matches "Synthwave" Tag</span>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <div class="w-1.5 h-1.5 rounded-full accent-bg"></div>
+                                    <span class="text-[9px] font-bold text-neutral-500 uppercase tracking-tighter">BPM Fit: Perfect Sync</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-end mb-3">
+                            <span class="rack-label !mb-0 !border-0">TRANSITION SCORE</span>
+                            <span class="text-[14px] font-black accent-text">9.4</span>
+                        </div>
+                        <div class="h-1 w-full bg-neutral-900 rounded-full">
+                            <div class="h-full accent-bg rounded-full shadow-[0_0_10px_rgba(255,85,0,0.5)]" style="width: 94%"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mt-4">
+                            <div class="bg-neutral-950 p-2 rounded border carbon-border">
+                                <span class="block text-[8px] font-bold text-neutral-600 uppercase mb-1">Key Match</span>
+                                <span class="text-[10px] font-black text-green-500">Am → Am</span>
+                            </div>
+                            <div class="bg-neutral-950 p-2 rounded border carbon-border">
+                                <span class="block text-[8px] font-bold text-neutral-600 uppercase mb-1">Energy Δ</span>
+                                <span class="text-[10px] font-black text-white">+4%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <span class="rack-label">QUICK ALTERNATIVES</span>
+                        <div class="space-y-2">
+                            <template x-for="i in 3">
+                                <div class="inspector-row group flex items-center justify-between p-2 rounded cursor-pointer transition-all border border-transparent hover:carbon-border">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-10 h-10 bg-neutral-900 rounded border carbon-border overflow-hidden">
+                                            <img :src="`https://api.dicebear.com/7.x/identicon/svg?seed=alt${i}`" class="w-full h-full">
+                                        </div>
+                                        <div>
+                                            <span class="block text-[10px] font-bold text-white leading-none mb-1">Stellar Velocity</span>
+                                            <span class="text-[8px] font-bold text-neutral-500 uppercase tracking-tighter" x-text="110 + (i*4) + ' BPM'">128 BPM</span>
+                                        </div>
+                                    </div>
+                                    <button class="opacity-0 group-hover:opacity-100 accent-text text-[9px] font-black uppercase tracking-widest transition-opacity">Swap</button>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Global Logic Toggles -->
+                <div class="pt-4 border-t border-neutral-800 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-bold text-neutral-400">Lock BPM Target</span>
+                        <button class="w-8 h-4 bg-neutral-800 rounded-full relative">
+                            <div class="absolute right-0.5 top-0.5 w-3 h-3 accent-bg rounded-full"></div>
+                        </button>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-bold text-neutral-400">Protect Neighbors</span>
+                        <button class="w-8 h-4 bg-neutral-900 rounded-full relative">
+                            <div class="absolute left-0.5 top-0.5 w-3 h-3 bg-neutral-600 rounded-full"></div>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </aside>
+    </main>
+
+    <script>
+        function ideApp() {
+            return {
+                view: 'editor',
+                currentArc: 'WAVEFORM',
+                editMode: 'node',
+                globalPlaying: false,
+                selectedNodeIndex: 1,
+                draggingIndex: null,
+                showExportModal: false,
+
+                arcs: [
+                    { name: 'WAVEFORM', path: 'M 0 5 Q 10 0, 20 5 T 40 5' },
+                    { name: 'SLOW BURN', path: 'M 0 10 L 20 8 L 40 2' },
+                    { name: 'PEAK', path: 'M 0 10 Q 20 0, 40 10' },
+                    { name: 'RANDOM', path: 'M 0 5 L 10 2 L 20 8 L 30 4 L 40 6' }
+                ],
+
+                currentProject: {
+                    name: 'Tokyo Drift Confidence',
+                    prompt: 'Neon night driving with aggressive synthesis, futuristic vibes, and a high-energy peak for the highway sections.',
+                    nodes: [
+                        { id: 1, title: 'Pacific Coast', artist: 'Kavinsky', bpm: 105, artwork: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=200&h=200&fit=crop', locked: false, isPlaying: false, why: 'Smooth intro beat that establishes the synth-driven atmosphere.' },
+                        { id: 2, title: 'Nightcall', artist: 'Kavinsky', bpm: 110, artwork: 'https://images.unsplash.com/photo-1493225255756-d9584f8606e9?w=200&h=200&fit=crop', locked: false, isPlaying: false, why: 'The essential neon-night anthem; matches your primary aesthetic perfectly.' },
+                        { id: 3, title: 'Turbo Killer', artist: 'Carpenter Brut', bpm: 171, artwork: 'https://images.unsplash.com/photo-1459749411177-042180ce673c?w=200&h=200&fit=crop', locked: true, isPlaying: false, why: 'Aggressive energy peak required for the high-intensity portion of your curve.' },
+                        { id: 4, title: 'Overdrive', artist: 'Lazerhawk', bpm: 125, artwork: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200&h=200&fit=crop', locked: false, isPlaying: false, why: 'Bridges the gap between peak aggression and atmospheric cruising.' },
+                        { id: 5, title: 'Resonance', artist: 'Home', bpm: 100, artwork: 'https://images.unsplash.com/photo-1514525253361-bee8718a300a?w=200&h=200&fit=crop', locked: false, isPlaying: false, why: 'The definitive cooldown track to resolve the set journey.' },
+                    ]
+                },
+
+                getBpmY(bpm) {
+                    const min = 60, max = 200;
+                    const p = (bpm - min) / (max - min);
+                    return 100 - (p * 100);
+                },
+
+                getAngle(i) {
+                    const n1 = this.currentProject.nodes[i];
+                    const n2 = this.currentProject.nodes[i+1];
+                    const dy = this.getBpmY(n2.bpm) - this.getBpmY(n1.bpm);
+                    const dx = 100 / this.currentProject.nodes.length;
+                    return Math.atan2(dy, dx) * (180 / Math.PI);
+                },
+
+                get curvePath() {
+                    const points = this.currentProject.nodes.map((n, i) => {
+                        return { x: ((i + 0.5) / this.currentProject.nodes.length) * 100, y: this.getBpmY(n.bpm) };
+                    });
+                    if (!points.length) return "";
+                    let d = `M ${points[0].x} ${points[0].y}`;
+                    for(let i=0; i<points.length-1; i++){
+                        const mx = (points[i].x + points[i+1].x) / 2;
+                        d += ` C ${mx} ${points[i].y}, ${mx} ${points[i+1].y}, ${points[i+1].x} ${points[i+1].y}`;
+                    }
+                    return d;
+                },
+
+                get nodePath() {
+                    const pts = this.currentProject.nodes.map((n, i) => `${((i + 0.5) / this.currentProject.nodes.length) * 100},${this.getBpmY(n.bpm)}`);
+                    return "M " + pts.join(" L ");
+                },
+
+                startDragging(index, e) {
+                    if (this.editMode === 'curve') return;
+                    this.draggingIndex = index;
+                    this.selectedNodeIndex = index;
+                },
+
+                handleCanvasMouseMove(e) {
+                    if (this.draggingIndex === null) return;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const y = e.clientY - rect.top;
+                    const p = 1 - (y / rect.height);
+                    let bpm = 60 + (p * 140);
+                    this.currentProject.nodes[this.draggingIndex].bpm = Math.max(60, Math.min(200, bpm));
+                },
+
+                stopDragging() {
+                    this.draggingIndex = null;
+                },
+
+                regenerate() {
+                    console.log("Regenerating set...");
+                }
+            }
+        }
+    </script>
+</body>
+</html>

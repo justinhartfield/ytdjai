@@ -21,7 +21,11 @@
       "Bash(./node_modules/.bin/tsc:*)",
       "Bash(git fetch:*)",
       "Bash(git rebase:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(git stash drop:*)",
+      "Bash(git reset:*)",
+      "Bash(grep:*)",
+      "Bash(curl:*)"
     ]
   }
 }

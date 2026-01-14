@@ -235,54 +235,47 @@ async function generateWithOpenAI(prompt: string, constraints: GeneratePlaylistR
         messages: [
           {
             role: 'system',
-            content: `You are a professional DJ and music curator. Generate a playlist based on the user's description.
-            Return a JSON array of track objects with these fields:
-            - title: string (track name)
-            - artist: string (artist name)
-            - key: string (musical key like "Am", "F#m", "C")
-            - genre: string (music genre)
-            - energy: number (1-100 subjective intensity scale, NOT tempo)
-              1-20: Ambient/chill - downtempo, atmospheric, relaxing
-              21-40: Relaxed, groovy - laid-back beats, smooth vibes
-              41-60: Moderate, steady - balanced energy, consistent drive
-              61-80: High energy, driving - uplifting, powerful, building
-              81-100: Peak intensity, aggressive - drops, maximum impact
-              Based on: aggression, rhythmic intensity, emotional intensity, builds/drops - NOT just tempo
-            - duration: number (in seconds, typically 180-420)
-            - aiReasoning: string (IMPORTANT: 1-2 sentences explaining how this specific track fits the user's theme/vibe description AND how it transitions from the previous track. Reference the user's prompt directly, e.g. "Perfect for the beach party vibe with its tropical synths..." or "The driving bassline captures the late-night energy requested...")
-            - alternatives: array of 2 alternative track objects, each with:
-              - title, artist, key, genre, energy, duration (same as main track)
-              - whyNotChosen: string (1 sentence explaining why this wasn't the primary pick but is still a great alternative, e.g. "Slightly higher energy than ideal for this slot, but excellent key match and similar vibe")
-              - matchScore: number (70-95, how well this alternative fits the slot)
+            content: `You are a DJ curator. Generate a playlist as a JSON array. Each track object has:
+- title, artist, key (e.g. "Am"), genre, energy (1-100 intensity), duration (seconds)
+- aiReasoning: 1 sentence on why it fits the theme
+- alternatives: array of 2 objects with title, artist, key, genre, energy, duration, whyNotChosen (1 sentence), matchScore (70-95)
 
-            Consider transitions between tracks - adjacent tracks should have compatible energy levels and keys.
-            Each track's aiReasoning MUST reference the user's theme/description to explain why it was selected.
-            The alternatives should be genuinely good options that almost made the cut - similar style, compatible energy/key.
-            The response should ONLY be valid JSON array, no additional text or markdown.
-
-${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${constraintInstructions}` : ''}`
+Energy scale: 1-20 chill, 21-40 groovy, 41-60 moderate, 61-80 driving, 81-100 peak.
+Return ONLY valid JSON array, no markdown.${constraintInstructions ? `\n\nConstraints:\n${constraintInstructions}` : ''}`
           },
           {
             role: 'user',
-            content: `Create a ${constraints?.trackCount || 8} track DJ set: ${prompt}
-
-            Energy range: ${constraints?.energyRange?.min || 40}-${constraints?.energyRange?.max || 80} (1-100 scale)
-            Moods: ${constraints?.moods?.join(', ') || 'varied'}`
+            content: `${constraints?.trackCount || 8} track set: ${prompt}. Energy: ${constraints?.energyRange?.min || 40}-${constraints?.energyRange?.max || 80}`
           }
         ],
         temperature: 0.8,
-        max_tokens: 2000
+        max_tokens: 4000
       })
     })
 
     const data = await response.json()
 
     if (data.choices?.[0]?.message?.content) {
-      const content = data.choices[0].message.content
+      let content = data.choices[0].message.content
       console.log('[OpenAI] Raw response:', content.substring(0, 200))
-      const tracks = JSON.parse(content)
-      console.log('[OpenAI] Parsed', tracks.length, 'tracks')
-      return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+
+      // Try to parse JSON, handle truncated responses
+      try {
+        const tracks = JSON.parse(content)
+        console.log('[OpenAI] Parsed', tracks.length, 'tracks')
+        return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+      } catch (parseError) {
+        // Try to fix truncated JSON by finding last complete object
+        console.log('[OpenAI] JSON parse failed, attempting recovery...')
+        const lastCompleteArray = content.lastIndexOf('}]')
+        if (lastCompleteArray > 0) {
+          content = content.substring(0, lastCompleteArray + 2)
+          const tracks = JSON.parse(content)
+          console.log('[OpenAI] Recovered', tracks.length, 'tracks from truncated response')
+          return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+        }
+        throw parseError
+      }
     }
 
     console.error('[OpenAI] No valid response content:', data)
