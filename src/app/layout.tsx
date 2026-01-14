@@ -13,10 +13,18 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'YTDJ.AI'
   },
+  icons: {
+    apple: '/icon-192.png'
+  },
   openGraph: {
     title: 'YTDJ.AI - AI-Powered DJ Set Creator',
     description: 'Create perfect DJ sets with AI-powered music curation',
     type: 'website'
+  },
+  other: {
+    'mobile-web-app-capable': 'yes',
+    'screen-orientation': 'landscape',
+    'x5-orientation': 'landscape'
   }
 }
 
@@ -36,17 +44,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <head>
-        {/* PWA Meta Tags */}
-        <link rel="apple-touch-icon" href="/icon-192.png" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="mobile-web-app-capable" content="yes" />
-
-        {/* Orientation lock to landscape */}
-        <meta name="screen-orientation" content="landscape" />
-        <meta name="x5-orientation" content="landscape" />
-      </head>
       <body className="antialiased">
         <Providers>{children}</Providers>
       </body>

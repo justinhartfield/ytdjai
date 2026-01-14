@@ -17,10 +17,10 @@ class ShareEngine {
   private canShareFiles: boolean = false
 
   constructor() {
-    if (typeof window !== 'undefined' && navigator.share) {
+    if (typeof window !== 'undefined' && 'share' in navigator) {
       this.isSupported = true
       // Check if we can share files
-      this.canShareFiles = navigator.canShare !== undefined
+      this.canShareFiles = 'canShare' in navigator
     }
   }
 
