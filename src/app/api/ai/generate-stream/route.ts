@@ -339,97 +339,112 @@ function createStreamingResponse(prompt: string, constraints: GeneratePlaylistRe
   const stream = new ReadableStream({
     async start(controller) {
       const sendEvent = (event: StreamEvent) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
-      }
-
-      // Signal start
-      sendEvent({ event: 'started', providers: availableProviders })
-
-      if (availableProviders.length === 0) {
-        sendEvent({ event: 'all-failed', errors: [{ provider: 'openai', error: 'No AI providers configured' }] })
-        controller.close()
-        return
-      }
-
-      let primaryProvider: AIProvider | null = null
-      const completedProviders: AIProvider[] = []
-      const failures: { provider: AIProvider; error: string }[] = []
-      const youtubeApiKey = process.env.YOUTUBE_API_KEY || process.env.GOOGLE_AI_API_KEY
-
-      // Use Promise.race pattern to get first result quickly while others continue
-      const generateForProvider = async (provider: AIProvider): Promise<{
-        provider: AIProvider
-        tracks: PlaylistNode[]
-      } | null> => {
-        sendEvent({ event: 'provider-started', provider })
-
         try {
-          let tracks: AITrackWithAlternatives[]
-
-          switch (provider) {
-            case 'openai':
-              tracks = await generateWithOpenAI(prompt, constraints)
-              break
-            case 'claude':
-              tracks = await generateWithClaude(prompt, constraints)
-              break
-            case 'gemini':
-              tracks = await generateWithGemini(prompt, constraints)
-              break
-            default:
-              throw new Error(`Unknown provider: ${provider}`)
-          }
-
-          console.log(`[Stream API] ${provider} returned ${tracks.length} tracks`)
-          const playlistNodes = tracksToPlaylistNodes(tracks, provider)
-
-          // Determine if this is primary or alternative
-          if (primaryProvider === null) {
-            primaryProvider = provider
-            sendEvent({ event: 'primary-result', provider, tracks: playlistNodes })
-
-            // Start YouTube enrichment for primary tracks
-            if (youtubeApiKey) {
-              for (let i = 0; i < playlistNodes.length; i++) {
-                const track = playlistNodes[i].track
-                const enrichedTrack = await enrichTrackWithYouTube(track, youtubeApiKey)
-                if (enrichedTrack.youtubeId && !enrichedTrack.youtubeId.startsWith('pending-')) {
-                  sendEvent({ event: 'track-enriched', provider, index: i, track: enrichedTrack })
-                }
-              }
-            }
-          } else {
-            sendEvent({ event: 'alternative-result', provider, tracks: playlistNodes })
-          }
-
-          completedProviders.push(provider)
-          return { provider, tracks: playlistNodes }
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-          console.error(`[Stream API] ${provider} failed:`, errorMessage)
-          failures.push({ provider, error: errorMessage })
-          sendEvent({ event: 'provider-failed', provider, error: errorMessage })
-          return null
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
+        } catch (e) {
+          console.error('[Stream API] Failed to send event:', e)
         }
       }
 
-      // Run all providers in parallel
-      await Promise.allSettled(
-        availableProviders.map(provider => generateForProvider(provider))
-      )
+      try {
+        // Signal start
+        sendEvent({ event: 'started', providers: availableProviders })
 
-      // Send completion event
-      if (completedProviders.length > 0) {
-        sendEvent({
-          event: 'complete',
-          summary: {
-            primary: primaryProvider,
-            alternatives: completedProviders.filter(p => p !== primaryProvider),
-            failed: failures.map(f => f.provider)
+        if (availableProviders.length === 0) {
+          sendEvent({ event: 'all-failed', errors: [{ provider: 'openai', error: 'No AI providers configured' }] })
+          controller.close()
+          return
+        }
+
+        let primaryProvider: AIProvider | null = null
+        const completedProviders: AIProvider[] = []
+        const failures: { provider: AIProvider; error: string }[] = []
+        const youtubeApiKey = process.env.YOUTUBE_API_KEY || process.env.GOOGLE_AI_API_KEY
+
+        // Use Promise.race pattern to get first result quickly while others continue
+        const generateForProvider = async (provider: AIProvider): Promise<{
+          provider: AIProvider
+          tracks: PlaylistNode[]
+        } | null> => {
+          sendEvent({ event: 'provider-started', provider })
+
+          try {
+            console.log(`[Stream API] Starting ${provider} generation...`)
+            let tracks: AITrackWithAlternatives[]
+
+            switch (provider) {
+              case 'openai':
+                tracks = await generateWithOpenAI(prompt, constraints)
+                break
+              case 'claude':
+                tracks = await generateWithClaude(prompt, constraints)
+                break
+              case 'gemini':
+                tracks = await generateWithGemini(prompt, constraints)
+                break
+              default:
+                throw new Error(`Unknown provider: ${provider}`)
+            }
+
+            console.log(`[Stream API] ${provider} returned ${tracks.length} tracks`)
+            const playlistNodes = tracksToPlaylistNodes(tracks, provider)
+
+            // Determine if this is primary or alternative
+            if (primaryProvider === null) {
+              primaryProvider = provider
+              console.log(`[Stream API] ${provider} is primary, sending result...`)
+              sendEvent({ event: 'primary-result', provider, tracks: playlistNodes })
+
+              // Start YouTube enrichment for primary tracks (limit to avoid timeout)
+              if (youtubeApiKey) {
+                const enrichLimit = Math.min(playlistNodes.length, 5) // Limit to 5 to avoid timeout
+                for (let i = 0; i < enrichLimit; i++) {
+                  const track = playlistNodes[i].track
+                  const enrichedTrack = await enrichTrackWithYouTube(track, youtubeApiKey)
+                  if (enrichedTrack.youtubeId && !enrichedTrack.youtubeId.startsWith('pending-')) {
+                    sendEvent({ event: 'track-enriched', provider, index: i, track: enrichedTrack })
+                  }
+                }
+              }
+            } else {
+              console.log(`[Stream API] ${provider} is alternative, sending result...`)
+              sendEvent({ event: 'alternative-result', provider, tracks: playlistNodes })
+            }
+
+            completedProviders.push(provider)
+            return { provider, tracks: playlistNodes }
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+            console.error(`[Stream API] ${provider} failed:`, errorMessage)
+            failures.push({ provider, error: errorMessage })
+            sendEvent({ event: 'provider-failed', provider, error: errorMessage })
+            return null
           }
-        })
-      } else {
-        sendEvent({ event: 'all-failed', errors: failures })
+        }
+
+        // Run all providers in parallel
+        console.log('[Stream API] Starting all providers in parallel...')
+        await Promise.allSettled(
+          availableProviders.map(provider => generateForProvider(provider))
+        )
+        console.log('[Stream API] All providers completed. Successes:', completedProviders.length, 'Failures:', failures.length)
+
+        // Send completion event
+        if (completedProviders.length > 0) {
+          sendEvent({
+            event: 'complete',
+            summary: {
+              primary: primaryProvider,
+              alternatives: completedProviders.filter(p => p !== primaryProvider),
+              failed: failures.map(f => f.provider)
+            }
+          })
+        } else {
+          sendEvent({ event: 'all-failed', errors: failures })
+        }
+      } catch (error) {
+        console.error('[Stream API] Fatal error:', error)
+        sendEvent({ event: 'all-failed', errors: [{ provider: 'openai', error: error instanceof Error ? error.message : 'Unknown fatal error' }] })
       }
 
       controller.close()
