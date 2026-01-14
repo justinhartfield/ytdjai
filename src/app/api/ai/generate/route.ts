@@ -5,7 +5,7 @@ import type { AIProvider, GeneratePlaylistRequest, PlaylistNode, Track, Alternat
 export const maxDuration = 60 // seconds (requires Netlify Pro or Vercel Pro)
 
 // Request-level timeout tracking for Netlify (hard limit ~26s)
-const NETLIFY_SAFE_TIMEOUT = 20000 // 20 seconds - leave buffer before Netlify kills us
+const NETLIFY_SAFE_TIMEOUT = 25000 // 25 seconds - pushing closer to Netlify's ~26s limit
 let requestStartTime = 0
 
 function timeRemaining(): number {
