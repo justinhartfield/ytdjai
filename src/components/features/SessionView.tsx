@@ -106,8 +106,11 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
     }))
   }, [playlist])
 
-  const showScrollNav = sessionColumns.length > 10
   const totalDuration = playlist.reduce((acc, node) => acc + node.track.duration, 0)
+
+  // Middle-click drag scrolling state
+  const [isMiddleDragging, setIsMiddleDragging] = useState(false)
+  const middleDragStart = useRef<{ x: number; scrollLeft: number } | null>(null)
 
   // Update scroll button visibility
   const updateScrollButtons = useCallback(() => {
@@ -150,6 +153,50 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
       return () => container.removeEventListener('scroll', handleGridScroll)
     }
   }, [handleGridScroll, updateScrollButtons, sessionColumns.length])
+
+  // Middle-click drag handlers
+  const handleMiddleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Middle mouse button is button 1
+    if (e.button !== 1) return
+    e.preventDefault()
+
+    const container = gridScrollContainerRef.current
+    if (!container) return
+
+    setIsMiddleDragging(true)
+    middleDragStart.current = {
+      x: e.clientX,
+      scrollLeft: container.scrollLeft
+    }
+  }, [])
+
+  const handleMiddleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isMiddleDragging || !middleDragStart.current) return
+
+    const container = gridScrollContainerRef.current
+    if (!container) return
+
+    const deltaX = e.clientX - middleDragStart.current.x
+    container.scrollLeft = middleDragStart.current.scrollLeft - deltaX
+  }, [isMiddleDragging])
+
+  const handleMiddleMouseUp = useCallback(() => {
+    setIsMiddleDragging(false)
+    middleDragStart.current = null
+  }, [])
+
+  // Clean up middle drag on mouse leave
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isMiddleDragging) {
+        setIsMiddleDragging(false)
+        middleDragStart.current = null
+      }
+    }
+
+    window.addEventListener('mouseup', handleGlobalMouseUp)
+    return () => window.removeEventListener('mouseup', handleGlobalMouseUp)
+  }, [isMiddleDragging])
 
   const handleSelectTrack = (track: Track, columnIndex: number) => {
     setSelectedTrack(track)
@@ -565,7 +612,7 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
           {/* The Grid with scroll navigation */}
           <div className="flex-1 flex relative">
             {/* Scroll Left Button */}
-            {showScrollNav && canScrollLeft && (
+            {canScrollLeft && (
               <button
                 onClick={() => scrollByAmount('left')}
                 className="absolute left-16 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/80 border border-white/10 flex items-center justify-center hover:bg-cyan-500/20 hover:border-cyan-500/50 transition-all shadow-lg"
@@ -576,7 +623,7 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
             )}
 
             {/* Scroll Right Button */}
-            {showScrollNav && canScrollRight && (
+            {canScrollRight && (
               <button
                 onClick={() => scrollByAmount('right')}
                 className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/80 border border-white/10 flex items-center justify-center hover:bg-cyan-500/20 hover:border-cyan-500/50 transition-all shadow-lg"
@@ -588,10 +635,22 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
 
             <div
               ref={gridScrollContainerRef}
-              className="flex-1 flex overflow-x-auto custom-scrollbar relative z-10"
-              onMouseMove={draggedColumnIndex !== null ? handleDragMove : undefined}
-              onMouseUp={draggedColumnIndex !== null ? handleDragEnd : undefined}
-              onMouseLeave={draggedColumnIndex !== null ? handleDragEnd : undefined}
+              className={cn(
+                "flex-1 flex overflow-x-auto custom-scrollbar relative z-10",
+                isMiddleDragging && "cursor-grabbing select-none"
+              )}
+              onMouseDown={handleMiddleMouseDown}
+              onMouseMove={(e) => {
+                if (draggedColumnIndex !== null) handleDragMove(e)
+                handleMiddleMouseMove(e)
+              }}
+              onMouseUp={(e) => {
+                if (draggedColumnIndex !== null) handleDragEnd()
+                handleMiddleMouseUp()
+              }}
+              onMouseLeave={() => {
+                if (draggedColumnIndex !== null) handleDragEnd()
+              }}
               onTouchMove={draggedColumnIndex !== null ? handleDragMove : undefined}
               onTouchEnd={draggedColumnIndex !== null ? handleDragEnd : undefined}
             >
