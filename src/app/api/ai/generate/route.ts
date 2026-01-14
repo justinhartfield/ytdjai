@@ -616,11 +616,40 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
       // Remove markdown code blocks if present
       text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
 
-      const jsonMatch = text.match(/\[[\s\S]*\]/)
-      if (jsonMatch) {
-        const tracks = JSON.parse(jsonMatch[0])
-        console.log('[Gemini] Parsed', tracks.length, 'tracks')
-        return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+      // Try to parse JSON, handle truncated responses
+      try {
+        const jsonMatch = text.match(/\[[\s\S]*\]/)
+        if (jsonMatch) {
+          const tracks = JSON.parse(jsonMatch[0])
+          console.log('[Gemini] Parsed', tracks.length, 'tracks')
+          return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+        }
+      } catch (parseError) {
+        // Try to fix truncated JSON by finding last complete object
+        console.log('[Gemini] JSON parse failed, attempting recovery...')
+        const lastCompleteObject = text.lastIndexOf('},')
+        if (lastCompleteObject > 0) {
+          // Find the array start and close it after the last complete object
+          const arrayStart = text.indexOf('[')
+          if (arrayStart >= 0) {
+            const recovered = text.substring(arrayStart, lastCompleteObject + 1) + ']'
+            try {
+              const tracks = JSON.parse(recovered)
+              console.log('[Gemini] Recovered', tracks.length, 'tracks from truncated response')
+              return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+            } catch {
+              // Try one more approach - find last }] pattern
+              const lastBracket = text.lastIndexOf('}]')
+              if (lastBracket > 0) {
+                const recovered2 = text.substring(arrayStart, lastBracket + 2)
+                const tracks = JSON.parse(recovered2)
+                console.log('[Gemini] Recovered', tracks.length, 'tracks (method 2)')
+                return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+              }
+            }
+          }
+        }
+        throw parseError
       }
     }
 
