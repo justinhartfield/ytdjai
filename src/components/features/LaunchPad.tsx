@@ -6,6 +6,7 @@ import { Sparkles, Check, Heart, Clock, Settings, ChevronDown, ChevronUp, Slider
 import { cn } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
 import { generatePlaylist } from '@/lib/ai-service'
+import { streamGeneratePlaylist } from '@/lib/ai-stream-service'
 import type { AIConstraints } from '@/types'
 import { AIConstraintsDrawer } from './AIConstraintsDrawer'
 import { AdvancedPromptPanel } from './AdvancedPromptPanel'
@@ -77,7 +78,21 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
   const [showSettings, setShowSettings] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
 
-  const { aiProvider, updateSetWithPrompt, setIsGenerating: setStoreGenerating, constraints, generationControls } = useYTDJStore()
+  const {
+    aiProvider,
+    updateSetWithPrompt,
+    setIsGenerating: setStoreGenerating,
+    constraints,
+    generationControls,
+    startParallelGeneration,
+    receivePrimaryResult,
+    receiveAlternativeResult,
+    setProviderFailed,
+    enrichTrack,
+    completeGeneration,
+    failAllGeneration,
+    updatePrompt
+  } = useYTDJStore()
 
   const toggleTag = (tag: string) => {
     setSelectedTags(prev =>
@@ -207,14 +222,25 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
       avoidText
     ].filter(Boolean).join('. ')
 
-    try {
-      const result = await generatePlaylist({
+    // Save the prompt
+    updatePrompt(fullPrompt)
+
+    // Start parallel generation - fires all 3 AIs simultaneously
+    startParallelGeneration(effectiveTrackCount)
+
+    // Immediately transition to IDE (shows ghost tracks while loading)
+    onComplete()
+
+    // Stream results from all 3 providers
+    streamGeneratePlaylist(
+      {
         prompt: fullPrompt,
+        trackCount: effectiveTrackCount,
+        energyRange,
         constraints: {
           trackCount: effectiveTrackCount,
           energyRange,
           novelty,
-          // Include all extended constraints from AI Settings
           energyTolerance: constraints.energyTolerance,
           syncopation: constraints.syncopation,
           keyMatch: constraints.keyMatch,
@@ -222,7 +248,6 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
           discovery: constraints.discovery,
           activeDecades: constraints.activeDecades,
           blacklist: constraints.blacklist,
-          // Include new generation controls
           weightedPhrases: generationControls.weightedPhrases,
           avoidConcepts: generationControls.avoidConcepts,
           lengthTarget: generationControls.lengthTarget,
@@ -234,21 +259,57 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
           contextTokens: generationControls.contextTokens,
           longFormInput: generationControls.longFormInput,
           appliedTemplates: generationControls.appliedTemplates
-        } as AIConstraints,
-        provider: aiProvider
-      })
-
-      if (result.success && result.playlist) {
-        updateSetWithPrompt(result.playlist, fullPrompt)
-        onComplete()
+        } as AIConstraints
+      },
+      {
+        onStarted: (providers) => {
+          console.log('[Stream] Started with providers:', providers)
+        },
+        onProviderStarted: (provider) => {
+          console.log('[Stream] Provider started:', provider)
+        },
+        onPrimaryResult: (provider, tracks) => {
+          console.log('[Stream] Primary result from:', provider, tracks.length, 'tracks')
+          receivePrimaryResult(provider, tracks)
+        },
+        onAlternativeResult: (provider, tracks) => {
+          console.log('[Stream] Alternative result from:', provider, tracks.length, 'tracks')
+          receiveAlternativeResult(provider, tracks)
+        },
+        onProviderFailed: (provider, error) => {
+          console.log('[Stream] Provider failed:', provider, error)
+          setProviderFailed(provider, error)
+        },
+        onTrackEnriched: (provider, index, track) => {
+          console.log('[Stream] Track enriched:', provider, index, track.title)
+          enrichTrack(provider, index, track)
+        },
+        onComplete: (summary) => {
+          console.log('[Stream] Complete:', summary)
+          completeGeneration(summary)
+          setIsGenerating(false)
+          setStoreGenerating(false)
+        },
+        onAllFailed: (errors) => {
+          console.error('[Stream] All providers failed:', errors)
+          failAllGeneration(errors)
+          setIsGenerating(false)
+          setStoreGenerating(false)
+        },
+        onError: (error) => {
+          console.error('[Stream] Error:', error)
+          setIsGenerating(false)
+          setStoreGenerating(false)
+        }
       }
-    } catch (error) {
-      console.error('Failed to generate playlist:', error)
-    } finally {
-      setIsGenerating(false)
-      setStoreGenerating(false)
-    }
-  }, [prompt, selectedTags, selectedArc, duration, energyRange, novelty, aiProvider, constraints, generationControls, updateSetWithPrompt, setStoreGenerating, onComplete])
+    )
+  }, [
+    prompt, selectedTags, selectedArc, duration, energyRange, novelty,
+    aiProvider, constraints, generationControls,
+    updatePrompt, startParallelGeneration, onComplete,
+    receivePrimaryResult, receiveAlternativeResult, setProviderFailed,
+    enrichTrack, completeGeneration, failAllGeneration, setStoreGenerating
+  ])
 
   return (
     <div className="min-h-screen bg-[#05060f] text-white overflow-auto">

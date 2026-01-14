@@ -19,7 +19,8 @@ import { ExportFlow } from './ExportFlow'
 import { AIControlsSidebar } from './AIControlsSidebar'
 import { SaveSetDialog } from './SaveSetDialog'
 import { BrowseSetsModal } from './BrowseSetsModal'
-import type { PlaylistNode, Track, AIConstraints, Set } from '@/types'
+import type { PlaylistNode, Track, AIConstraints, Set, AIProvider } from '@/types'
+import { GhostTrackNode } from './GhostTrackNode'
 
 interface ArrangementIDEProps {
   onViewChange: (view: 'arrangement' | 'session') => void
@@ -51,7 +52,9 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
     canUndo,
     canRedo,
     activeArcTemplate,
-    setActiveArcTemplate
+    setActiveArcTemplate,
+    generationProgress,
+    swapWithProviderAlternative
   } = useYTDJStore()
   const playlist = currentSet?.playlist || []
   const [editingPrompt, setEditingPrompt] = useState(currentSet?.prompt || '')
@@ -85,6 +88,20 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
   const canvasRef = useRef<HTMLDivElement>(null)
   const swapDebounceRef = useRef<NodeJS.Timeout | null>(null)
   const lastDragY = useRef<number | null>(null)
+
+  // Check for auto-open export flag (returning from OAuth)
+  useEffect(() => {
+    const shouldOpenExport = sessionStorage.getItem('ytdj-auto-open-export')
+    if (shouldOpenExport === 'true') {
+      // Clear the flag first to prevent loops
+      sessionStorage.removeItem('ytdj-auto-open-export')
+      // Small delay to ensure component is fully mounted
+      const timer = setTimeout(() => {
+        setShowExport(true)
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [])
 
   // Handle window events for drag (to capture events outside canvas)
   useEffect(() => {
@@ -701,6 +718,57 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
                 TRANSITIONS
               </div>
             </div>
+
+            {/* AI Provider Results Selector */}
+            {generationProgress.providerPlaylists.length > 1 && (
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-bold tracking-[0.2em] text-gray-500 mr-2">AI RESULTS:</span>
+                {generationProgress.providerPlaylists.map(({ provider }) => (
+                  <button
+                    key={provider}
+                    onClick={() => swapWithProviderAlternative(provider)}
+                    className={cn(
+                      'px-3 py-1 rounded text-[9px] font-bold uppercase tracking-wider transition-all',
+                      generationProgress.primaryProvider === provider
+                        ? 'bg-cyan-500 text-black'
+                        : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
+                    )}
+                  >
+                    {provider === 'openai' ? 'GPT-4o' : provider === 'claude' ? 'Claude' : 'Gemini'}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Loading Status */}
+            {generationProgress.isGenerating && (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1">
+                  {(['openai', 'claude', 'gemini'] as AIProvider[]).map((provider) => {
+                    const isActive = generationProgress.activeProviders.includes(provider)
+                    const isComplete = generationProgress.completedProviders.includes(provider)
+                    const isFailed = generationProgress.failedProviders.includes(provider)
+                    return (
+                      <div
+                        key={provider}
+                        className={cn(
+                          'w-2 h-2 rounded-full transition-all',
+                          isComplete ? 'bg-green-500' :
+                          isFailed ? 'bg-red-500' :
+                          isActive ? 'bg-cyan-500 animate-pulse' : 'bg-gray-600'
+                        )}
+                        title={`${provider}: ${isComplete ? 'Done' : isFailed ? 'Failed' : isActive ? 'Loading...' : 'Waiting'}`}
+                      />
+                    )
+                  })}
+                </div>
+                <span className="text-[9px] font-bold tracking-wider text-cyan-400">
+                  {generationProgress.enrichedCount > 0
+                    ? `Enriching ${generationProgress.enrichedCount}/${generationProgress.skeletonCount}`
+                    : 'Generating...'}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Grid Background */}
@@ -756,6 +824,24 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
                   transform: 'translateX(-50%)'
                 }}
               />
+            )}
+
+            {/* Ghost Track Nodes - show while loading */}
+            {generationProgress.isGenerating && playlist.length === 0 && (
+              <AnimatePresence>
+                {Array.from({ length: generationProgress.skeletonCount }).map((_, index) => {
+                  const x = ((index + 1) / (generationProgress.skeletonCount + 1)) * 100
+                  const y = 50 // Default to middle height
+                  return (
+                    <GhostTrackNode
+                      key={`ghost-${index}`}
+                      index={index}
+                      x={x}
+                      y={y}
+                    />
+                  )
+                })}
+              </AnimatePresence>
             )}
 
             {/* Track Nodes */}

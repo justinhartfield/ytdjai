@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSession, signIn, signOut } from 'next-auth/react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -9,6 +9,9 @@ import {
 } from 'lucide-react'
 import { cn, formatDuration } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
+
+// Key for storing pending export state in sessionStorage
+const PENDING_EXPORT_KEY = 'ytdj-pending-export'
 
 interface ExportFlowProps {
   isOpen: boolean
@@ -31,6 +34,11 @@ interface ExportState {
   failedCount?: number
 }
 
+interface PendingExportState {
+  exportState: ExportState
+  timestamp: number
+}
+
 export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
   const { data: session, status } = useSession()
   const { currentSet } = useYTDJStore()
@@ -46,10 +54,39 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
   const [progress, setProgress] = useState(0)
   const [progressMessage, setProgressMessage] = useState('')
   const [copied, setCopied] = useState(false)
+  const [resumedFromAuth, setResumedFromAuth] = useState(false)
+
+  // Check for pending export on mount (returning from OAuth)
+  useEffect(() => {
+    if (status === 'authenticated' && !resumedFromAuth) {
+      try {
+        const pendingExportJson = sessionStorage.getItem(PENDING_EXPORT_KEY)
+        if (pendingExportJson) {
+          const pendingExport: PendingExportState = JSON.parse(pendingExportJson)
+          // Only restore if saved within last 5 minutes
+          const fiveMinutesAgo = Date.now() - 5 * 60 * 1000
+          if (pendingExport.timestamp > fiveMinutesAgo) {
+            // Restore export state and proceed to metadata step
+            setExportState(pendingExport.exportState)
+            setStep('metadata')
+            setResumedFromAuth(true)
+            // Clear the pending export
+            sessionStorage.removeItem(PENDING_EXPORT_KEY)
+            return
+          }
+          // Clear stale pending export
+          sessionStorage.removeItem(PENDING_EXPORT_KEY)
+        }
+      } catch (e) {
+        console.error('[ExportFlow] Error restoring pending export:', e)
+        sessionStorage.removeItem(PENDING_EXPORT_KEY)
+      }
+    }
+  }, [status, resumedFromAuth])
 
   // Reset when opening
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !resumedFromAuth) {
       // Check auth status
       if (status === 'unauthenticated') {
         setStep('auth')
@@ -64,7 +101,7 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
       })
       setProgress(0)
     }
-  }, [isOpen, currentSet, status])
+  }, [isOpen, currentSet, status, resumedFromAuth])
 
   const generateDescription = () => {
     const trackCount = playlist.length
@@ -166,6 +203,28 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
   }
 
   const handleSignIn = () => {
+    // Save current state to localStorage before OAuth redirect
+    // This ensures the Zustand persist middleware has written the latest state
+    const zustandStorage = localStorage.getItem('ytdj-ai-storage')
+    if (zustandStorage) {
+      // Force a re-save to ensure it's current
+      localStorage.setItem('ytdj-ai-storage', zustandStorage)
+    }
+
+    // Save export state to sessionStorage so we can resume after OAuth
+    const pendingExport: PendingExportState = {
+      exportState: {
+        ...exportState,
+        name: exportState.name || currentSet?.name || 'My DJ Set',
+        description: exportState.description || generateDescription(),
+      },
+      timestamp: Date.now(),
+    }
+    sessionStorage.setItem(PENDING_EXPORT_KEY, JSON.stringify(pendingExport))
+
+    // Also save a flag to auto-open export modal on return
+    sessionStorage.setItem('ytdj-auto-open-export', 'true')
+
     signIn('google', { callbackUrl: window.location.href })
   }
 

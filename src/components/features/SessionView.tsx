@@ -82,6 +82,20 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
 
+  // Check for auto-open export flag (returning from OAuth)
+  useEffect(() => {
+    const shouldOpenExport = sessionStorage.getItem('ytdj-auto-open-export')
+    if (shouldOpenExport === 'true') {
+      // Clear the flag first to prevent loops
+      sessionStorage.removeItem('ytdj-auto-open-export')
+      // Small delay to ensure component is fully mounted
+      const timer = setTimeout(() => {
+        setShowExport(true)
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [])
+
   // Player state from store
   const { isPlaying, playingNodeIndex, currentTime, duration } = player
   const activeTrackIndex = playingNodeIndex ?? 0

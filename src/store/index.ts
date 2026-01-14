@@ -19,7 +19,9 @@ import type {
   ContextTokens,
   AnchorTrack,
   SimilarPlaylistRef,
-  PromptTemplate
+  PromptTemplate,
+  GenerationProgress,
+  ProviderPlaylist
 } from '@/types'
 
 // Player State
@@ -169,6 +171,19 @@ interface YTDJState {
 
   // Initialize
   initializeStore: () => void
+
+  // Generation Progress (parallel AI streaming)
+  generationProgress: GenerationProgress
+  startParallelGeneration: (trackCount: number) => void
+  setProviderStarted: (provider: AIProvider) => void
+  receivePrimaryResult: (provider: AIProvider, tracks: PlaylistNode[]) => void
+  receiveAlternativeResult: (provider: AIProvider, tracks: PlaylistNode[]) => void
+  setProviderFailed: (provider: AIProvider, error: string) => void
+  enrichTrack: (provider: AIProvider, index: number, track: Partial<Track>) => void
+  completeGeneration: (summary: { primary: AIProvider | null; alternatives: AIProvider[]; failed: AIProvider[] }) => void
+  failAllGeneration: (errors: { provider: AIProvider; error: string }[]) => void
+  resetGenerationProgress: () => void
+  swapWithProviderAlternative: (provider: AIProvider) => void
 
   // Cloud Sync
   saveSetToCloud: (setId?: string) => Promise<{ success: boolean; error?: string }>
@@ -579,6 +594,169 @@ export const useYTDJStore = create<YTDJState>()(
           })
         }
       },
+
+      // Generation Progress (parallel AI streaming)
+      generationProgress: {
+        isGenerating: false,
+        activeProviders: [],
+        completedProviders: [],
+        failedProviders: [],
+        skeletonCount: 0,
+        enrichedCount: 0,
+        primaryProvider: null,
+        providerPlaylists: []
+      },
+
+      startParallelGeneration: (trackCount) => set((state) => ({
+        generationProgress: {
+          ...state.generationProgress,
+          isGenerating: true,
+          activeProviders: ['openai', 'claude', 'gemini'],
+          completedProviders: [],
+          failedProviders: [],
+          skeletonCount: trackCount,
+          enrichedCount: 0,
+          primaryProvider: null,
+          providerPlaylists: []
+        },
+        isGenerating: true
+      })),
+
+      setProviderStarted: (provider) => set((state) => ({
+        generationProgress: {
+          ...state.generationProgress,
+          activeProviders: state.generationProgress.activeProviders.includes(provider)
+            ? state.generationProgress.activeProviders
+            : [...state.generationProgress.activeProviders, provider]
+        }
+      })),
+
+      receivePrimaryResult: (provider, tracks) => set((state) => {
+        // Update playlist with primary result
+        const currentSet = state.currentSet || {
+          id: `set-${Date.now()}`,
+          name: 'Untitled Set',
+          playlist: [],
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+
+        return {
+          generationProgress: {
+            ...state.generationProgress,
+            primaryProvider: provider,
+            completedProviders: [...state.generationProgress.completedProviders, provider],
+            activeProviders: state.generationProgress.activeProviders.filter(p => p !== provider),
+            providerPlaylists: [
+              ...state.generationProgress.providerPlaylists,
+              { provider, tracks, receivedAt: new Date() }
+            ]
+          },
+          currentSet: {
+            ...currentSet,
+            playlist: tracks,
+            updatedAt: new Date()
+          }
+        }
+      }),
+
+      receiveAlternativeResult: (provider, tracks) => set((state) => ({
+        generationProgress: {
+          ...state.generationProgress,
+          completedProviders: [...state.generationProgress.completedProviders, provider],
+          activeProviders: state.generationProgress.activeProviders.filter(p => p !== provider),
+          providerPlaylists: [
+            ...state.generationProgress.providerPlaylists,
+            { provider, tracks, receivedAt: new Date() }
+          ]
+        }
+      })),
+
+      setProviderFailed: (provider, error) => set((state) => ({
+        generationProgress: {
+          ...state.generationProgress,
+          failedProviders: [...state.generationProgress.failedProviders, provider],
+          activeProviders: state.generationProgress.activeProviders.filter(p => p !== provider)
+        }
+      })),
+
+      enrichTrack: (provider, index, trackUpdate) => set((state) => {
+        // Only update if this is the primary provider
+        if (state.generationProgress.primaryProvider !== provider) return state
+        if (!state.currentSet) return state
+
+        const playlist = [...state.currentSet.playlist]
+        if (index >= 0 && index < playlist.length) {
+          playlist[index] = {
+            ...playlist[index],
+            track: {
+              ...playlist[index].track,
+              ...trackUpdate
+            }
+          }
+        }
+
+        return {
+          generationProgress: {
+            ...state.generationProgress,
+            enrichedCount: state.generationProgress.enrichedCount + 1
+          },
+          currentSet: {
+            ...state.currentSet,
+            playlist
+          }
+        }
+      }),
+
+      completeGeneration: (summary) => set((state) => ({
+        generationProgress: {
+          ...state.generationProgress,
+          isGenerating: false,
+          activeProviders: []
+        },
+        isGenerating: false
+      })),
+
+      failAllGeneration: (errors) => set((state) => ({
+        generationProgress: {
+          ...state.generationProgress,
+          isGenerating: false,
+          activeProviders: [],
+          failedProviders: errors.map(e => e.provider)
+        },
+        isGenerating: false
+      })),
+
+      resetGenerationProgress: () => set((state) => ({
+        generationProgress: {
+          isGenerating: false,
+          activeProviders: [],
+          completedProviders: [],
+          failedProviders: [],
+          skeletonCount: 0,
+          enrichedCount: 0,
+          primaryProvider: null,
+          providerPlaylists: []
+        }
+      })),
+
+      // Swap entire playlist with an alternative provider's result
+      swapWithProviderAlternative: (provider) => set((state) => {
+        const alternativePlaylist = state.generationProgress.providerPlaylists.find(p => p.provider === provider)
+        if (!alternativePlaylist || !state.currentSet) return state
+
+        return {
+          currentSet: {
+            ...state.currentSet,
+            playlist: alternativePlaylist.tracks,
+            updatedAt: new Date()
+          },
+          generationProgress: {
+            ...state.generationProgress,
+            primaryProvider: provider
+          }
+        }
+      }),
 
       // Cloud Sync
       isSyncing: false,

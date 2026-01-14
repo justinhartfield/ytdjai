@@ -249,3 +249,33 @@ export interface User {
   googleAccessToken?: string
   googleRefreshToken?: string
 }
+
+// Provider alternative - a complete playlist suggestion from another AI
+export interface ProviderPlaylist {
+  provider: AIProvider
+  tracks: PlaylistNode[]
+  receivedAt: Date
+}
+
+// Generation progress state for parallel AI generation
+export interface GenerationProgress {
+  isGenerating: boolean
+  activeProviders: AIProvider[]
+  completedProviders: AIProvider[]
+  failedProviders: AIProvider[]
+  skeletonCount: number // number of ghost tracks to show
+  enrichedCount: number // tracks with YouTube data
+  primaryProvider: AIProvider | null
+  providerPlaylists: ProviderPlaylist[] // all playlists from all providers
+}
+
+// Stream event types (matching backend)
+export type StreamEvent =
+  | { event: 'started'; providers: AIProvider[] }
+  | { event: 'provider-started'; provider: AIProvider }
+  | { event: 'primary-result'; provider: AIProvider; tracks: PlaylistNode[] }
+  | { event: 'alternative-result'; provider: AIProvider; tracks: PlaylistNode[] }
+  | { event: 'provider-failed'; provider: AIProvider; error: string }
+  | { event: 'track-enriched'; provider: AIProvider; index: number; track: Partial<Track> }
+  | { event: 'complete'; summary: { primary: AIProvider | null; alternatives: AIProvider[]; failed: AIProvider[] } }
+  | { event: 'all-failed'; errors: { provider: AIProvider; error: string }[] }
