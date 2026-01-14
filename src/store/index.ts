@@ -10,7 +10,16 @@ import type {
   AIConstraints,
   ArcTemplate,
   User,
-  NodeState
+  NodeState,
+  WeightedPhrase,
+  EnergyPreset,
+  ContentMode,
+  LengthTarget,
+  VocalDensity,
+  ContextTokens,
+  AnchorTrack,
+  SimilarPlaylistRef,
+  PromptTemplate
 } from '@/types'
 
 // Player State
@@ -39,6 +48,45 @@ interface ExtendedConstraints {
   activeDecades: string[]
   discovery: number
   blacklist: string[]
+}
+
+// Generation Controls State (new advanced features)
+interface GenerationControls {
+  // Multi-phrase blending (Feature 5)
+  weightedPhrases: WeightedPhrase[]
+
+  // Negative prompting (Feature 6)
+  avoidConcepts: string[]
+
+  // Length & runtime target (Feature 11)
+  lengthTarget: LengthTarget
+
+  // Energy & tempo presets (Feature 12)
+  energyPreset: EnergyPreset
+
+  // Content mode (Feature 13)
+  contentMode: ContentMode
+
+  // Vocal density (Feature 14)
+  vocalDensity: VocalDensity
+
+  // Anchor tracks (Feature 16)
+  anchorTracks: AnchorTrack[]
+
+  // Similar playlist hybrid (Feature 17)
+  similarPlaylist: SimilarPlaylistRef | null
+
+  // Context tokens (Feature 10)
+  contextTokens: ContextTokens
+
+  // Paragraph/poem mode (Feature 9)
+  longFormInput: string
+
+  // Applied prompt templates (Feature 7)
+  appliedTemplates: PromptTemplate[]
+
+  // Emoji support flag (Feature 8) - parsed from prompt automatically
+  emojiVibesEnabled: boolean
 }
 
 // YTDJ Store Interface (simplified for main app)
@@ -101,6 +149,23 @@ interface YTDJState {
   // Active Arc Template
   activeArcTemplate: string
   setActiveArcTemplate: (templateId: string) => void
+
+  // Generation Controls (new advanced features)
+  generationControls: GenerationControls
+  setGenerationControls: (updates: Partial<GenerationControls>) => void
+  addWeightedPhrase: (phrase: WeightedPhrase) => void
+  removeWeightedPhrase: (index: number) => void
+  updateWeightedPhrase: (index: number, updates: Partial<WeightedPhrase>) => void
+  addAvoidConcept: (concept: string) => void
+  removeAvoidConcept: (index: number) => void
+  addAnchorTrack: (track: AnchorTrack) => void
+  removeAnchorTrack: (id: string) => void
+  togglePromptTemplate: (template: PromptTemplate) => void
+  setContextToken: <K extends keyof ContextTokens>(key: K, value: ContextTokens[K]) => void
+  clearContextToken: (key: keyof ContextTokens) => void
+  setVocalDensity: (key: keyof VocalDensity, value: number) => void
+  setSimilarPlaylist: (playlist: SimilarPlaylistRef | null) => void
+  setLongFormInput: (text: string) => void
 
   // Initialize
   initializeStore: () => void
@@ -385,6 +450,120 @@ export const useYTDJStore = create<YTDJState>()(
       activeArcTemplate: 'mountain',
       setActiveArcTemplate: (templateId) => set({ activeArcTemplate: templateId }),
 
+      // Generation Controls (new advanced features)
+      generationControls: {
+        weightedPhrases: [],
+        avoidConcepts: [],
+        lengthTarget: { type: 'runtime', minutes: 45 },
+        energyPreset: 'custom',
+        contentMode: 'explicit-ok',
+        vocalDensity: {
+          instrumentalVsVocal: 50,
+          hookyVsAtmospheric: 50,
+          lyricClarity: 50
+        },
+        anchorTracks: [],
+        similarPlaylist: null,
+        contextTokens: {},
+        longFormInput: '',
+        appliedTemplates: [],
+        emojiVibesEnabled: true
+      },
+      setGenerationControls: (updates) => set((state) => ({
+        generationControls: { ...state.generationControls, ...updates }
+      })),
+      addWeightedPhrase: (phrase) => set((state) => ({
+        generationControls: {
+          ...state.generationControls,
+          weightedPhrases: [...state.generationControls.weightedPhrases, phrase]
+        }
+      })),
+      removeWeightedPhrase: (index) => set((state) => ({
+        generationControls: {
+          ...state.generationControls,
+          weightedPhrases: state.generationControls.weightedPhrases.filter((_, i) => i !== index)
+        }
+      })),
+      updateWeightedPhrase: (index, updates) => set((state) => ({
+        generationControls: {
+          ...state.generationControls,
+          weightedPhrases: state.generationControls.weightedPhrases.map((p, i) =>
+            i === index ? { ...p, ...updates } : p
+          )
+        }
+      })),
+      addAvoidConcept: (concept) => set((state) => ({
+        generationControls: {
+          ...state.generationControls,
+          avoidConcepts: [...state.generationControls.avoidConcepts, concept]
+        }
+      })),
+      removeAvoidConcept: (index) => set((state) => ({
+        generationControls: {
+          ...state.generationControls,
+          avoidConcepts: state.generationControls.avoidConcepts.filter((_, i) => i !== index)
+        }
+      })),
+      addAnchorTrack: (track) => set((state) => ({
+        generationControls: {
+          ...state.generationControls,
+          anchorTracks: state.generationControls.anchorTracks.length < 5
+            ? [...state.generationControls.anchorTracks, track]
+            : state.generationControls.anchorTracks
+        }
+      })),
+      removeAnchorTrack: (id) => set((state) => ({
+        generationControls: {
+          ...state.generationControls,
+          anchorTracks: state.generationControls.anchorTracks.filter((t) => t.id !== id)
+        }
+      })),
+      togglePromptTemplate: (template) => set((state) => {
+        const templates = state.generationControls.appliedTemplates
+        const isActive = templates.includes(template)
+        return {
+          generationControls: {
+            ...state.generationControls,
+            appliedTemplates: isActive
+              ? templates.filter(t => t !== template)
+              : [...templates, template]
+          }
+        }
+      }),
+      setContextToken: (key, value) => set((state) => ({
+        generationControls: {
+          ...state.generationControls,
+          contextTokens: { ...state.generationControls.contextTokens, [key]: value }
+        }
+      })),
+      clearContextToken: (key) => set((state) => {
+        const { [key]: _, ...rest } = state.generationControls.contextTokens
+        return {
+          generationControls: {
+            ...state.generationControls,
+            contextTokens: rest
+          }
+        }
+      }),
+      setVocalDensity: (key, value) => set((state) => ({
+        generationControls: {
+          ...state.generationControls,
+          vocalDensity: { ...state.generationControls.vocalDensity, [key]: value }
+        }
+      })),
+      setSimilarPlaylist: (playlist) => set((state) => ({
+        generationControls: {
+          ...state.generationControls,
+          similarPlaylist: playlist
+        }
+      })),
+      setLongFormInput: (text) => set((state) => ({
+        generationControls: {
+          ...state.generationControls,
+          longFormInput: text
+        }
+      })),
+
       // Initialize
       initializeStore: () => {
         const state = get()
@@ -521,6 +700,7 @@ export const useYTDJStore = create<YTDJState>()(
         currentSet: state.currentSet,
         constraints: state.constraints,
         activeArcTemplate: state.activeArcTemplate,
+        generationControls: state.generationControls,
       }),
     }
   )

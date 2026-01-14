@@ -94,6 +94,62 @@ export interface Set {
   coverArt?: string // URL or data URI for the arrangement's cover art
 }
 
+// Weighted prompt phrase for multi-phrase blending
+export interface WeightedPhrase {
+  phrase: string
+  weight: number // 0-100, will be normalized
+}
+
+// Energy/tempo preset types
+export type EnergyPreset = 'no-slow-songs' | 'keep-it-mellow' | 'mid-tempo-groove' | 'bpm-ramp' | 'custom'
+
+// Content rating mode
+export type ContentMode = 'clean' | 'explicit-ok' | 'family'
+
+// Length target type - either track count or runtime
+export type LengthTarget =
+  | { type: 'tracks'; count: 15 | 30 | 60 }
+  | { type: 'runtime'; minutes: 45 | 120 }
+
+// Vocal density settings
+export interface VocalDensity {
+  instrumentalVsVocal: number // 0 = instrumental, 100 = vocal-heavy
+  hookyVsAtmospheric: number // 0 = hooky/catchy, 100 = atmospheric
+  lyricClarity: number // 0 = clear lyrics, 100 = abstract/buried vocals
+}
+
+// Context tokens for enhanced generation
+export interface ContextTokens {
+  timeOfDay?: 'morning' | 'afternoon' | 'evening' | 'night' | 'late-night'
+  season?: 'spring' | 'summer' | 'fall' | 'winter'
+  weather?: 'sunny' | 'cloudy' | 'rainy' | 'stormy' | 'snowy'
+  activity?: 'workout' | 'study' | 'work' | 'dinner-party' | 'driving' | 'relaxing' | 'dancing'
+  socialContext?: 'solo' | 'friends' | 'date' | 'party' | 'background'
+}
+
+// Anchor track (guaranteed include)
+export interface AnchorTrack {
+  id: string
+  title: string
+  artist: string
+  youtubeId?: string
+  thumbnail?: string
+}
+
+// Similar playlist reference for hybrid generation
+export interface SimilarPlaylistRef {
+  url?: string // Spotify/YouTube playlist URL
+  modifier?: string // e.g., "but more 'sunrise hope'"
+}
+
+// Quick prompt template
+export type PromptTemplate =
+  | 'make-it-cinematic'
+  | 'make-it-danceable'
+  | 'make-it-intimate'
+  | 'make-it-instrumental'
+  | 'make-it-90s-soundtrack'
+
 export interface AIConstraints {
   energyTolerance?: number // 1-20 - how strict energy matching should be
   novelty?: number // 0-100 (familiar to deep cuts) - maps to discovery
@@ -115,6 +171,41 @@ export interface AIConstraints {
   activeDecades?: string[] // which decades to include ('80s', '90s', '00s', '10s', '20s')
   discovery?: number // 0-100 - chart hits (0) to underground (100)
   blacklist?: string[] // artists/genres to exclude
+
+  // === NEW GENERATION CONTROLS ===
+
+  // Multi-phrase blending (Feature 5)
+  weightedPhrases?: WeightedPhrase[]
+
+  // Negative prompting (Feature 6)
+  avoidConcepts?: string[] // "sad breakup", "country", etc.
+
+  // Length & runtime target (Feature 11)
+  lengthTarget?: LengthTarget
+
+  // Energy & tempo presets (Feature 12)
+  energyPreset?: EnergyPreset
+
+  // Content mode (Feature 13)
+  contentMode?: ContentMode
+
+  // Vocal density (Feature 14)
+  vocalDensity?: VocalDensity
+
+  // Anchor tracks (Feature 16)
+  anchorTracks?: AnchorTrack[]
+
+  // Similar playlist hybrid (Feature 17)
+  similarPlaylist?: SimilarPlaylistRef
+
+  // Context tokens (Feature 10)
+  contextTokens?: ContextTokens
+
+  // Paragraph/poem mode (Feature 9) - stores distilled attributes from long text
+  longFormInput?: string
+
+  // Applied prompt templates (Feature 7)
+  appliedTemplates?: PromptTemplate[]
 }
 
 export interface GeneratePlaylistRequest {

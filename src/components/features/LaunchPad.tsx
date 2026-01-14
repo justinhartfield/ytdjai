@@ -1,13 +1,18 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { motion } from 'framer-motion'
-import { Sparkles, Check, Heart, Clock, Settings } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Sparkles, Check, Heart, Clock, Settings, ChevronDown, ChevronUp, Sliders } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
 import { generatePlaylist } from '@/lib/ai-service'
 import type { AIConstraints } from '@/types'
 import { AIConstraintsDrawer } from './AIConstraintsDrawer'
+import { AdvancedPromptPanel } from './AdvancedPromptPanel'
+import { GenerationControls } from './GenerationControls'
+import { AnchorTracks } from './AnchorTracks'
+import { ContextTokens } from './ContextTokens'
+import { SimilarPlaylist } from './SimilarPlaylist'
 
 const VIBE_TAGS = [
   'CYBERPUNK',
@@ -70,8 +75,9 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
   const [energyRange, setEnergyRange] = useState({ min: 20, max: 80 })
   const [isGenerating, setIsGenerating] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
-  const { aiProvider, updateSetWithPrompt, setIsGenerating: setStoreGenerating, constraints } = useYTDJStore()
+  const { aiProvider, updateSetWithPrompt, setIsGenerating: setStoreGenerating, constraints, generationControls } = useYTDJStore()
 
   const toggleTag = (tag: string) => {
     setSelectedTags(prev =>
@@ -96,22 +102,116 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
     const arcTemplate = ARC_TEMPLATES.find(a => a.id === selectedArc)
     const arcText = arcTemplate ? `Energy arc: ${arcTemplate.name.toLowerCase()} - ${arcTemplate.description}` : ''
 
+    // Build weighted phrases text
+    const weightedPhrasesText = generationControls.weightedPhrases.length > 0
+      ? generationControls.weightedPhrases.map(p => {
+          const totalWeight = generationControls.weightedPhrases.reduce((sum, wp) => sum + wp.weight, 0)
+          const percentage = Math.round((p.weight / totalWeight) * 100)
+          return `"${p.phrase}" (${percentage}%)`
+        }).join(' + ')
+      : ''
+
+    // Build avoid concepts text
+    const avoidText = generationControls.avoidConcepts.length > 0
+      ? `AVOID: ${generationControls.avoidConcepts.join(', ')}`
+      : ''
+
+    // Build prompt templates text
+    const templatesText = generationControls.appliedTemplates.length > 0
+      ? `Style modifiers: ${generationControls.appliedTemplates.map(t => t.replace(/-/g, ' ')).join(', ')}`
+      : ''
+
+    // Build context tokens text
+    const contextParts: string[] = []
+    if (generationControls.contextTokens.timeOfDay) contextParts.push(`time: ${generationControls.contextTokens.timeOfDay}`)
+    if (generationControls.contextTokens.season) contextParts.push(`season: ${generationControls.contextTokens.season}`)
+    if (generationControls.contextTokens.weather) contextParts.push(`weather: ${generationControls.contextTokens.weather}`)
+    if (generationControls.contextTokens.activity) contextParts.push(`activity: ${generationControls.contextTokens.activity}`)
+    if (generationControls.contextTokens.socialContext) contextParts.push(`vibe: ${generationControls.contextTokens.socialContext}`)
+    const contextText = contextParts.length > 0 ? `Context: ${contextParts.join(', ')}` : ''
+
+    // Build anchor tracks text
+    const anchorText = generationControls.anchorTracks.length > 0
+      ? `MUST INCLUDE these tracks: ${generationControls.anchorTracks.map(t => `"${t.title}" by ${t.artist}`).join(', ')}`
+      : ''
+
+    // Build similar playlist text
+    const similarText = generationControls.similarPlaylist?.url
+      ? `Base on playlist: ${generationControls.similarPlaylist.url}${generationControls.similarPlaylist.modifier ? `, but ${generationControls.similarPlaylist.modifier}` : ''}`
+      : ''
+
+    // Build vocal density text
+    const vocalText = (() => {
+      const parts: string[] = []
+      const { vocalDensity } = generationControls
+      if (vocalDensity.instrumentalVsVocal < 30) parts.push('prefer instrumental tracks')
+      else if (vocalDensity.instrumentalVsVocal > 70) parts.push('prefer vocal-heavy tracks')
+      if (vocalDensity.hookyVsAtmospheric < 30) parts.push('catchy, hooky songs')
+      else if (vocalDensity.hookyVsAtmospheric > 70) parts.push('atmospheric, ambient textures')
+      if (vocalDensity.lyricClarity < 30) parts.push('clear, narrative lyrics')
+      else if (vocalDensity.lyricClarity > 70) parts.push('abstract, buried vocals')
+      return parts.length > 0 ? `Vocal preferences: ${parts.join(', ')}` : ''
+    })()
+
+    // Build energy preset text
+    const energyPresetText = (() => {
+      switch (generationControls.energyPreset) {
+        case 'no-slow-songs': return 'Keep all tracks above 50 energy, no ballads or slow songs'
+        case 'keep-it-mellow': return 'Keep energy soft and mellow throughout, nothing too intense'
+        case 'mid-tempo-groove': return 'Maintain mid-tempo groove between 60-75 energy'
+        case 'bpm-ramp': return 'Gradually increase BPM and energy throughout the set'
+        default: return ''
+      }
+    })()
+
+    // Build content mode text
+    const contentText = (() => {
+      switch (generationControls.contentMode) {
+        case 'clean': return 'Only clean, radio-safe tracks, no explicit content'
+        case 'family': return 'Family-friendly tracks only, appropriate for all ages'
+        default: return ''
+      }
+    })()
+
+    // Calculate track count based on length target
+    let trackCount: number
+    let durationTarget: number
+    if (generationControls.lengthTarget.type === 'tracks') {
+      trackCount = generationControls.lengthTarget.count
+      durationTarget = trackCount * 4 // Estimate ~4 min per track
+    } else {
+      durationTarget = generationControls.lengthTarget.minutes
+      trackCount = Math.round(durationTarget / 4) // Roughly 4 min per track
+    }
+
+    // Use the legacy duration if no advanced controls used
+    const effectiveDuration = generationControls.lengthTarget ? durationTarget : duration
+    const effectiveTrackCount = generationControls.lengthTarget ? trackCount : Math.round(duration / 5)
+
     const fullPrompt = [
       prompt || 'Create an amazing DJ set',
+      weightedPhrasesText && `Blend these vibes: ${weightedPhrasesText}`,
+      generationControls.longFormInput && `Inspired by: "${generationControls.longFormInput.substring(0, 500)}${generationControls.longFormInput.length > 500 ? '...' : ''}"`,
       tagsText && `Style: ${tagsText}`,
+      templatesText,
       arcText,
-      `Duration: approximately ${duration} minutes`,
+      energyPresetText,
+      `Duration: approximately ${effectiveDuration} minutes`,
       `Energy range: ${energyRange.min}-${energyRange.max}`,
-      novelty > 66 ? 'Include deep cuts and obscure tracks' : novelty < 33 ? 'Focus on well-known hits' : 'Mix of familiar and fresh tracks'
+      novelty > 66 ? 'Include deep cuts and obscure tracks' : novelty < 33 ? 'Focus on well-known hits' : 'Mix of familiar and fresh tracks',
+      contentText,
+      vocalText,
+      contextText,
+      anchorText,
+      similarText,
+      avoidText
     ].filter(Boolean).join('. ')
-
-    const trackCount = Math.round(duration / 5) // Roughly 5 min per track
 
     try {
       const result = await generatePlaylist({
         prompt: fullPrompt,
         constraints: {
-          trackCount,
+          trackCount: effectiveTrackCount,
           energyRange,
           novelty,
           // Include all extended constraints from AI Settings
@@ -121,7 +221,19 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
           artistDiversity: constraints.diversity,
           discovery: constraints.discovery,
           activeDecades: constraints.activeDecades,
-          blacklist: constraints.blacklist
+          blacklist: constraints.blacklist,
+          // Include new generation controls
+          weightedPhrases: generationControls.weightedPhrases,
+          avoidConcepts: generationControls.avoidConcepts,
+          lengthTarget: generationControls.lengthTarget,
+          energyPreset: generationControls.energyPreset,
+          contentMode: generationControls.contentMode,
+          vocalDensity: generationControls.vocalDensity,
+          anchorTracks: generationControls.anchorTracks,
+          similarPlaylist: generationControls.similarPlaylist || undefined,
+          contextTokens: generationControls.contextTokens,
+          longFormInput: generationControls.longFormInput,
+          appliedTemplates: generationControls.appliedTemplates
         } as AIConstraints,
         provider: aiProvider
       })
@@ -136,7 +248,7 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
       setIsGenerating(false)
       setStoreGenerating(false)
     }
-  }, [prompt, selectedTags, selectedArc, duration, energyRange, novelty, aiProvider, constraints, updateSetWithPrompt, setStoreGenerating, onComplete])
+  }, [prompt, selectedTags, selectedArc, duration, energyRange, novelty, aiProvider, constraints, generationControls, updateSetWithPrompt, setStoreGenerating, onComplete])
 
   return (
     <div className="min-h-screen bg-[#05060f] text-white overflow-auto">
@@ -287,6 +399,88 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
                 </div>
               </div>
             </div>
+
+            {/* Advanced Generation Controls Toggle */}
+            <button
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className={cn(
+                'w-full flex items-center justify-between px-5 py-4 rounded-2xl border transition-all',
+                showAdvanced
+                  ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-purple-500/30'
+                  : 'bg-[#0a0c1c]/80 backdrop-blur-xl border-white/10 hover:border-white/20'
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  'w-8 h-8 rounded-lg flex items-center justify-center',
+                  showAdvanced ? 'bg-purple-500/20' : 'bg-white/10'
+                )}>
+                  <Sliders className={cn(
+                    'w-4 h-4',
+                    showAdvanced ? 'text-purple-400' : 'text-white/50'
+                  )} />
+                </div>
+                <div className="text-left">
+                  <h3 className={cn(
+                    'text-xs font-bold tracking-wider',
+                    showAdvanced ? 'text-purple-400' : 'text-white'
+                  )}>
+                    ADVANCED GENERATION
+                  </h3>
+                  <p className="text-[10px] text-white/40">
+                    Vibe blending, anchors, context & more
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {(generationControls.weightedPhrases.length > 0 ||
+                  generationControls.avoidConcepts.length > 0 ||
+                  generationControls.anchorTracks.length > 0 ||
+                  generationControls.appliedTemplates.length > 0 ||
+                  Object.keys(generationControls.contextTokens).length > 0 ||
+                  generationControls.similarPlaylist?.url ||
+                  generationControls.longFormInput) && (
+                  <span className="text-[10px] font-bold text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded-full">
+                    ACTIVE
+                  </span>
+                )}
+                {showAdvanced ? (
+                  <ChevronUp className="w-5 h-5 text-white/40" />
+                ) : (
+                  <ChevronDown className="w-5 h-5 text-white/40" />
+                )}
+              </div>
+            </button>
+
+            {/* Advanced Controls Panel */}
+            <AnimatePresence>
+              {showAdvanced && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="overflow-hidden"
+                >
+                  <div className="space-y-4 pt-2">
+                    {/* Advanced Prompt Features */}
+                    <AdvancedPromptPanel />
+
+                    {/* Generation Controls */}
+                    <GenerationControls />
+
+                    {/* Anchor Tracks */}
+                    <AnchorTracks />
+
+                    {/* Context Tokens */}
+                    <ContextTokens />
+
+                    {/* Similar Playlist */}
+                    <SimilarPlaylist />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Right Column - Step 2 */}
