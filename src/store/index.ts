@@ -382,7 +382,7 @@ export const useYTDJStore = create<YTDJState>()(
       canRedo: () => get().historyIndex < get().history.length - 1,
 
       // Active Arc Template
-      activeArcTemplate: 'warmup',
+      activeArcTemplate: 'mountain',
       setActiveArcTemplate: (templateId) => set({ activeArcTemplate: templateId }),
 
       // Initialize
@@ -790,5 +790,33 @@ export const arcTemplates: ArcTemplate[] = [
     description: 'Deep groove to sunrise build',
     svgPath: 'M0,15 Q30,18 50,15 Q70,10 85,5 Q95,8 100,12',
     energyProfile: [65, 70, 72, 70, 72, 75, 80, 90, 88, 78],
+  },
+  {
+    id: 'explosive',
+    name: 'Explosive Start',
+    description: 'Maximum energy opener, gradual wind down',
+    svgPath: 'M0,5 Q10,5 20,8 Q40,15 60,18 Q80,22 100,25',
+    energyProfile: [100, 98, 92, 85, 75, 65, 55, 45, 38, 30],
+  },
+  {
+    id: 'tension-release',
+    name: 'Tension & Release',
+    description: 'Build tension, explosive release, recover',
+    svgPath: 'M0,20 Q20,15 40,8 Q50,5 55,5 Q60,20 80,22 Q90,20 100,18',
+    energyProfile: [50, 60, 75, 88, 100, 100, 45, 40, 50, 55],
+  },
+  {
+    id: 'chill-vibes',
+    name: 'Chill Vibes',
+    description: 'Low energy ambient journey',
+    svgPath: 'M0,20 Q25,22 50,18 Q75,22 100,20',
+    energyProfile: [35, 40, 45, 38, 42, 35, 40, 45, 42, 38],
+  },
+  {
+    id: 'festival-closer',
+    name: 'Festival Closer',
+    description: 'Epic build to massive finale',
+    svgPath: 'M0,25 Q20,22 40,18 Q60,12 80,8 Q90,5 100,5',
+    energyProfile: [40, 50, 60, 70, 78, 85, 92, 98, 100, 100],
   },
 ]

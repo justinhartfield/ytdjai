@@ -3,8 +3,8 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Zap, Undo2, Redo2, Download, Play, Pause, SkipBack, SkipForward,
-  Lock, X, RefreshCw, Plus, Sparkles, Info, Loader2, Shuffle, Cloud, FolderOpen, GripVertical,
+  Undo2, Redo2, Play, Pause, SkipBack, SkipForward,
+  Lock, X, Plus, Sparkles, Info, Loader2, Cloud, FolderOpen, GripVertical,
   ChevronLeft, ChevronRight
 } from 'lucide-react'
 import { cn, formatDuration } from '@/lib/utils'
@@ -19,14 +19,6 @@ import { AIControlsSidebar } from './AIControlsSidebar'
 import { SaveSetDialog } from './SaveSetDialog'
 import { BrowseSetsModal } from './BrowseSetsModal'
 import type { PlaylistNode, Track, Set, AIConstraints, AlternativeTrack } from '@/types'
-
-// Local ARC_TEMPLATES that matches the store format
-const ARC_TEMPLATES = [
-  { id: 'warmup', name: 'Warm-up Peak', svg: 'M0,25 Q50,5 100,25' },
-  { id: 'burn', name: 'Slow Burn', svg: 'M0,28 L100,5' },
-  { id: 'valley', name: 'The Valley', svg: 'M0,5 Q50,28 100,5' },
-  { id: 'chaos', name: 'Pulse Chaos', svg: 'M0,15 L20,5 L40,25 L60,10 L80,28 L100,15' }
-]
 
 interface SessionViewProps {
   onViewChange: (view: 'arrangement' | 'session') => void
@@ -72,7 +64,6 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [showBrowseSets, setShowBrowseSets] = useState(false)
   const [isRegenerating, setIsRegenerating] = useState(false)
-  const [isSmoothing, setIsSmoothing] = useState(false)
   const [addingTrackAtIndex, setAddingTrackAtIndex] = useState<number | null>(null)
   const [energyTolerance, setEnergyTolerance] = useState(10)
   const [targetTrackCount, setTargetTrackCount] = useState(8)
@@ -92,9 +83,6 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
   // Player state from store
   const { isPlaying, playingNodeIndex, currentTime, duration } = player
   const activeTrackIndex = playingNodeIndex ?? 0
-
-  // Get the current arc template
-  const currentArc = ARC_TEMPLATES.find(arc => arc.id === activeArcTemplate) || ARC_TEMPLATES[0]
 
   // Convert playlist to session columns - use alternatives from AI generation
   const sessionColumns: SessionColumn[] = useMemo(() => {
@@ -288,74 +276,79 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
     }
   }, [isRegenerating, currentSet, playlist, constraints, aiProvider, updateSetWithPrompt])
 
-  // Global Ops: Auto-Smooth Transitions
-  const handleAutoSmooth = useCallback(() => {
-    if (isSmoothing || playlist.length < 2) return
+  // Fit songs to arc - rearrange unlocked tracks to best match the energy curve
+  const handleFitToArc = useCallback((arcId: string) => {
+    if (playlist.length < 2) return
 
-    setIsSmoothing(true)
-    try {
-      // Sort tracks by Energy to create smooth transitions
-      const unlockedWithIndex = playlist
-        .map((node, index) => ({ node, index, isLocked: node.isLocked }))
-        .filter(item => !item.isLocked)
+    const arc = arcTemplates.find(a => a.id === arcId)
+    if (!arc) return
 
-      const lockedPositions = playlist
-        .map((node, index) => ({ node, index }))
-        .filter(item => item.node.isLocked)
+    // Interpolate the arc's energy profile to match the playlist length
+    const targetEnergies: number[] = []
+    for (let i = 0; i < playlist.length; i++) {
+      const position = i / (playlist.length - 1) // 0 to 1
+      const profileIndex = position * (arc.energyProfile.length - 1)
+      const lowerIndex = Math.floor(profileIndex)
+      const upperIndex = Math.ceil(profileIndex)
+      const fraction = profileIndex - lowerIndex
 
-      // Get energies of locked tracks to understand constraints
-      const lockedEnergies = lockedPositions.map(item => ({
-        index: item.index,
-        energy: item.node.targetEnergy || item.node.track.energy || 50
-      }))
+      if (upperIndex >= arc.energyProfile.length) {
+        targetEnergies.push(arc.energyProfile[arc.energyProfile.length - 1])
+      } else {
+        const interpolatedEnergy = arc.energyProfile[lowerIndex] * (1 - fraction) + arc.energyProfile[upperIndex] * fraction
+        targetEnergies.push(Math.round(interpolatedEnergy))
+      }
+    }
 
-      // Sort unlocked tracks by Energy
-      unlockedWithIndex.sort((a, b) => {
-        const energyA = a.node.targetEnergy || a.node.track.energy || 50
-        const energyB = b.node.targetEnergy || b.node.track.energy || 50
-        return energyA - energyB
-      })
+    // Separate locked and unlocked tracks
+    const lockedPositions = new Map<number, PlaylistNode>()
+    const unlockedTracks: { node: PlaylistNode; energy: number }[] = []
 
-      // Rebuild playlist with smooth energy progression
-      const newPlaylist = [...playlist]
-      let unlockedIdx = 0
+    playlist.forEach((node, index) => {
+      if (node.isLocked) {
+        lockedPositions.set(index, node)
+      } else {
+        unlockedTracks.push({
+          node,
+          energy: node.track.energy || 50
+        })
+      }
+    })
 
-      for (let i = 0; i < newPlaylist.length; i++) {
-        if (!newPlaylist[i].isLocked && unlockedIdx < unlockedWithIndex.length) {
-          newPlaylist[i] = unlockedWithIndex[unlockedIdx].node
-          unlockedIdx++
+    // For each unlocked position, find the best matching unlocked track
+    const newPlaylist: PlaylistNode[] = new Array(playlist.length)
+    const usedTracks = new Set<string>()
+
+    // First, place locked tracks
+    lockedPositions.forEach((node, index) => {
+      newPlaylist[index] = node
+    })
+
+    // Then, for each unlocked position, find the best matching track
+    for (let i = 0; i < playlist.length; i++) {
+      if (lockedPositions.has(i)) continue
+
+      const targetEnergy = targetEnergies[i]
+      let bestMatch: { node: PlaylistNode; energy: number } | null = null
+      let bestDiff = Infinity
+
+      for (const track of unlockedTracks) {
+        if (usedTracks.has(track.node.id)) continue
+        const diff = Math.abs(track.energy - targetEnergy)
+        if (diff < bestDiff) {
+          bestDiff = diff
+          bestMatch = track
         }
       }
 
-      updatePlaylist(newPlaylist)
-    } catch (error) {
-      console.error('Failed to smooth transitions:', error)
-    } finally {
-      setIsSmoothing(false)
+      if (bestMatch) {
+        newPlaylist[i] = {
+          ...bestMatch.node,
+          targetEnergy: targetEnergy
+        }
+        usedTracks.add(bestMatch.node.id)
+      }
     }
-  }, [isSmoothing, playlist, updatePlaylist])
-
-  // Global Ops: Randomize Unlocked
-  const handleRandomizeUnlocked = useCallback(() => {
-    const unlockedIndices = playlist
-      .map((node, index) => ({ node, index }))
-      .filter(item => !item.node.isLocked)
-      .map(item => item.index)
-
-    if (unlockedIndices.length < 2) return
-
-    // Fisher-Yates shuffle for unlocked tracks
-    const newPlaylist = [...playlist]
-    const unlockedNodes = unlockedIndices.map(i => newPlaylist[i])
-
-    for (let i = unlockedNodes.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [unlockedNodes[i], unlockedNodes[j]] = [unlockedNodes[j], unlockedNodes[i]]
-    }
-
-    unlockedIndices.forEach((originalIndex, i) => {
-      newPlaylist[originalIndex] = unlockedNodes[i]
-    })
 
     updatePlaylist(newPlaylist)
   }, [playlist, updatePlaylist])
@@ -572,10 +565,8 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
         {/* Left Sidebar: AI Controls */}
         <AIControlsSidebar
           onRegenerate={(mode, prompt) => handleRegenerateGrid(prompt)}
-          onAutoSmooth={handleAutoSmooth}
-          onRandomizeUnlocked={handleRandomizeUnlocked}
+          onFitToArc={handleFitToArc}
           isGenerating={isRegenerating}
-          isSmoothing={isSmoothing}
           energyTolerance={energyTolerance}
           onEnergyToleranceChange={setEnergyTolerance}
           targetTrackCount={targetTrackCount}

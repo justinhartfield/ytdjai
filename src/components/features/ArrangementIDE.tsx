@@ -8,7 +8,7 @@ import {
   Volume2, VolumeX, Plus, Clock, Cloud, FolderOpen
 } from 'lucide-react'
 import { cn, formatDuration } from '@/lib/utils'
-import { useYTDJStore } from '@/store'
+import { useYTDJStore, arcTemplates } from '@/store'
 import { generatePlaylist, swapTrack } from '@/lib/ai-service'
 import { formatTime } from './YouTubePlayer'
 import { IconSidebar } from './IconSidebar'
@@ -19,13 +19,6 @@ import { AIControlsSidebar } from './AIControlsSidebar'
 import { SaveSetDialog } from './SaveSetDialog'
 import { BrowseSetsModal } from './BrowseSetsModal'
 import type { PlaylistNode, Track, AIConstraints, Set } from '@/types'
-
-const ARC_TEMPLATES = [
-  { id: 'warmup', name: 'Warm-up Peak', svg: 'M0,25 Q50,5 100,25' },
-  { id: 'burn', name: 'Slow Burn', svg: 'M0,28 L100,5' },
-  { id: 'valley', name: 'The Valley', svg: 'M0,5 Q50,28 100,5' },
-  { id: 'chaos', name: 'Pulse Chaos', svg: 'M0,15 L20,5 L40,25 L60,10 L80,28 L100,15' }
-]
 
 interface ArrangementIDEProps {
   onViewChange: (view: 'arrangement' | 'session') => void
@@ -393,6 +386,83 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
     }
   }, [currentSet?.prompt, isGenerating, targetTrackCount, playlist, aiProvider, constraints, updateSetWithPrompt, setIsGenerating])
 
+  // Fit songs to arc - rearrange unlocked tracks to best match the energy curve
+  const handleFitToArc = useCallback((arcId: string) => {
+    if (playlist.length < 2) return
+
+    const arc = arcTemplates.find(a => a.id === arcId)
+    if (!arc) return
+
+    // Interpolate the arc's energy profile to match the playlist length
+    const targetEnergies: number[] = []
+    for (let i = 0; i < playlist.length; i++) {
+      const position = i / (playlist.length - 1) // 0 to 1
+      const profileIndex = position * (arc.energyProfile.length - 1)
+      const lowerIndex = Math.floor(profileIndex)
+      const upperIndex = Math.ceil(profileIndex)
+      const fraction = profileIndex - lowerIndex
+
+      if (upperIndex >= arc.energyProfile.length) {
+        targetEnergies.push(arc.energyProfile[arc.energyProfile.length - 1])
+      } else {
+        const interpolatedEnergy = arc.energyProfile[lowerIndex] * (1 - fraction) + arc.energyProfile[upperIndex] * fraction
+        targetEnergies.push(Math.round(interpolatedEnergy))
+      }
+    }
+
+    // Separate locked and unlocked tracks
+    const lockedPositions = new Map<number, PlaylistNode>()
+    const unlockedTracks: { node: PlaylistNode; energy: number }[] = []
+
+    playlist.forEach((node, index) => {
+      if (node.isLocked) {
+        lockedPositions.set(index, node)
+      } else {
+        unlockedTracks.push({
+          node,
+          energy: node.track.energy || 50
+        })
+      }
+    })
+
+    // For each unlocked position, find the best matching unlocked track
+    const newPlaylist: PlaylistNode[] = new Array(playlist.length)
+    const usedTracks = new Set<string>()
+
+    // First, place locked tracks
+    lockedPositions.forEach((node, index) => {
+      newPlaylist[index] = node
+    })
+
+    // Then, for each unlocked position, find the best matching track
+    for (let i = 0; i < playlist.length; i++) {
+      if (lockedPositions.has(i)) continue
+
+      const targetEnergy = targetEnergies[i]
+      let bestMatch: { node: PlaylistNode; energy: number } | null = null
+      let bestDiff = Infinity
+
+      for (const track of unlockedTracks) {
+        if (usedTracks.has(track.node.id)) continue
+        const diff = Math.abs(track.energy - targetEnergy)
+        if (diff < bestDiff) {
+          bestDiff = diff
+          bestMatch = track
+        }
+      }
+
+      if (bestMatch) {
+        newPlaylist[i] = {
+          ...bestMatch.node,
+          targetEnergy: targetEnergy
+        }
+        usedTracks.add(bestMatch.node.id)
+      }
+    }
+
+    updatePlaylist(newPlaylist)
+  }, [playlist, updatePlaylist])
+
   const handleArcChange = useCallback((arcId: string) => {
     if (arcId === activeArcTemplate) return
     setPendingArcChange(arcId)
@@ -401,7 +471,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
   const confirmArcChange = useCallback(async () => {
     if (!pendingArcChange || isGenerating) return
 
-    const arc = ARC_TEMPLATES.find(a => a.id === pendingArcChange)
+    const arc = arcTemplates.find(a => a.id === pendingArcChange)
     if (!arc) return
 
     setActiveArcTemplate(pendingArcChange)
@@ -565,6 +635,7 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
               handleRegenerate(undefined, prompt)
             }
           }}
+          onFitToArc={handleFitToArc}
           isGenerating={isGenerating}
           energyTolerance={energyTolerance}
           onEnergyToleranceChange={setEnergyTolerance}
@@ -1117,14 +1188,14 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
 
               <h2 className="text-2xl font-black tracking-tighter mb-2 uppercase">Change Arc Template?</h2>
               <p className="text-gray-400 text-sm mb-6">
-                This will regenerate your entire set with the <span className="text-cyan-400 font-bold">{ARC_TEMPLATES.find(a => a.id === pendingArcChange)?.name}</span> energy arc. Your current tracks will be replaced.
+                This will regenerate your entire set with the <span className="text-cyan-400 font-bold">{arcTemplates.find(a => a.id === pendingArcChange)?.name}</span> energy arc. Your current tracks will be replaced.
               </p>
 
               {/* Preview the arc */}
               <div className="p-4 bg-white/5 rounded-xl border border-white/10 mb-6">
                 <svg className="w-full h-12" viewBox="0 0 100 30">
                   <path
-                    d={ARC_TEMPLATES.find(a => a.id === pendingArcChange)?.svg}
+                    d={arcTemplates.find(a => a.id === pendingArcChange)?.svgPath}
                     fill="none"
                     stroke="#00f2ff"
                     strokeWidth="2"

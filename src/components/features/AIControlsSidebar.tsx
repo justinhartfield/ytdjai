@@ -2,24 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import {
-  Zap, RefreshCw, Plus, Shuffle, Loader2, Waves
+  Zap, RefreshCw, Plus
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useYTDJStore } from '@/store'
-
-const ARC_TEMPLATES = [
-  { id: 'warmup', name: 'Warm-up Peak', svg: 'M0,25 Q50,5 100,25' },
-  { id: 'burn', name: 'Slow Burn', svg: 'M0,28 L100,5' },
-  { id: 'valley', name: 'The Valley', svg: 'M0,5 Q50,28 100,5' },
-  { id: 'chaos', name: 'Pulse Chaos', svg: 'M0,15 L20,5 L40,25 L60,10 L80,28 L100,15' }
-]
+import { useYTDJStore, arcTemplates } from '@/store'
 
 interface AIControlsSidebarProps {
   onRegenerate: (mode?: 'replace' | 'append', prompt?: string) => void
-  onAutoSmooth?: () => void
-  onRandomizeUnlocked?: () => void
+  onFitToArc?: (arcId: string) => void
   isGenerating: boolean
-  isSmoothing?: boolean
   energyTolerance: number
   onEnergyToleranceChange: (value: number) => void
   targetTrackCount: number
@@ -28,10 +19,8 @@ interface AIControlsSidebarProps {
 
 export function AIControlsSidebar({
   onRegenerate,
-  onAutoSmooth,
-  onRandomizeUnlocked,
+  onFitToArc,
   isGenerating,
-  isSmoothing = false,
   energyTolerance,
   onEnergyToleranceChange,
   targetTrackCount,
@@ -62,6 +51,10 @@ export function AIControlsSidebar({
     if (isGenerating) return
     setPendingArcChange(arcId)
     setActiveArcTemplate(arcId)
+    // Fit songs to the selected arc curve
+    if (onFitToArc) {
+      onFitToArc(arcId)
+    }
     // Clear pending after a short delay
     setTimeout(() => setPendingArcChange(null), 1000)
   }
@@ -148,9 +141,12 @@ export function AIControlsSidebar({
 
         {/* Arc Template Selector */}
         <div className="space-y-4">
-          <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-widest">Energy Arc Template</label>
-          <div className="grid grid-cols-2 gap-2">
-            {ARC_TEMPLATES.map((arc) => (
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-widest">Energy Arc Template</label>
+            <span className="text-[9px] text-gray-600">{arcTemplates.length} templates</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 max-h-[280px] overflow-y-auto custom-scrollbar pr-1">
+            {arcTemplates.map((arc) => (
               <button
                 key={arc.id}
                 onClick={() => handleArcChange(arc.id)}
@@ -161,16 +157,17 @@ export function AIControlsSidebar({
                     ? 'border-cyan-500/50 bg-cyan-500/5'
                     : 'border-white/5 hover:border-white/10'
                 )}
+                title={arc.description}
               >
                 <span className={cn(
-                  'text-[9px] font-bold uppercase block mb-2',
+                  'text-[9px] font-bold uppercase block mb-2 truncate',
                   activeArcTemplate === arc.id ? 'text-cyan-400' : 'text-gray-500'
                 )}>
                   {arc.name}
                 </span>
                 <svg className="w-full h-8" viewBox="0 0 100 30">
                   <path
-                    d={arc.svg}
+                    d={arc.svgPath}
                     fill="none"
                     stroke={activeArcTemplate === arc.id ? '#00f2ff' : '#444'}
                     strokeWidth="2"
@@ -258,39 +255,6 @@ export function AIControlsSidebar({
               <Plus className="w-3.5 h-3.5" />
               Add More
             </button>
-
-            {/* Auto-Smooth Transitions */}
-            {onAutoSmooth && (
-              <button
-                onClick={onAutoSmooth}
-                disabled={isSmoothing || playlist.length < 2}
-                className="py-3 px-2 bg-purple-500/20 border border-purple-500/30 text-purple-400 font-bold text-[10px] uppercase tracking-wider rounded-lg hover:bg-purple-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-              >
-                {isSmoothing ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span className="hidden xl:inline">Smoothing</span>
-                  </>
-                ) : (
-                  <>
-                    <Waves className="w-3.5 h-3.5" />
-                    <span className="hidden xl:inline">Smooth</span>
-                  </>
-                )}
-              </button>
-            )}
-
-            {/* Randomize Unlocked */}
-            {onRandomizeUnlocked && (
-              <button
-                onClick={onRandomizeUnlocked}
-                disabled={playlist.filter(n => !n.isLocked).length < 2}
-                className="py-3 px-2 bg-orange-500/20 border border-orange-500/30 text-orange-400 font-bold text-[10px] uppercase tracking-wider rounded-lg hover:bg-orange-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-              >
-                <Shuffle className="w-3.5 h-3.5" />
-                <span className="hidden xl:inline">Randomize</span>
-              </button>
-            )}
           </div>
         </div>
       </div>
