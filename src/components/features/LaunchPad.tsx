@@ -2,11 +2,12 @@
 
 import { useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Sparkles, Check, Heart, Clock } from 'lucide-react'
+import { Sparkles, Check, Heart, Clock, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
 import { generatePlaylist } from '@/lib/ai-service'
 import type { AIConstraints } from '@/types'
+import { AIConstraintsDrawer } from './AIConstraintsDrawer'
 
 const VIBE_TAGS = [
   'CYBERPUNK',
@@ -68,6 +69,7 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
   const [selectedArc, setSelectedArc] = useState('mountain')
   const [energyRange, setEnergyRange] = useState({ min: 20, max: 80 })
   const [isGenerating, setIsGenerating] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   const { aiProvider, updateSetWithPrompt, setIsGenerating: setStoreGenerating, constraints } = useYTDJStore()
 
@@ -138,6 +140,12 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
 
   return (
     <div className="min-h-screen bg-[#05060f] text-white overflow-auto">
+      {/* AI Settings Drawer */}
+      <AIConstraintsDrawer
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+      />
+
       {/* Background grid */}
       <div
         className="fixed inset-0 opacity-20"
@@ -159,7 +167,15 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
             </div>
 
             {/* Main Headline */}
-            <div className="space-y-2">
+            <div className="space-y-2 relative">
+              {/* Settings Gear Icon */}
+              <button
+                onClick={() => setShowSettings(true)}
+                className="absolute -right-2 top-0 w-10 h-10 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-cyan-500/30 flex items-center justify-center transition-all group"
+                title="AI Settings"
+              >
+                <Settings className="w-5 h-5 text-white/50 group-hover:text-cyan-400 transition-colors" />
+              </button>
               <h1 className="text-5xl lg:text-6xl font-black tracking-tight">
                 <span className="text-white italic">CRAFT</span>
               </h1>
