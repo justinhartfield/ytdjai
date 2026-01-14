@@ -3,14 +3,15 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Zap, Undo2, Redo2, Download, Play, Pause, SkipBack, SkipForward,
+  Zap, Undo2, Redo2, Download, Play, Pause,
   Lock, Unlock, Trash2, X, RefreshCw, Settings2, Sparkles, Loader2,
-  Volume2, VolumeX, Plus, Clock, Cloud, FolderOpen
+  Plus, Clock, Cloud, FolderOpen
 } from 'lucide-react'
 import { cn, formatDuration } from '@/lib/utils'
 import { useYTDJStore, arcTemplates } from '@/store'
 import { generatePlaylist, swapTrack } from '@/lib/ai-service'
 import { formatTime } from './YouTubePlayer'
+import { TransportBar } from './TransportBar'
 import { IconSidebar } from './IconSidebar'
 import { AIConstraintsDrawer } from './AIConstraintsDrawer'
 import { SetsDashboard } from './SetsDashboard'
@@ -928,100 +929,6 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
             </AnimatePresence>
           </div>
 
-          {/* Transport Bar */}
-          <footer className="h-24 bg-[#0a0c1c]/80 backdrop-blur-xl border-t border-white/5 flex items-center px-8 gap-12 relative">
-            <div className="absolute top-0 left-0 w-1 h-full bg-cyan-500" />
-
-            {/* Playback Controls */}
-            <div className="flex items-center gap-6">
-              <button
-                onClick={skipPrevious}
-                disabled={playingNodeIndex === null || playingNodeIndex <= 0}
-                className="text-gray-500 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                <SkipBack className="w-6 h-6" />
-              </button>
-              <button
-                onClick={() => {
-                  if (isPlaying) {
-                    pauseTrack()
-                  } else if (playingNodeIndex !== null) {
-                    playTrack(playingNodeIndex)
-                  } else if (playlist.length > 0) {
-                    playTrack(0)
-                  }
-                }}
-                disabled={playlist.length === 0}
-                className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isPlaying ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8 ml-1" />}
-              </button>
-              <button
-                onClick={skipNext}
-                disabled={playingNodeIndex === null || playingNodeIndex >= playlist.length - 1}
-                className="text-gray-500 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                <SkipForward className="w-6 h-6" />
-              </button>
-            </div>
-
-            {/* Progress Section */}
-            <div className="flex-1 space-y-3">
-              <div className="flex justify-between items-center text-[10px] font-mono tracking-widest text-gray-500">
-                <div className="flex items-center gap-4">
-                  <span className="text-cyan-400 font-black">
-                    {isPlaying || playingNodeIndex !== null ? (
-                      <>PLAYING: {playlist[activeTrackIndex]?.track.title || 'No track'}</>
-                    ) : (
-                      'Ready to play'
-                    )}
-                  </span>
-                  {(isPlaying || playingNodeIndex !== null) && (
-                    <>
-                      <span>•</span>
-                      <span>Energy: {playlist[activeTrackIndex]?.track.energy || 50}</span>
-                    </>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-white">{formatTime(currentTime)}</span> / <span>{duration > 0 ? formatTime(duration) : formatDuration(totalDuration)}</span>
-                </div>
-              </div>
-              <div
-                className="h-1 bg-white/5 rounded-full relative overflow-hidden group cursor-pointer"
-                onClick={(e) => {
-                  if (duration > 0) {
-                    const rect = e.currentTarget.getBoundingClientRect()
-                    const percent = (e.clientX - rect.left) / rect.width
-                    setPlayerState({ currentTime: percent * duration })
-                  }
-                }}
-              >
-                <div
-                  className="absolute top-0 left-0 bottom-0 bg-gradient-to-r from-cyan-400 to-pink-500 shadow-[0_0_15px_rgba(0,242,255,0.5)] transition-all"
-                  style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
-                />
-              </div>
-            </div>
-
-            {/* Volume Control */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setPlayerState({ volume: volume > 0 ? 0 : 80 })}
-                className="text-gray-500 hover:text-white transition-colors"
-              >
-                {volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-              </button>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={volume}
-                onChange={(e) => setPlayerState({ volume: parseInt(e.target.value) })}
-                className="w-20 accent-cyan-500"
-              />
-            </div>
-          </footer>
         </main>
 
         {/* Right Sidebar: Inspector */}
@@ -1162,6 +1069,9 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
           )}
         </AnimatePresence>
       </div>
+
+      {/* Bottom Transport Bar */}
+      <TransportBar />
 
       {/* Arc Change Confirmation Modal */}
       <AnimatePresence>

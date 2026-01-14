@@ -3,11 +3,12 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Undo2, Redo2, Play, Pause, SkipBack, SkipForward,
+  Undo2, Redo2, Play, Pause,
   Lock, X, Plus, Sparkles, Info, Loader2, Cloud, FolderOpen, GripVertical,
   ChevronLeft, ChevronRight
 } from 'lucide-react'
 import { cn, formatDuration } from '@/lib/utils'
+import { TransportBar } from './TransportBar'
 import { useYTDJStore, arcTemplates } from '@/store'
 import { generatePlaylist } from '@/lib/ai-service'
 import { formatTime } from './YouTubePlayer'
@@ -1049,80 +1050,7 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
       </div>
 
       {/* Bottom Transport Bar */}
-      <footer className="h-20 bg-[#0a0c1c]/80 backdrop-blur-xl border-t border-white/5 flex items-center px-6 gap-8 z-50">
-        {/* Player Controls */}
-        <div className="flex items-center gap-4">
-          <button
-            onClick={skipPrevious}
-            disabled={playingNodeIndex === null || playingNodeIndex <= 0}
-            className="text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <SkipBack className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => {
-              if (isPlaying) {
-                pauseTrack()
-              } else if (playingNodeIndex !== null) {
-                playTrack(playingNodeIndex)
-              } else if (playlist.length > 0) {
-                playTrack(0)
-              }
-            }}
-            disabled={playlist.length === 0}
-            className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
-          </button>
-          <button
-            onClick={skipNext}
-            disabled={playingNodeIndex === null || playingNodeIndex >= playlist.length - 1}
-            className="text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <SkipForward className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Progress Scrubber */}
-        <div className="flex-1 space-y-2">
-          <div className="flex justify-between text-[10px] font-mono text-gray-500">
-            <span className="text-cyan-400 font-bold uppercase tracking-wider">
-              {isPlaying || playingNodeIndex !== null
-                ? `Playing: ${playlist[activeTrackIndex]?.track.title || 'Unknown'}`
-                : 'Ready to play'}
-            </span>
-            <span>
-              <span className="text-white">{formatTime(currentTime)}</span> / {duration > 0 ? formatTime(duration) : formatDuration(totalDuration)}
-            </span>
-          </div>
-          <div className="h-1.5 bg-white/5 rounded-full overflow-hidden relative cursor-pointer group">
-            <div className="absolute inset-0 bg-white/5 group-hover:bg-white/10 transition-colors" />
-            <div
-              className="absolute top-0 left-0 bottom-0 bg-gradient-to-r from-cyan-500 to-pink-500 shadow-[0_0_10px_rgba(0,242,255,0.5)]"
-              style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
-            />
-          </div>
-        </div>
-
-        {/* Mini Player */}
-        <div className="flex items-center gap-4 w-72 border-l border-white/10 pl-8">
-          <div className="w-14 h-9 bg-black/40 border border-white/5 rounded flex items-center justify-center overflow-hidden relative group">
-            <img
-              src={playlist[activeTrackIndex]?.track.thumbnail || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100&h=100&fit=crop'}
-              alt=""
-              className="w-full h-full object-cover"
-            />
-          </div>
-          <div className="text-left overflow-hidden">
-            <div className="text-[10px] font-bold text-white truncate uppercase tracking-tighter">
-              {playlist[activeTrackIndex]?.track.title || 'Project Workspace'}
-            </div>
-            <div className="text-[9px] text-gray-500 uppercase tracking-widest flex items-center gap-1">
-              YouTube Source
-            </div>
-          </div>
-        </div>
-      </footer>
+      <TransportBar />
 
       {/* Export Flow */}
       <ExportFlow isOpen={showExport} onClose={() => setShowExport(false)} />
