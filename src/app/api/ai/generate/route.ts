@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { AIProvider, GeneratePlaylistRequest, PlaylistNode, Track, AlternativeTrack } from '@/types'
 
+// Next.js route segment config - increase timeout for serverless functions
+export const maxDuration = 60 // seconds (requires Netlify Pro or Vercel Pro)
+
 // Type for AI response with alternatives
 interface AITrackWithAlternatives {
   title: string
@@ -33,8 +36,17 @@ interface YouTubeSearchResult {
   duration?: number
 }
 
+// Track if YouTube API quota is exhausted to skip further calls
+let youtubeQuotaExhausted = false
+let quotaExhaustedAt = 0
+
 // Search YouTube for a video (without fetching duration - that's batched later)
 async function searchYouTubeVideo(query: string, apiKey: string): Promise<{ videoId: string; title: string; thumbnail: string } | null> {
+  // Skip if we know quota is exhausted (reset after 5 minutes to retry)
+  if (youtubeQuotaExhausted && Date.now() - quotaExhaustedAt < 5 * 60 * 1000) {
+    return null
+  }
+
   try {
     const searchResponse = await fetch(
       `https://www.googleapis.com/youtube/v3/search?` +
@@ -42,9 +54,18 @@ async function searchYouTubeVideo(query: string, apiKey: string): Promise<{ vide
     )
 
     if (!searchResponse.ok) {
-      console.error('YouTube search failed:', searchResponse.status)
+      if (searchResponse.status === 403) {
+        console.error('[YouTube] Quota exhausted (403) - skipping further YouTube calls')
+        youtubeQuotaExhausted = true
+        quotaExhaustedAt = Date.now()
+      } else {
+        console.error('YouTube search failed:', searchResponse.status)
+      }
       return null
     }
+
+    // Reset quota flag on success
+    youtubeQuotaExhausted = false
 
     const searchData = await searchResponse.json()
 
