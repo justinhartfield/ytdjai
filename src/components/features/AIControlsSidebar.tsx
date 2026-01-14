@@ -145,7 +145,7 @@ export function AIControlsSidebar({
             <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-widest">Energy Arc Template</label>
             <span className="text-[9px] text-gray-600">{arcTemplates.length} templates</span>
           </div>
-          <div className="grid grid-cols-2 gap-2 max-h-[280px] overflow-y-auto custom-scrollbar pr-1">
+          <div className="grid grid-cols-2 gap-2 max-h-[280px] xl:max-h-none overflow-y-auto xl:overflow-y-visible custom-scrollbar pr-1 xl:pr-0">
             {arcTemplates.map((arc) => (
               <button
                 key={arc.id}
