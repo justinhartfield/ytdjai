@@ -1,6 +1,7 @@
 'use client'
 
-import { Settings2, Music2, FolderOpen } from 'lucide-react'
+import { useRef } from 'react'
+import { Settings2, Music2, FolderOpen, ImagePlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
 
@@ -11,7 +12,8 @@ interface IconSidebarProps {
 }
 
 export function IconSidebar({ className }: IconSidebarProps) {
-  const { ui, setLeftSidebarPanel } = useYTDJStore()
+  const { ui, setLeftSidebarPanel, currentSet, updateCoverArt } = useYTDJStore()
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const activePanel = ui.leftSidebarPanel
 
   const icons = [
@@ -35,15 +37,67 @@ export function IconSidebar({ className }: IconSidebarProps) {
     }
   ]
 
+  const handleCoverArtClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      return
+    }
+
+    // Convert to data URI
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const dataUri = event.target?.result as string
+      updateCoverArt(dataUri)
+    }
+    reader.readAsDataURL(file)
+
+    // Reset input so same file can be selected again
+    e.target.value = ''
+  }
+
+  const coverArt = currentSet?.coverArt
+
   return (
     <aside className={cn(
       "w-16 bg-[#070815] border-r border-white/5 flex flex-col items-center py-4 gap-2",
       className
     )}>
-      {/* Logo */}
-      <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-pink-500 flex items-center justify-center font-black text-black text-sm mb-4">
-        YT
-      </div>
+      {/* Cover Art */}
+      <button
+        onClick={handleCoverArtClick}
+        className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center mb-4 transition-all hover:ring-2 hover:ring-cyan-500/50 group relative"
+        title="Click to change cover art"
+      >
+        {coverArt ? (
+          <img
+            src={coverArt}
+            alt="Cover art"
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-tr from-gray-700 to-gray-600 flex items-center justify-center">
+            <ImagePlus className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
+          </div>
+        )}
+        {/* Hover overlay */}
+        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <ImagePlus className="w-4 h-4 text-white" />
+        </div>
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileChange}
+        className="hidden"
+      />
 
       {/* Navigation Icons */}
       <nav className="flex-1 flex flex-col items-center gap-1">

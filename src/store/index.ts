@@ -62,6 +62,7 @@ interface YTDJState {
   updateSetWithPrompt: (playlist: PlaylistNode[], prompt: string) => void
   updatePrompt: (prompt: string) => void
   updateNodeStartTime: (nodeIndex: number, startTime: number) => void
+  updateCoverArt: (coverArt: string | undefined) => void
 
   // Player State
   player: PlayerState
@@ -193,6 +194,12 @@ export const useYTDJStore = create<YTDJState>()(
         if (!state.currentSet) return state
         return {
           currentSet: { ...state.currentSet, prompt, updatedAt: new Date() }
+        }
+      }),
+      updateCoverArt: (coverArt) => set((state) => {
+        if (!state.currentSet) return state
+        return {
+          currentSet: { ...state.currentSet, coverArt, updatedAt: new Date() }
         }
       }),
       updateNodeStartTime: (nodeIndex, startTime) => set((state) => {

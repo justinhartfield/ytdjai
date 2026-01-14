@@ -91,6 +91,7 @@ export interface Set {
   updatedAt: Date
   isExported?: boolean
   youtubePlaylistId?: string
+  coverArt?: string // URL or data URI for the arrangement's cover art
 }
 
 export interface AIConstraints {

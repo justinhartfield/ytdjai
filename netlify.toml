@@ -7,6 +7,14 @@
   # Disable smart secrets detection - API keys are legitimately used in server-side code
   SECRETS_SCAN_SMART_DETECTION_ENABLED = "false"
 
+# Increase function timeout for AI generation (default is 10s, max 26s on Pro)
+[functions]
+  external_node_modules = ["@prisma/client"]
+  node_bundler = "esbuild"
+
+[functions."api/ai/generate"]
+  timeout = 26
+
 # Next.js requires the Next.js Runtime
 [[plugins]]
   package = "@netlify/plugin-nextjs"
