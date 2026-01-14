@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { LaunchPad, ArrangementIDE, SessionView, YouTubePlayer } from '@/components/features'
+import { MobileApp } from '@/components/mobile/MobileApp'
 import { useYTDJStore } from '@/store'
+import { useMobileDetect } from '@/hooks/useMobileDetect'
 
 type IDEView = 'arrangement' | 'session'
 
@@ -11,6 +13,7 @@ export default function Home() {
   const { initializeStore, currentSet } = useYTDJStore()
   const [showLaunchPad, setShowLaunchPad] = useState(true)
   const [currentView, setCurrentView] = useState<IDEView>('arrangement')
+  const { isMobileLandscape } = useMobileDetect()
 
   useEffect(() => {
     // Initialize store on mount
@@ -32,6 +35,12 @@ export default function Home() {
     setCurrentView(view)
   }
 
+  // Render mobile version for landscape mobile devices
+  if (isMobileLandscape) {
+    return <MobileApp />
+  }
+
+  // Render desktop version
   return (
     <AnimatePresence mode="wait">
       {showLaunchPad ? (
