@@ -1045,6 +1045,52 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                   </div>
                 )}
 
+                {/* Fix It Actions */}
+                <div className="bg-white/5 rounded-2xl p-4 border border-white/5 space-y-3">
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                    <Zap className="w-3 h-3" />
+                    Fix It
+                  </h4>
+                  <p className="text-[10px] text-gray-500">One-click playlist improvements</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => handleRegenerate(undefined, `${currentSet?.prompt || ''} Make it more upbeat and energetic`)}
+                      disabled={isGenerating}
+                      className="px-3 py-2 bg-pink-500/10 text-pink-400 text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-pink-500/20 transition-all border border-pink-500/20 disabled:opacity-50"
+                    >
+                      More upbeat
+                    </button>
+                    <button
+                      onClick={() => handleRegenerate(undefined, `${currentSet?.prompt || ''} Make it more underground and less mainstream`)}
+                      disabled={isGenerating}
+                      className="px-3 py-2 bg-purple-500/10 text-purple-400 text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-purple-500/20 transition-all border border-purple-500/20 disabled:opacity-50"
+                    >
+                      More underground
+                    </button>
+                    <button
+                      onClick={() => handleRegenerate(undefined, `${currentSet?.prompt || ''} Make it more cohesive with better flow between tracks`)}
+                      disabled={isGenerating}
+                      className="px-3 py-2 bg-cyan-500/10 text-cyan-400 text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-cyan-500/20 transition-all border border-cyan-500/20 disabled:opacity-50"
+                    >
+                      More cohesive
+                    </button>
+                    <button
+                      onClick={() => handleRegenerate(undefined, `${currentSet?.prompt || ''} Add more variety with different styles and eras`)}
+                      disabled={isGenerating}
+                      className="px-3 py-2 bg-orange-500/10 text-orange-400 text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-orange-500/20 transition-all border border-orange-500/20 disabled:opacity-50"
+                    >
+                      More variety
+                    </button>
+                    <button
+                      onClick={() => handleRegenerate(undefined, `${currentSet?.prompt || ''} Include more guitar-driven and rock-influenced tracks`)}
+                      disabled={isGenerating}
+                      className="px-3 py-2 bg-green-500/10 text-green-400 text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-green-500/20 transition-all border border-green-500/20 disabled:opacity-50"
+                    >
+                      More guitars
+                    </button>
+                  </div>
+                </div>
+
                 {/* Lock Controls */}
                 <div className="flex gap-2 pt-4">
                   <button
