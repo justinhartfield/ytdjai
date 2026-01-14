@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useCallback, useMemo, useRef } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Zap, Undo2, Redo2, Download, Play, Pause, SkipBack, SkipForward,
-  Lock, X, RefreshCw, Plus, Sparkles, Info, Loader2, Shuffle, Cloud, FolderOpen, GripVertical
+  Lock, X, RefreshCw, Plus, Sparkles, Info, Loader2, Shuffle, Cloud, FolderOpen, GripVertical,
+  ChevronLeft, ChevronRight
 } from 'lucide-react'
 import { cn, formatDuration } from '@/lib/utils'
 import { useYTDJStore, arcTemplates } from '@/store'
@@ -82,6 +83,12 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
   const dragStartX = useRef<number>(0)
   const columnsContainerRef = useRef<HTMLDivElement>(null)
 
+  // Horizontal scroll state for >10 days
+  const gridScrollContainerRef = useRef<HTMLDivElement>(null)
+  const headerScrollContainerRef = useRef<HTMLDivElement>(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+
   // Player state from store
   const { isPlaying, playingNodeIndex, currentTime, duration } = player
   const activeTrackIndex = playingNodeIndex ?? 0
@@ -99,7 +106,50 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
     }))
   }, [playlist])
 
+  const showScrollNav = sessionColumns.length > 10
   const totalDuration = playlist.reduce((acc, node) => acc + node.track.duration, 0)
+
+  // Update scroll button visibility
+  const updateScrollButtons = useCallback(() => {
+    const container = gridScrollContainerRef.current
+    if (!container) return
+
+    setCanScrollLeft(container.scrollLeft > 0)
+    setCanScrollRight(container.scrollLeft < container.scrollWidth - container.clientWidth - 1)
+  }, [])
+
+  // Sync header and grid scroll positions
+  const handleGridScroll = useCallback(() => {
+    const gridContainer = gridScrollContainerRef.current
+    const headerContainer = headerScrollContainerRef.current
+    if (gridContainer && headerContainer) {
+      headerContainer.scrollLeft = gridContainer.scrollLeft
+    }
+    updateScrollButtons()
+  }, [updateScrollButtons])
+
+  // Scroll by a fixed amount (3 columns)
+  const scrollByAmount = useCallback((direction: 'left' | 'right') => {
+    const container = gridScrollContainerRef.current
+    if (!container) return
+
+    const columnWidth = 200 // min-w-[200px]
+    const scrollAmount = columnWidth * 3
+    container.scrollBy({
+      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      behavior: 'smooth'
+    })
+  }, [])
+
+  // Initialize scroll button state
+  useEffect(() => {
+    updateScrollButtons()
+    const container = gridScrollContainerRef.current
+    if (container) {
+      container.addEventListener('scroll', handleGridScroll)
+      return () => container.removeEventListener('scroll', handleGridScroll)
+    }
+  }, [handleGridScroll, updateScrollButtons, sessionColumns.length])
 
   const handleSelectTrack = (track: Track, columnIndex: number) => {
     setSelectedTrack(track)
@@ -112,14 +162,37 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
     setSelectedColumnIndex(columnIndex)
   }
 
-  const handleSwapIn = useCallback((track: Track, columnIndex: number) => {
+  const handleSwapIn = useCallback(async (track: Track, columnIndex: number) => {
+    // If the track doesn't have a youtubeId, fetch it first
+    let enrichedTrack = track
+    if (!track.youtubeId) {
+      try {
+        const response = await fetch('/api/youtube/enrich', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ artist: track.artist, title: track.title })
+        })
+        const result = await response.json()
+        if (result.success && result.youtubeId) {
+          enrichedTrack = {
+            ...track,
+            youtubeId: result.youtubeId,
+            thumbnail: result.thumbnail || track.thumbnail,
+            duration: result.duration || track.duration
+          }
+        }
+      } catch (error) {
+        console.error('[SessionView] Failed to enrich track with YouTube data:', error)
+      }
+    }
+
     const newPlaylist = [...playlist]
     newPlaylist[columnIndex] = {
       ...newPlaylist[columnIndex],
-      track
+      track: enrichedTrack
     }
     updatePlaylist(newPlaylist)
-    setSelectedTrack(track)
+    setSelectedTrack(enrichedTrack)
     setAuditioningTrack(null)
   }, [playlist, updatePlaylist])
 
@@ -472,7 +545,11 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
             <div className="w-16 border-r border-white/5 flex items-center justify-center">
               <span className="text-[9px] font-bold text-gray-600">SLOT</span>
             </div>
-            <div className="flex overflow-x-auto custom-scrollbar flex-1">
+            <div
+              ref={headerScrollContainerRef}
+              className="flex overflow-x-auto custom-scrollbar flex-1 scrollbar-hide"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
               {sessionColumns.map((col, index) => (
                 <div
                   key={col.id}
@@ -485,17 +562,41 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
             </div>
           </div>
 
-          {/* The Grid */}
-          <div
-            className="flex-1 flex overflow-x-auto custom-scrollbar relative z-10"
-            onMouseMove={draggedColumnIndex !== null ? handleDragMove : undefined}
-            onMouseUp={draggedColumnIndex !== null ? handleDragEnd : undefined}
-            onMouseLeave={draggedColumnIndex !== null ? handleDragEnd : undefined}
-            onTouchMove={draggedColumnIndex !== null ? handleDragMove : undefined}
-            onTouchEnd={draggedColumnIndex !== null ? handleDragEnd : undefined}
-          >
-            {/* Y-Axis Row Labels */}
-            <div className="w-16 border-r border-white/5 flex flex-col pt-4 bg-black/40 flex-shrink-0 text-center space-y-28">
+          {/* The Grid with scroll navigation */}
+          <div className="flex-1 flex relative">
+            {/* Scroll Left Button */}
+            {showScrollNav && canScrollLeft && (
+              <button
+                onClick={() => scrollByAmount('left')}
+                className="absolute left-16 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/80 border border-white/10 flex items-center justify-center hover:bg-cyan-500/20 hover:border-cyan-500/50 transition-all shadow-lg"
+                aria-label="Scroll left"
+              >
+                <ChevronLeft className="w-5 h-5 text-white" />
+              </button>
+            )}
+
+            {/* Scroll Right Button */}
+            {showScrollNav && canScrollRight && (
+              <button
+                onClick={() => scrollByAmount('right')}
+                className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/80 border border-white/10 flex items-center justify-center hover:bg-cyan-500/20 hover:border-cyan-500/50 transition-all shadow-lg"
+                aria-label="Scroll right"
+              >
+                <ChevronRight className="w-5 h-5 text-white" />
+              </button>
+            )}
+
+            <div
+              ref={gridScrollContainerRef}
+              className="flex-1 flex overflow-x-auto custom-scrollbar relative z-10"
+              onMouseMove={draggedColumnIndex !== null ? handleDragMove : undefined}
+              onMouseUp={draggedColumnIndex !== null ? handleDragEnd : undefined}
+              onMouseLeave={draggedColumnIndex !== null ? handleDragEnd : undefined}
+              onTouchMove={draggedColumnIndex !== null ? handleDragMove : undefined}
+              onTouchEnd={draggedColumnIndex !== null ? handleDragEnd : undefined}
+            >
+              {/* Y-Axis Row Labels */}
+              <div className="w-16 border-r border-white/5 flex flex-col pt-4 bg-black/40 flex-shrink-0 text-center space-y-28">
               <div className="text-[9px] font-bold text-cyan-500 -rotate-90 whitespace-nowrap origin-center">ACTIVE PICK</div>
               <div className="text-[9px] font-bold text-gray-600 -rotate-90 whitespace-nowrap origin-center">ALTERNATIVES</div>
             </div>
@@ -734,6 +835,7 @@ export function SessionView({ onViewChange, currentView }: SessionViewProps) {
                 </div>
               )}
             </div>
+          </div>
           </div>
 
         </section>

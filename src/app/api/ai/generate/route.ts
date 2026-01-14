@@ -598,7 +598,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
           }
         })
       },
-      15000
+      20000
     )
 
     const data = await response.json()
@@ -690,61 +690,45 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
   }
 }
 
-async function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], energyTolerance: number = 10): Promise<PlaylistNode[]> {
-  // Collect all tracks that need YouTube enrichment (main tracks + alternatives)
-  const allTracksToEnrich: Partial<Track>[] = []
-  const trackIndexMap: { mainIndex: number; altIndex?: number }[] = []
+async function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], energyTolerance: number = 10, skipYouTubeForAlternatives: boolean = true): Promise<PlaylistNode[]> {
+  // Collect main tracks that need YouTube enrichment
+  // Skip alternatives to save time on Netlify (can reduce from 24 searches to 8)
+  const mainTracksToEnrich: Partial<Track>[] = tracks.map(track => ({
+    title: track.title,
+    artist: track.artist,
+    key: track.key,
+    genre: track.genre,
+    energy: track.energy,
+    duration: track.duration,
+    aiReasoning: track.aiReasoning
+  }))
 
-  tracks.forEach((track, mainIndex) => {
-    // Add main track
-    allTracksToEnrich.push(track)
-    trackIndexMap.push({ mainIndex })
+  // Enrich ONLY main tracks with YouTube data (8 searches instead of 24)
+  console.log(`[Generate] Enriching ${mainTracksToEnrich.length} main tracks with YouTube data (skipping ${tracks.reduce((acc, t) => acc + (t.alternatives?.length || 0), 0)} alternatives to save time)`)
+  const enrichedMainTracks = await enrichTracksWithYouTube(mainTracksToEnrich)
 
-    // Add alternatives
-    if (track.alternatives) {
-      track.alternatives.forEach((alt, altIndex) => {
-        allTracksToEnrich.push(alt)
-        trackIndexMap.push({ mainIndex, altIndex })
-      })
-    }
-  })
-
-  // Enrich all tracks with YouTube data in parallel
-  console.log(`[Generate] Enriching ${allTracksToEnrich.length} tracks with YouTube data (${tracks.length} main + alternatives)`)
-  const enrichedTracks = await enrichTracksWithYouTube(allTracksToEnrich)
-
-  // Rebuild the structure with enriched data
-  const enrichedMain: (Partial<Track> & { alternatives?: AITrackWithAlternatives['alternatives'] })[] = tracks.map(() => ({}))
+  // Build alternatives without YouTube enrichment (they'll get enriched on-demand when swapped)
   const enrichedAlternatives: Map<number, AlternativeTrack[]> = new Map()
 
-  enrichedTracks.forEach((enriched, i) => {
-    const mapping = trackIndexMap[i]
-    if (mapping.altIndex === undefined) {
-      // This is a main track
-      enrichedMain[mapping.mainIndex] = { ...tracks[mapping.mainIndex], ...enriched }
-    } else {
-      // This is an alternative
-      if (!enrichedAlternatives.has(mapping.mainIndex)) {
-        enrichedAlternatives.set(mapping.mainIndex, [])
-      }
-      const originalAlt = tracks[mapping.mainIndex].alternatives?.[mapping.altIndex]
-      enrichedAlternatives.get(mapping.mainIndex)!.push({
-        id: `alt-${Date.now()}-${mapping.mainIndex}-${mapping.altIndex}`,
-        youtubeId: enriched.youtubeId || `yt-alt-${Date.now()}-${mapping.mainIndex}-${mapping.altIndex}`,
-        title: enriched.title || originalAlt?.title || 'Unknown Track',
-        artist: enriched.artist || originalAlt?.artist || 'Unknown Artist',
-        duration: enriched.duration || originalAlt?.duration || 240,
-        key: enriched.key || originalAlt?.key,
-        genre: enriched.genre || originalAlt?.genre,
-        energy: enriched.energy || originalAlt?.energy,
-        thumbnail: enriched.thumbnail || `https://picsum.photos/seed/${Date.now() + mapping.mainIndex + mapping.altIndex}/200/200`,
-        whyNotChosen: originalAlt?.whyNotChosen,
-        matchScore: originalAlt?.matchScore
-      })
+  tracks.forEach((track, mainIndex) => {
+    if (track.alternatives && track.alternatives.length > 0) {
+      enrichedAlternatives.set(mainIndex, track.alternatives.map((alt, altIndex) => ({
+        id: `alt-${Date.now()}-${mainIndex}-${altIndex}`,
+        youtubeId: '', // Will be fetched on-demand when user swaps
+        title: alt.title,
+        artist: alt.artist,
+        duration: alt.duration || 240,
+        key: alt.key,
+        genre: alt.genre,
+        energy: alt.energy,
+        thumbnail: `https://picsum.photos/seed/${Date.now() + mainIndex + altIndex}/200/200`,
+        whyNotChosen: alt.whyNotChosen,
+        matchScore: alt.matchScore
+      })))
     }
   })
 
-  return enrichedMain.map((track, index) => ({
+  return enrichedMainTracks.map((track, index) => ({
     id: `node-${Date.now()}-${index}`,
     track: {
       id: `track-${Date.now()}-${index}`,
@@ -756,12 +740,12 @@ async function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], energyTo
       genre: track.genre,
       energy: track.energy,
       thumbnail: track.thumbnail || `https://picsum.photos/seed/${Date.now() + index}/200/200`,
-      aiReasoning: track.aiReasoning
+      aiReasoning: tracks[index].aiReasoning // Get from original tracks
     },
     position: index,
     alternatives: enrichedAlternatives.get(index) || [],
-    transitionToNext: index < enrichedMain.length - 1 ? {
-      quality: calculateTransitionQuality(track, enrichedMain[index + 1], energyTolerance),
+    transitionToNext: index < enrichedMainTracks.length - 1 ? {
+      quality: calculateTransitionQuality(track, enrichedMainTracks[index + 1], energyTolerance),
       type: 'blend',
       duration: 16
     } : undefined
