@@ -31,8 +31,10 @@ export function AIConstraintsDrawer({ isOpen, onClose, onRegenerate }: AIConstra
   } = useYTDJStore()
 
   const [blacklistInput, setBlacklistInput] = useState('')
+  const [showMoreDecades, setShowMoreDecades] = useState(false)
 
-  const decades = ['80s', '90s', '00s', '10s', '20s']
+  const mainDecades = ['80s', '90s', '00s', '10s', '20s']
+  const olderDecades = ['1850s', '1860s', '1870s', '1880s', '1890s', '1900s', '1910s', '1920s', '1930s', '1940s', '1950s', '1960s', '1970s']
 
   const handleAddBlacklist = () => {
     if (blacklistInput.trim()) {
@@ -180,7 +182,7 @@ export function AIConstraintsDrawer({ isOpen, onClose, onRegenerate }: AIConstra
               <div className="space-y-3">
                 <label className="text-xs font-bold text-gray-400">Active Decades</label>
                 <div className="flex flex-wrap gap-2">
-                  {decades.map((decade) => (
+                  {mainDecades.map((decade) => (
                     <button
                       key={decade}
                       onClick={() => toggleDecade(decade)}
@@ -195,6 +197,45 @@ export function AIConstraintsDrawer({ isOpen, onClose, onRegenerate }: AIConstra
                     </button>
                   ))}
                 </div>
+
+                {/* More Decades Toggle */}
+                <button
+                  onClick={() => setShowMoreDecades(!showMoreDecades)}
+                  className="text-[10px] font-bold text-gray-500 hover:text-gray-300 uppercase tracking-wider transition-colors flex items-center gap-1"
+                >
+                  <Plus className={cn("w-3 h-3 transition-transform", showMoreDecades && "rotate-45")} />
+                  {showMoreDecades ? 'Hide Older Decades' : 'More Decades'}
+                </button>
+
+                {/* Older Decades (Hidden by default) */}
+                <AnimatePresence>
+                  {showMoreDecades && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
+                        {olderDecades.map((decade) => (
+                          <button
+                            key={decade}
+                            onClick={() => toggleDecade(decade)}
+                            className={cn(
+                              "px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border",
+                              constraints.activeDecades.includes(decade)
+                                ? "bg-pink-500/20 border-pink-500/50 text-pink-400"
+                                : "bg-white/5 border-white/10 text-gray-500 hover:text-white hover:border-white/20"
+                            )}
+                          >
+                            {decade}
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* Discovery Bias */}
