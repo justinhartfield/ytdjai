@@ -456,7 +456,7 @@ async function generateWithClaude(prompt: string, constraints: GeneratePlaylistR
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-sonnet-20240229',
+        model: 'claude-3-5-sonnet-20241022',
         max_tokens: 2000,
         messages: [
           {
@@ -546,7 +546,7 @@ async function generateWithGemini(prompt: string, constraints: GeneratePlaylistR
   try {
     // Use timeout-aware fetch for AI call (allow 12 seconds max for AI response)
     const response = await fetchWithTimeout(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
