@@ -660,11 +660,6 @@ export function ArrangementIDE({ onViewChange, currentView }: ArrangementIDEProp
                 TRANSITIONS
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <button className="px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-[9px] font-bold tracking-widest">
-                AUTO-SMOOTH
-              </button>
-            </div>
           </div>
 
           {/* Grid Background */}
