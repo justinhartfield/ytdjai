@@ -148,6 +148,116 @@ function buildConstraintInstructions(constraints: GeneratePlaylistRequest['const
     instructions.push('CONTENT: Only include clean, non-explicit tracks.')
   }
 
+  // === AI WIZARD PRO SETTINGS ===
+
+  // Weighted phrases (multi-phrase blending)
+  if (constraints?.weightedPhrases && constraints.weightedPhrases.length > 0) {
+    const totalWeight = constraints.weightedPhrases.reduce((sum, wp) => sum + wp.weight, 0)
+    const phrasesText = constraints.weightedPhrases.map(p => {
+      const percentage = Math.round((p.weight / totalWeight) * 100)
+      return `"${p.phrase}" (${percentage}%)`
+    }).join(' + ')
+    instructions.push(`VIBE BLENDING: Blend these vibes in the specified proportions: ${phrasesText}`)
+  }
+
+  // Avoid concepts
+  if (constraints?.avoidConcepts && constraints.avoidConcepts.length > 0) {
+    instructions.push(`AVOID THESE STYLES/CONCEPTS: ${constraints.avoidConcepts.join(', ')}`)
+  }
+
+  // Applied templates (style transforms)
+  if (constraints?.appliedTemplates && constraints.appliedTemplates.length > 0) {
+    const templateDescriptions: Record<string, string> = {
+      'make-it-cinematic': 'cinematic, epic, film score-like quality',
+      'make-it-danceable': 'danceable, rhythmic, groove-focused',
+      'make-it-chill': 'relaxed, laid-back, chill atmosphere',
+      'make-it-intense': 'intense, powerful, high-energy',
+      'make-it-nostalgic': 'nostalgic, retro, throwback feel',
+      'make-it-experimental': 'experimental, avant-garde, unconventional'
+    }
+    const transforms = constraints.appliedTemplates.map(t => templateDescriptions[t] || t.replace(/-/g, ' ')).join(', ')
+    instructions.push(`STYLE TRANSFORMS: Apply these qualities to the playlist: ${transforms}`)
+  }
+
+  // Context tokens
+  if (constraints?.contextTokens) {
+    const contextParts: string[] = []
+    if (constraints.contextTokens.timeOfDay) contextParts.push(`time of day: ${constraints.contextTokens.timeOfDay}`)
+    if (constraints.contextTokens.season) contextParts.push(`season: ${constraints.contextTokens.season}`)
+    if (constraints.contextTokens.weather) contextParts.push(`weather: ${constraints.contextTokens.weather}`)
+    if (constraints.contextTokens.activity) contextParts.push(`activity: ${constraints.contextTokens.activity}`)
+    if (constraints.contextTokens.socialContext) contextParts.push(`social vibe: ${constraints.contextTokens.socialContext}`)
+    if (contextParts.length > 0) {
+      instructions.push(`CONTEXTUAL ATMOSPHERE: Tailor tracks for ${contextParts.join(', ')}`)
+    }
+  }
+
+  // Anchor tracks (must include)
+  if (constraints?.anchorTracks && constraints.anchorTracks.length > 0) {
+    const anchors = constraints.anchorTracks.map(t => `"${t.title}" by ${t.artist}`).join(', ')
+    instructions.push(`MUST INCLUDE TRACKS: You MUST include these specific tracks in the playlist: ${anchors}`)
+  }
+
+  // Similar playlist reference
+  if (constraints?.similarPlaylist?.url) {
+    let similarText = `BASE ON REFERENCE: Create a playlist similar to the one at ${constraints.similarPlaylist.url}`
+    if (constraints.similarPlaylist.modifier) {
+      similarText += `, but ${constraints.similarPlaylist.modifier}`
+    }
+    instructions.push(similarText)
+  }
+
+  // Vocal density preferences
+  if (constraints?.vocalDensity) {
+    const vocalParts: string[] = []
+    const { instrumentalVsVocal, hookyVsAtmospheric, lyricClarity } = constraints.vocalDensity
+    if (instrumentalVsVocal < 30) vocalParts.push('prefer instrumental tracks')
+    else if (instrumentalVsVocal > 70) vocalParts.push('prefer vocal-heavy tracks')
+    if (hookyVsAtmospheric < 30) vocalParts.push('catchy, hooky songs with memorable melodies')
+    else if (hookyVsAtmospheric > 70) vocalParts.push('atmospheric, ambient textures')
+    if (lyricClarity < 30) vocalParts.push('clear, narrative lyrics')
+    else if (lyricClarity > 70) vocalParts.push('abstract, buried, or processed vocals')
+    if (vocalParts.length > 0) {
+      instructions.push(`VOCAL PREFERENCES: ${vocalParts.join(', ')}`)
+    }
+  }
+
+  // Energy preset
+  if (constraints?.energyPreset) {
+    switch (constraints.energyPreset) {
+      case 'no-slow-songs':
+        instructions.push('ENERGY RULE: Keep all tracks above 50 energy - no ballads or slow songs allowed')
+        break
+      case 'keep-it-mellow':
+        instructions.push('ENERGY RULE: Keep energy soft and mellow throughout - nothing too intense')
+        break
+      case 'mid-tempo-groove':
+        instructions.push('ENERGY RULE: Maintain mid-tempo groove between 60-75 energy')
+        break
+      case 'bpm-ramp':
+        instructions.push('ENERGY RULE: Gradually increase BPM and energy throughout the set')
+        break
+    }
+  }
+
+  // Content mode
+  if (constraints?.contentMode) {
+    switch (constraints.contentMode) {
+      case 'clean':
+        instructions.push('CONTENT FILTER: Only include clean, radio-safe tracks - no explicit content')
+        break
+      case 'family':
+        instructions.push('CONTENT FILTER: Family-friendly tracks only - appropriate for all ages')
+        break
+    }
+  }
+
+  // Long form input (deep context)
+  if (constraints?.longFormInput && constraints.longFormInput.trim()) {
+    const truncated = constraints.longFormInput.substring(0, 500)
+    instructions.push(`DEEP CONTEXT: Use this as inspiration for the playlist mood and theme: "${truncated}${constraints.longFormInput.length > 500 ? '...' : ''}"`)
+  }
+
   return instructions.join('\n')
 }
 
