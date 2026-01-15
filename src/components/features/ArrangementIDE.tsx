@@ -66,7 +66,6 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
     poorFitCount: number
     poorFitPositions: number[]
   } | null>(null)
-  const [isRegenerating, setIsRegenerating] = useState(false)
 
   const [selectedNodeIndex, setSelectedNodeIndex] = useState<number | null>(0)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
@@ -556,12 +555,12 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
 
   // Regenerate poor fit tracks to match arc
   const handleRegeneratePoorFits = useCallback(async () => {
-    if (!arcMismatchInfo || isRegenerating) return
+    if (!arcMismatchInfo || isGenerating) return
 
     const arc = arcTemplates.find(a => a.id === arcMismatchInfo.arcId)
     if (!arc) return
 
-    setIsRegenerating(true)
+    setIsGenerating(true)
     setArcMismatchInfo(null)
 
     try {
@@ -587,6 +586,7 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
 
       if (poorFitPositions.length === 0) {
         // All poor fits are locked, nothing we can do
+        setIsGenerating(false)
         return
       }
 
@@ -623,9 +623,9 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
     } catch (error) {
       console.error('Failed to regenerate poor fit tracks:', error)
     } finally {
-      setIsRegenerating(false)
+      setIsGenerating(false)
     }
-  }, [arcMismatchInfo, isRegenerating, playlist, currentSet, constraints, aiProvider, updatePlaylist])
+  }, [arcMismatchInfo, isGenerating, playlist, currentSet, constraints, aiProvider, updatePlaylist, setIsGenerating])
 
   const handleArcChange = useCallback((arcId: string) => {
     if (arcId === activeArcTemplate) return
@@ -1398,10 +1398,10 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
                 </button>
                 <button
                   onClick={handleRegeneratePoorFits}
-                  disabled={isRegenerating}
+                  disabled={isGenerating}
                   className="flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest text-black bg-cyan-500 hover:bg-cyan-400 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {isRegenerating ? (
+                  {isGenerating ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
                       Regenerating...
