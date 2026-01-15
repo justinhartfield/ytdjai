@@ -31,6 +31,58 @@ interface AITrackWithAlternatives {
 let youtubeQuotaExhausted = false
 let quotaExhaustedAt = 0
 
+// Attempt to repair common JSON issues from AI responses
+function repairJSON(jsonStr: string): string {
+  let repaired = jsonStr
+
+  // Remove any trailing incomplete objects/arrays
+  // Find the last complete object by counting brackets
+  let bracketCount = 0
+  let lastValidEnd = -1
+  let inString = false
+  let escapeNext = false
+
+  for (let i = 0; i < repaired.length; i++) {
+    const char = repaired[i]
+
+    if (escapeNext) {
+      escapeNext = false
+      continue
+    }
+
+    if (char === '\\') {
+      escapeNext = true
+      continue
+    }
+
+    if (char === '"' && !escapeNext) {
+      inString = !inString
+      continue
+    }
+
+    if (!inString) {
+      if (char === '[' || char === '{') {
+        bracketCount++
+      } else if (char === ']' || char === '}') {
+        bracketCount--
+        if (bracketCount === 0) {
+          lastValidEnd = i
+        }
+      }
+    }
+  }
+
+  // If we found a valid end point and there's trailing garbage, trim it
+  if (lastValidEnd > 0 && lastValidEnd < repaired.length - 1) {
+    repaired = repaired.substring(0, lastValidEnd + 1)
+  }
+
+  // Fix common issues: trailing commas before ] or }
+  repaired = repaired.replace(/,(\s*[}\]])/g, '$1')
+
+  return repaired
+}
+
 function parseISO8601Duration(duration: string): number {
   const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
   if (!match) return 240
@@ -152,6 +204,7 @@ Return ONLY valid JSON array, no markdown.${constraintInstructions ? `\n\nConstr
     const jsonMatch = content.match(/\[[\s\S]*\]/)
     if (jsonMatch) {
       try {
+        // Try direct parse first
         const parsed = JSON.parse(jsonMatch[0])
         if (!Array.isArray(parsed)) {
           throw new Error('Parsed result is not an array')
@@ -159,8 +212,21 @@ Return ONLY valid JSON array, no markdown.${constraintInstructions ? `\n\nConstr
         console.log('[OpenAI] Parsed', parsed.length, 'tracks')
         return parsed
       } catch (parseErr) {
-        console.error('[OpenAI] JSON parse error:', parseErr)
-        throw new Error(`OpenAI JSON parse failed: ${parseErr}`)
+        // Try to repair the JSON
+        console.log('[OpenAI] Initial parse failed, attempting repair...')
+        try {
+          const repaired = repairJSON(jsonMatch[0])
+          const parsed = JSON.parse(repaired)
+          if (!Array.isArray(parsed)) {
+            throw new Error('Repaired result is not an array')
+          }
+          console.log('[OpenAI] Repaired and parsed', parsed.length, 'tracks')
+          return parsed
+        } catch (repairErr) {
+          console.error('[OpenAI] JSON parse error after repair:', repairErr)
+          console.error('[OpenAI] Raw JSON (first 500 chars):', jsonMatch[0].substring(0, 500))
+          throw new Error(`OpenAI JSON parse failed: ${parseErr}`)
+        }
       }
     }
   }
@@ -186,7 +252,7 @@ async function generateWithClaude(prompt: string, constraints: GeneratePlaylistR
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 2000,
+      max_tokens: 4000,
       messages: [{
         role: 'user',
         content: `You are a professional DJ. Generate a playlist for: "${prompt}"
@@ -222,8 +288,21 @@ Return ONLY a JSON array with: title, artist, key, genre, energy (1-100), durati
         console.log('[Claude] Parsed', parsed.length, 'tracks')
         return parsed
       } catch (parseErr) {
-        console.error('[Claude] JSON parse error:', parseErr)
-        throw new Error(`Claude JSON parse failed: ${parseErr}`)
+        // Try to repair the JSON
+        console.log('[Claude] Initial parse failed, attempting repair...')
+        try {
+          const repaired = repairJSON(jsonMatch[0])
+          const parsed = JSON.parse(repaired)
+          if (!Array.isArray(parsed)) {
+            throw new Error('Repaired result is not an array')
+          }
+          console.log('[Claude] Repaired and parsed', parsed.length, 'tracks')
+          return parsed
+        } catch (repairErr) {
+          console.error('[Claude] JSON parse error after repair:', repairErr)
+          console.error('[Claude] Raw JSON (first 500 chars):', jsonMatch[0].substring(0, 500))
+          throw new Error(`Claude JSON parse failed: ${parseErr}`)
+        }
       }
     }
   }
@@ -255,7 +334,7 @@ ${constraintInstructions ? `Constraints:\n${constraintInstructions}` : ''}
 Return ONLY a JSON array with: title, artist, key, genre, energy (1-100), duration (seconds), aiReasoning, alternatives (2 objects with title, artist, key, genre, energy, duration, whyNotChosen, matchScore)`
           }]
         }],
-        generationConfig: { temperature: 0.8, maxOutputTokens: 2000 }
+        generationConfig: { temperature: 0.8, maxOutputTokens: 4000 }
       })
     }
   )
@@ -284,8 +363,21 @@ Return ONLY a JSON array with: title, artist, key, genre, energy (1-100), durati
         console.log('[Gemini] Parsed', parsed.length, 'tracks')
         return parsed
       } catch (parseErr) {
-        console.error('[Gemini] JSON parse error:', parseErr)
-        throw new Error(`Gemini JSON parse failed: ${parseErr}`)
+        // Try to repair the JSON
+        console.log('[Gemini] Initial parse failed, attempting repair...')
+        try {
+          const repaired = repairJSON(jsonMatch[0])
+          const parsed = JSON.parse(repaired)
+          if (!Array.isArray(parsed)) {
+            throw new Error('Repaired result is not an array')
+          }
+          console.log('[Gemini] Repaired and parsed', parsed.length, 'tracks')
+          return parsed
+        } catch (repairErr) {
+          console.error('[Gemini] JSON parse error after repair:', repairErr)
+          console.error('[Gemini] Raw JSON (first 500 chars):', jsonMatch[0].substring(0, 500))
+          throw new Error(`Gemini JSON parse failed: ${parseErr}`)
+        }
       }
     }
   }
