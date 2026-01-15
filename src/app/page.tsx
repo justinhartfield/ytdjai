@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { LaunchPad, ArrangementIDE, SessionView, YouTubePlayer } from '@/components/features'
-import { MobileApp } from '@/components/mobile/MobileApp'
+import { LandscapeApp } from '@/components/mobile-landscape/LandscapeApp'
 import { useYTDJStore } from '@/store'
 import { useMobileDetect } from '@/hooks/useMobileDetect'
 
@@ -39,9 +39,9 @@ export default function Home() {
     setShowLaunchPad(true)
   }
 
-  // Render mobile version for landscape mobile devices
+  // Render mobile landscape version for landscape mobile devices
   if (isMobileLandscape) {
-    return <MobileApp />
+    return <LandscapeApp />
   }
 
   // Render desktop version
