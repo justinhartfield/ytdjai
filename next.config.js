@@ -19,11 +19,10 @@ const nextConfig = {
       },
     ],
   },
-  // Netlify handles environment variables
+  // NOTE: Server-side API routes read from process.env directly at runtime
+  // Only include env vars here that need to be available at build time
+  // or passed to client-side code (use NEXT_PUBLIC_ prefix for client-side)
   env: {
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-    GOOGLE_AI_API_KEY: process.env.GOOGLE_AI_API_KEY,
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
   },

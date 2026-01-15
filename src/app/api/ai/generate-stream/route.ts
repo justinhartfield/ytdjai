@@ -105,8 +105,10 @@ async function generateWithOpenAI(prompt: string, constraints: GeneratePlaylistR
   if (!apiKey) throw new Error('OpenAI API key not configured')
 
   const constraintInstructions = buildConstraintInstructions(constraints)
+  console.log('[OpenAI] Starting request...')
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    signal: AbortSignal.timeout(45000), // 45 second timeout
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -133,17 +135,36 @@ Return ONLY valid JSON array, no markdown.${constraintInstructions ? `\n\nConstr
     })
   })
 
+  console.log('[OpenAI] Response status:', response.status)
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error('[OpenAI] HTTP error response:', errorText.substring(0, 500))
+    throw new Error(`OpenAI HTTP ${response.status}: ${errorText.substring(0, 200)}`)
+  }
+
   const data = await response.json()
   if (data.error) throw new Error(`OpenAI API error: ${data.error.message}`)
 
   if (data.choices?.[0]?.message?.content) {
     let content = data.choices[0].message.content
+    console.log('[OpenAI] Raw response length:', content.length)
     content = content.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
     const jsonMatch = content.match(/\[[\s\S]*\]/)
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0])
+      try {
+        const parsed = JSON.parse(jsonMatch[0])
+        if (!Array.isArray(parsed)) {
+          throw new Error('Parsed result is not an array')
+        }
+        console.log('[OpenAI] Parsed', parsed.length, 'tracks')
+        return parsed
+      } catch (parseErr) {
+        console.error('[OpenAI] JSON parse error:', parseErr)
+        throw new Error(`OpenAI JSON parse failed: ${parseErr}`)
+      }
     }
   }
+  console.error('[OpenAI] No valid content found in response')
   throw new Error('OpenAI returned no valid content')
 }
 
@@ -153,8 +174,10 @@ async function generateWithClaude(prompt: string, constraints: GeneratePlaylistR
   if (!apiKey) throw new Error('Anthropic API key not configured')
 
   const constraintInstructions = buildConstraintInstructions(constraints)
+  console.log('[Claude] Starting request...')
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
+    signal: AbortSignal.timeout(45000), // 45 second timeout
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -175,17 +198,36 @@ Return ONLY a JSON array with: title, artist, key, genre, energy (1-100), durati
     })
   })
 
+  console.log('[Claude] Response status:', response.status)
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error('[Claude] HTTP error response:', errorText.substring(0, 500))
+    throw new Error(`Claude HTTP ${response.status}: ${errorText.substring(0, 200)}`)
+  }
+
   const data = await response.json()
   if (data.error) throw new Error(`Claude API error: ${data.error.message}`)
 
   if (data.content?.[0]?.text) {
     let text = data.content[0].text
+    console.log('[Claude] Raw response length:', text.length)
     text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
     const jsonMatch = text.match(/\[[\s\S]*\]/)
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0])
+      try {
+        const parsed = JSON.parse(jsonMatch[0])
+        if (!Array.isArray(parsed)) {
+          throw new Error('Parsed result is not an array')
+        }
+        console.log('[Claude] Parsed', parsed.length, 'tracks')
+        return parsed
+      } catch (parseErr) {
+        console.error('[Claude] JSON parse error:', parseErr)
+        throw new Error(`Claude JSON parse failed: ${parseErr}`)
+      }
     }
   }
+  console.error('[Claude] No valid content found in response')
   throw new Error('Claude returned no valid content')
 }
 
@@ -195,10 +237,12 @@ async function generateWithGemini(prompt: string, constraints: GeneratePlaylistR
   if (!apiKey) throw new Error('Google AI API key not configured')
 
   const constraintInstructions = buildConstraintInstructions(constraints)
+  console.log('[Gemini] Starting request...')
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
     {
+      signal: AbortSignal.timeout(45000), // 45 second timeout
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -216,22 +260,52 @@ Return ONLY a JSON array with: title, artist, key, genre, energy (1-100), durati
     }
   )
 
+  console.log('[Gemini] Response status:', response.status)
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error('[Gemini] HTTP error response:', errorText.substring(0, 500))
+    throw new Error(`Gemini HTTP ${response.status}: ${errorText.substring(0, 200)}`)
+  }
+
   const data = await response.json()
   if (data.error) throw new Error(`Gemini API error: ${data.error.message}`)
 
   if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
     let text = data.candidates[0].content.parts[0].text
+    console.log('[Gemini] Raw response length:', text.length)
     text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
     const jsonMatch = text.match(/\[[\s\S]*\]/)
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0])
+      try {
+        const parsed = JSON.parse(jsonMatch[0])
+        if (!Array.isArray(parsed)) {
+          throw new Error('Parsed result is not an array')
+        }
+        console.log('[Gemini] Parsed', parsed.length, 'tracks')
+        return parsed
+      } catch (parseErr) {
+        console.error('[Gemini] JSON parse error:', parseErr)
+        throw new Error(`Gemini JSON parse failed: ${parseErr}`)
+      }
     }
   }
+  console.error('[Gemini] No valid content found in response')
   throw new Error('Gemini returned no valid content')
 }
 
 // Convert AI tracks to PlaylistNodes
 function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], provider: AIProvider): PlaylistNode[] {
+  // Validate tracks is an array
+  if (!tracks || !Array.isArray(tracks)) {
+    console.error(`[${provider}] Invalid tracks data:`, tracks)
+    throw new Error(`${provider} returned invalid data - expected array but got ${typeof tracks}`)
+  }
+
+  if (tracks.length === 0) {
+    console.error(`[${provider}] Empty tracks array`)
+    throw new Error(`${provider} returned empty playlist`)
+  }
+
   return tracks.map((track, index) => ({
     id: `node-${provider}-${Date.now()}-${index}`,
     track: {
@@ -334,6 +408,7 @@ function createStreamingResponse(prompt: string, constraints: GeneratePlaylistRe
   if (process.env.ANTHROPIC_API_KEY) availableProviders.push('claude')
   if (process.env.GOOGLE_AI_API_KEY) availableProviders.push('gemini')
 
+  // Log which providers are available (without showing key values)
   console.log('[Stream API] Available providers:', availableProviders)
   console.log('[Stream API] Prompt:', prompt.substring(0, 100) + '...')
 
