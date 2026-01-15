@@ -120,19 +120,72 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
 
     try {
       // Initial progress
-      setProgress(10)
+      setProgress(5)
       setProgressMessage('Validating tracks...')
       await new Promise(resolve => setTimeout(resolve, 300))
 
-      // Prepare tracks data
-      const tracks = playlist.map(node => ({
-        youtubeId: node.track?.youtubeId || '',
-        title: node.track?.title || 'Unknown',
-        artist: node.track?.artist || 'Unknown'
-      })).filter(t => t.youtubeId)
+      // First, collect tracks that already have youtubeId and those that need enrichment
+      const tracksWithYoutubeId: { youtubeId: string; title: string; artist: string }[] = []
+      const tracksNeedingEnrichment: { title: string; artist: string; index: number }[] = []
+
+      playlist.forEach((node, index) => {
+        const youtubeId = node.track?.youtubeId || ''
+        const title = node.track?.title || 'Unknown'
+        const artist = node.track?.artist || 'Unknown'
+
+        if (youtubeId) {
+          tracksWithYoutubeId.push({ youtubeId, title, artist })
+        } else {
+          tracksNeedingEnrichment.push({ title, artist, index })
+        }
+      })
+
+      // If no tracks have youtubeId, enrich them on-demand
+      if (tracksWithYoutubeId.length === 0 && tracksNeedingEnrichment.length > 0) {
+        setProgress(10)
+        setProgressMessage(`Finding ${tracksNeedingEnrichment.length} tracks on YouTube...`)
+
+        // Enrich tracks in parallel (with a limit to avoid rate limiting)
+        const enrichBatchSize = 5
+        for (let i = 0; i < tracksNeedingEnrichment.length; i += enrichBatchSize) {
+          const batch = tracksNeedingEnrichment.slice(i, i + enrichBatchSize)
+          const enrichPromises = batch.map(async (track) => {
+            try {
+              const response = await fetch('/api/youtube/enrich', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ artist: track.artist, title: track.title }),
+              })
+              if (response.ok) {
+                const data = await response.json()
+                if (data.success && data.youtubeId) {
+                  return { youtubeId: data.youtubeId, title: track.title, artist: track.artist }
+                }
+              }
+              return null
+            } catch {
+              return null
+            }
+          })
+
+          const results = await Promise.all(enrichPromises)
+          results.forEach((result) => {
+            if (result) {
+              tracksWithYoutubeId.push(result)
+            }
+          })
+
+          // Update progress
+          const progressPercent = Math.min(10 + Math.round((i + batch.length) / tracksNeedingEnrichment.length * 10), 20)
+          setProgress(progressPercent)
+          setProgressMessage(`Found ${tracksWithYoutubeId.length} of ${tracksNeedingEnrichment.length} tracks...`)
+        }
+      }
+
+      const tracks = tracksWithYoutubeId
 
       if (tracks.length === 0) {
-        throw new Error('No valid tracks to export')
+        throw new Error('No valid tracks to export - could not find any tracks on YouTube')
       }
 
       setProgress(20)

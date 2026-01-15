@@ -500,9 +500,26 @@ function createStreamingResponse(prompt: string, constraints: GeneratePlaylistRe
   if (process.env.ANTHROPIC_API_KEY) availableProviders.push('claude')
   if (process.env.GOOGLE_AI_API_KEY) availableProviders.push('gemini')
 
+  // Calculate per-provider track count to speed up generation when combining results
+  // If 3 providers: each gets ~1/3 of tracks, combined = full count
+  // If 2 providers: each gets ~1/2 of tracks
+  // If 1 provider: gets full track count
+  const providerCount = availableProviders.length
+  const requestedTrackCount = constraints?.trackCount || 8
+  const perProviderTrackCount = providerCount > 1
+    ? Math.ceil(requestedTrackCount / providerCount)
+    : requestedTrackCount
+
   // Log which providers are available (without showing key values)
   console.log('[Stream API] Available providers:', availableProviders)
+  console.log('[Stream API] Track count:', requestedTrackCount, '-> per provider:', perProviderTrackCount)
   console.log('[Stream API] Prompt:', prompt.substring(0, 100) + '...')
+
+  // Create modified constraints with reduced track count per provider
+  const perProviderConstraints = {
+    ...constraints,
+    trackCount: perProviderTrackCount
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -555,13 +572,13 @@ function createStreamingResponse(prompt: string, constraints: GeneratePlaylistRe
 
             switch (provider) {
               case 'openai':
-                tracks = await generateWithOpenAI(prompt, constraints)
+                tracks = await generateWithOpenAI(prompt, perProviderConstraints)
                 break
               case 'claude':
-                tracks = await generateWithClaude(prompt, constraints)
+                tracks = await generateWithClaude(prompt, perProviderConstraints)
                 break
               case 'gemini':
-                tracks = await generateWithGemini(prompt, constraints)
+                tracks = await generateWithGemini(prompt, perProviderConstraints)
                 break
               default:
                 throw new Error(`Unknown provider: ${provider}`)
