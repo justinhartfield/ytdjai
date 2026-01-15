@@ -18,6 +18,9 @@
 [functions."api/ai/generate-stream"]
   timeout = 26
 
+[functions."api/ai/swap"]
+  timeout = 26
+
 # Next.js requires the Next.js Runtime
 [[plugins]]
   package = "@netlify/plugin-nextjs"
@@ -30,6 +33,8 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://s.ytimg.com https://js.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; frame-src https://www.youtube.com https://js.stripe.com; connect-src 'self' https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://www.googleapis.com https://*.supabase.co wss://*.supabase.co https://api.stripe.com; media-src 'self' https://www.youtube.com;"
 
 # Cache static assets
 [[headers]]

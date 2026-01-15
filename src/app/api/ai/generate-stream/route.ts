@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { checkCanGenerate, consumeCredit, getUserSubscription } from '@/lib/subscription'
 import { TIER_CONFIG } from '@/lib/stripe'
+import { rateLimits, checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import type { AIProvider, GeneratePlaylistRequest, PlaylistNode, Track, AlternativeTrack, StreamEvent } from '@/types'
 
 // Next.js route segment config - increase timeout for serverless functions
@@ -804,6 +805,24 @@ export async function GET(request: NextRequest) {
     )
   }
 
+  const userEmail = session.user.email
+
+  // Rate limit check
+  const rateLimit = await checkRateLimit(rateLimits.aiGenerate, userEmail)
+  if (!rateLimit.success) {
+    return NextResponse.json(
+      {
+        error: 'Rate limit exceeded. Please wait before trying again.',
+        code: 'rate_limited',
+        retryAfter: Math.ceil((rateLimit.reset - Date.now()) / 1000),
+      },
+      {
+        status: 429,
+        headers: getRateLimitHeaders(rateLimit),
+      }
+    )
+  }
+
   // Check credits
   const canGenerate = await checkCanGenerate(session.user.email)
   if (!canGenerate.allowed) {
@@ -853,6 +872,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: 'Authentication required', code: 'auth_required' },
       { status: 401 }
+    )
+  }
+
+  const userEmail = session.user.email
+
+  // Rate limit check
+  const rateLimit = await checkRateLimit(rateLimits.aiGenerate, userEmail)
+  if (!rateLimit.success) {
+    return NextResponse.json(
+      {
+        error: 'Rate limit exceeded. Please wait before trying again.',
+        code: 'rate_limited',
+        retryAfter: Math.ceil((rateLimit.reset - Date.now()) / 1000),
+      },
+      {
+        status: 429,
+        headers: getRateLimitHeaders(rateLimit),
+      }
     )
   }
 

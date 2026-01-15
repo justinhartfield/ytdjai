@@ -36,7 +36,8 @@
       "Bash(xargs ls:*)",
       "Bash(cat:*)",
       "Bash(claude mcp add:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(PGPASSWORD='[YOUR-PASSWORD]' psql:*)"
     ]
   }
 }

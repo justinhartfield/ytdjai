@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { rateLimits, checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
+import { youtubeEnrichSchema, validateRequest } from '@/lib/validations'
 
 interface YouTubeSearchResult {
   videoId: string
@@ -67,15 +69,42 @@ function parseISO8601Duration(duration: string): number {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { artist, title } = body
+    // Rate limit by IP for unauthenticated endpoint
+    const forwardedFor = request.headers.get('x-forwarded-for')
+    const ip = forwardedFor?.split(',')[0]?.trim() || 'unknown'
 
-    if (!artist || !title) {
+    const rateLimit = await checkRateLimit(rateLimits.youtube, ip)
+    if (!rateLimit.success) {
       return NextResponse.json(
-        { success: false, error: 'Artist and title are required' },
+        {
+          success: false,
+          error: 'Rate limit exceeded. Please wait before trying again.',
+          code: 'rate_limited',
+          retryAfter: Math.ceil((rateLimit.reset - Date.now()) / 1000),
+        },
+        {
+          status: 429,
+          headers: getRateLimitHeaders(rateLimit),
+        }
+      )
+    }
+
+    // Parse and validate request body
+    const rawBody = await request.json()
+    const validation = validateRequest(youtubeEnrichSchema, rawBody)
+    if (!validation.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: validation.error,
+          code: 'validation_error',
+          details: validation.details,
+        },
         { status: 400 }
       )
     }
+
+    const { artist, title } = validation.data
 
     const apiKey = process.env.YOUTUBE_API_KEY || process.env.GOOGLE_AI_API_KEY
 

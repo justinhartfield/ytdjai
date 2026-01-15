@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { motion } from 'framer-motion'
 import {
   Play,
@@ -121,10 +122,13 @@ export function TrackCard({
       {/* Thumbnail */}
       <div className="relative flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-white/10">
         {track.thumbnail ? (
-          <img
+          <Image
             src={track.thumbnail}
             alt={track.title}
-            className="w-full h-full object-cover"
+            fill
+            sizes="48px"
+            className="object-cover"
+            unoptimized={track.thumbnail.includes('picsum.photos')}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
@@ -201,9 +205,9 @@ export function TrackCard({
                 }}
                 className="w-full flex items-center gap-2 px-3 py-2 hover:bg-purple-500/10 transition-colors"
               >
-                <div className="w-8 h-8 rounded overflow-hidden bg-white/10 flex-shrink-0">
+                <div className="relative w-8 h-8 rounded overflow-hidden bg-white/10 flex-shrink-0">
                   {altTrack.thumbnail ? (
-                    <img src={altTrack.thumbnail} alt="" className="w-full h-full object-cover" />
+                    <Image src={altTrack.thumbnail} alt="" fill sizes="32px" className="object-cover" unoptimized={altTrack.thumbnail.includes('picsum.photos')} />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <Sparkles className="w-3 h-3 text-white/30" />
@@ -230,9 +234,9 @@ export function TrackCard({
                 }}
                 className="w-full flex items-center gap-2 px-3 py-2 hover:bg-purple-500/10 transition-colors"
               >
-                <div className="w-8 h-8 rounded overflow-hidden bg-white/10 flex-shrink-0">
+                <div className="relative w-8 h-8 rounded overflow-hidden bg-white/10 flex-shrink-0">
                   {alt.thumbnail ? (
-                    <img src={alt.thumbnail} alt="" className="w-full h-full object-cover" />
+                    <Image src={alt.thumbnail} alt="" fill sizes="32px" className="object-cover" unoptimized={alt.thumbnail.includes('picsum.photos')} />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <Sparkles className="w-3 h-3 text-white/30" />

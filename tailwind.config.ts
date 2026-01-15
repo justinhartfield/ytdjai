@@ -27,7 +27,7 @@ const config: Config = {
         },
       },
       fontFamily: {
-        syne: ['Syne', 'sans-serif'],
+        syne: ['var(--font-syne)', 'sans-serif'],
       },
       animation: {
         'pulse-ring': 'pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',

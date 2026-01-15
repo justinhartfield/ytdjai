@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { checkCanGenerate, consumeCredit, getUserSubscription } from '@/lib/subscription'
 import { TIER_CONFIG } from '@/lib/stripe'
+import { rateLimits, checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
+import { swapTrackSchema, validateRequest } from '@/lib/validations'
 import type { AIProvider, SwapTrackRequest, Track } from '@/types'
 
 // Next.js route segment config - increase timeout for serverless functions
@@ -333,6 +335,23 @@ export async function POST(request: NextRequest) {
 
     const userEmail = session.user.email
 
+    // Rate limit check
+    const rateLimit = await checkRateLimit(rateLimits.aiSwap, userEmail)
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Rate limit exceeded. Please wait before trying again.',
+          code: 'rate_limited',
+          retryAfter: Math.ceil((rateLimit.reset - Date.now()) / 1000),
+        },
+        {
+          status: 429,
+          headers: getRateLimitHeaders(rateLimit),
+        }
+      )
+    }
+
     // Check if user can generate (has credits)
     const canGenerate = await checkCanGenerate(userEmail)
     if (!canGenerate.allowed) {
@@ -351,7 +370,21 @@ export async function POST(request: NextRequest) {
     const subscription = await getUserSubscription(userEmail)
     const tierConfig = TIER_CONFIG[subscription.tier]
 
-    const body: SwapTrackRequest = await request.json()
+    // Parse and validate request body
+    const rawBody = await request.json()
+    const validation = validateRequest(swapTrackSchema, rawBody)
+    if (!validation.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: validation.error,
+          code: 'validation_error',
+          details: validation.details,
+        },
+        { status: 400 }
+      )
+    }
+
     const {
       currentTrack,
       previousTrack,
@@ -360,10 +393,10 @@ export async function POST(request: NextRequest) {
       constraints,
       provider = 'openai',
       styleHint
-    } = body
+    } = validation.data
 
     // Check if user has access to the requested provider
-    if (!tierConfig.providers.includes(provider)) {
+    if (!(tierConfig.allowedProviders as readonly string[]).includes(provider)) {
       return NextResponse.json(
         {
           success: false,
