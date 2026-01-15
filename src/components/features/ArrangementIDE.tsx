@@ -22,6 +22,7 @@ import { BrowseSetsModal } from './BrowseSetsModal'
 import type { PlaylistNode, Track, AIConstraints, Set, AIProvider } from '@/types'
 import { GhostTrackNode, AIProviderBadge } from './GhostTrackNode'
 import { UpgradeModal } from './Subscription/UpgradeModal'
+import { CreditsDisplay } from './Subscription/CreditsDisplay'
 
 interface ArrangementIDEProps {
   onViewChange: (view: 'arrangement' | 'session') => void
@@ -709,6 +710,8 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
               <Redo2 className="w-5 h-5" />
             </button>
           </div>
+          <div className="h-8 w-px bg-white/10" />
+          <CreditsDisplay className="px-3 py-1.5 bg-black/40 rounded-full border border-white/5" />
           <div className="h-8 w-px bg-white/10" />
           <div className="flex items-center gap-3">
             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Project:</span>
