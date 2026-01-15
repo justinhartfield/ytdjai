@@ -108,12 +108,8 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
     setIsGenerating(true)
     setStoreGenerating(true)
 
-    // Build the prompt from selections
+    // Build display text for tags and weighted phrases (used in prompt display)
     const tagsText = selectedTags.length > 0 ? selectedTags.join(', ') : ''
-    const arcTemplate = ARC_TEMPLATES.find(a => a.id === selectedArc)
-    const arcText = arcTemplate ? `Energy arc: ${arcTemplate.name.toLowerCase()} - ${arcTemplate.description}` : ''
-
-    // Build weighted phrases text
     const weightedPhrasesText = generationControls.weightedPhrases.length > 0
       ? generationControls.weightedPhrases.map(p => {
           const totalWeight = generationControls.weightedPhrases.reduce((sum, wp) => sum + wp.weight, 0)
@@ -122,101 +118,49 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
         }).join(' + ')
       : ''
 
-    // Build avoid concepts text
-    const avoidText = generationControls.avoidConcepts.length > 0
-      ? `AVOID: ${generationControls.avoidConcepts.join(', ')}`
-      : ''
-
-    // Build prompt templates text
-    const templatesText = generationControls.appliedTemplates.length > 0
-      ? `Style modifiers: ${generationControls.appliedTemplates.map(t => t.replace(/-/g, ' ')).join(', ')}`
-      : ''
-
-    // Build context tokens text
-    const contextParts: string[] = []
-    if (generationControls.contextTokens.timeOfDay) contextParts.push(`time: ${generationControls.contextTokens.timeOfDay}`)
-    if (generationControls.contextTokens.season) contextParts.push(`season: ${generationControls.contextTokens.season}`)
-    if (generationControls.contextTokens.weather) contextParts.push(`weather: ${generationControls.contextTokens.weather}`)
-    if (generationControls.contextTokens.activity) contextParts.push(`activity: ${generationControls.contextTokens.activity}`)
-    if (generationControls.contextTokens.socialContext) contextParts.push(`vibe: ${generationControls.contextTokens.socialContext}`)
-    const contextText = contextParts.length > 0 ? `Context: ${contextParts.join(', ')}` : ''
-
-    // Build anchor tracks text
-    const anchorText = generationControls.anchorTracks.length > 0
-      ? `MUST INCLUDE these tracks: ${generationControls.anchorTracks.map(t => `"${t.title}" by ${t.artist}`).join(', ')}`
-      : ''
-
-    // Build similar playlist text
-    const similarText = generationControls.similarPlaylist?.url
-      ? `Base on playlist: ${generationControls.similarPlaylist.url}${generationControls.similarPlaylist.modifier ? `, but ${generationControls.similarPlaylist.modifier}` : ''}`
-      : ''
-
-    // Build vocal density text
-    const vocalText = (() => {
-      const parts: string[] = []
-      const { vocalDensity } = generationControls
-      if (vocalDensity.instrumentalVsVocal < 30) parts.push('prefer instrumental tracks')
-      else if (vocalDensity.instrumentalVsVocal > 70) parts.push('prefer vocal-heavy tracks')
-      if (vocalDensity.hookyVsAtmospheric < 30) parts.push('catchy, hooky songs')
-      else if (vocalDensity.hookyVsAtmospheric > 70) parts.push('atmospheric, ambient textures')
-      if (vocalDensity.lyricClarity < 30) parts.push('clear, narrative lyrics')
-      else if (vocalDensity.lyricClarity > 70) parts.push('abstract, buried vocals')
-      return parts.length > 0 ? `Vocal preferences: ${parts.join(', ')}` : ''
-    })()
-
-    // Build energy preset text
-    const energyPresetText = (() => {
-      switch (generationControls.energyPreset) {
-        case 'no-slow-songs': return 'Keep all tracks above 50 energy, no ballads or slow songs'
-        case 'keep-it-mellow': return 'Keep energy soft and mellow throughout, nothing too intense'
-        case 'mid-tempo-groove': return 'Maintain mid-tempo groove between 60-75 energy'
-        case 'bpm-ramp': return 'Gradually increase BPM and energy throughout the set'
-        default: return ''
-      }
-    })()
-
-    // Build content mode text
-    const contentText = (() => {
-      switch (generationControls.contentMode) {
-        case 'clean': return 'Only clean, radio-safe tracks, no explicit content'
-        case 'family': return 'Family-friendly tracks only, appropriate for all ages'
-        default: return ''
-      }
-    })()
-
     // Calculate track count based on length target
     let trackCount: number
-    let durationTarget: number
     if (generationControls.lengthTarget.type === 'tracks') {
       trackCount = generationControls.lengthTarget.count
-      durationTarget = trackCount * 4 // Estimate ~4 min per track
     } else {
-      durationTarget = generationControls.lengthTarget.minutes
-      trackCount = Math.round(durationTarget / 4) // Roughly 4 min per track
+      trackCount = Math.round(generationControls.lengthTarget.minutes / 4) // Roughly 4 min per track
     }
 
-    // Use the legacy duration if no advanced controls used
-    const effectiveDuration = generationControls.lengthTarget ? durationTarget : duration
+    // Use the legacy duration-based count if no advanced controls used
     const effectiveTrackCount = generationControls.lengthTarget ? trackCount : Math.round(duration / 5)
 
-    const fullPrompt = [
-      prompt || 'Create an amazing DJ set',
-      weightedPhrasesText && `Blend these vibes: ${weightedPhrasesText}`,
-      generationControls.longFormInput && `Inspired by: "${generationControls.longFormInput.substring(0, 500)}${generationControls.longFormInput.length > 500 ? '...' : ''}"`,
-      tagsText && `Style: ${tagsText}`,
-      templatesText,
-      arcText,
-      energyPresetText,
-      `Duration: approximately ${effectiveDuration} minutes`,
-      `Energy range: ${energyRange.min}-${energyRange.max}`,
-      novelty > 66 ? 'Include deep cuts and obscure tracks' : novelty < 33 ? 'Focus on well-known hits' : 'Mix of familiar and fresh tracks',
-      contentText,
-      vocalText,
-      contextText,
-      anchorText,
-      similarText,
-      avoidText
-    ].filter(Boolean).join('. ')
+    // Build a clean, focused prompt based on what the user actually specified
+    // All other settings (context, vocal, energy, etc.) are passed via constraints to the backend
+    const buildCleanPrompt = (): string => {
+      const parts: string[] = []
+
+      // Primary vibe definition - prioritize weighted phrases > user prompt > tags
+      if (weightedPhrasesText) {
+        parts.push(weightedPhrasesText)
+      } else if (prompt.trim()) {
+        parts.push(prompt.trim())
+      }
+
+      // Add style tags if selected (and not redundant with user prompt)
+      if (tagsText && !parts.some(p => p === tagsText)) {
+        parts.push(tagsText)
+      }
+
+      // Add long-form inspiration if provided (truncated for display only)
+      if (generationControls.longFormInput) {
+        const truncated = generationControls.longFormInput.substring(0, 200)
+        parts.push(`Inspired by: "${truncated}${generationControls.longFormInput.length > 200 ? '...' : ''}"`)
+      }
+
+      // If still empty, use a minimal default
+      if (parts.length === 0) {
+        return 'Generate a DJ set'
+      }
+
+      return parts.join('. ')
+    }
+
+    const fullPrompt = buildCleanPrompt()
 
     // Save the prompt
     updatePrompt(fullPrompt)
