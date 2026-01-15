@@ -10,6 +10,42 @@ import {
 import { getServerSupabase } from '@/lib/supabase'
 import Stripe from 'stripe'
 
+/**
+ * Check if a Stripe event has already been processed (for idempotency)
+ * Returns true if already processed, false if new event
+ */
+async function isEventProcessed(eventId: string): Promise<boolean> {
+  const supabase = getServerSupabase()
+  const { data } = await supabase
+    .from('stripe_events')
+    .select('id')
+    .eq('event_id', eventId)
+    .single()
+
+  return !!data
+}
+
+/**
+ * Mark a Stripe event as processed
+ */
+async function markEventProcessed(
+  eventId: string,
+  eventType: string,
+  status: 'processed' | 'failed' = 'processed',
+  error?: string
+): Promise<void> {
+  const supabase = getServerSupabase()
+  await supabase.from('stripe_events').upsert({
+    event_id: eventId,
+    event_type: eventType,
+    status,
+    error: error || null,
+    processed_at: new Date().toISOString(),
+  }, {
+    onConflict: 'event_id',
+  })
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text()
   const signature = req.headers.get('stripe-signature')
@@ -44,6 +80,18 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // Idempotency check - skip if already processed
+  try {
+    const alreadyProcessed = await isEventProcessed(event.id)
+    if (alreadyProcessed) {
+      console.log(`[Webhook] Event ${event.id} already processed, skipping`)
+      return NextResponse.json({ received: true, duplicate: true })
+    }
+  } catch (err) {
+    // If we can't check (table doesn't exist yet), continue processing
+    console.warn('[Webhook] Could not check event idempotency:', err)
+  }
+
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -74,9 +122,29 @@ export async function POST(req: NextRequest) {
         console.log(`Unhandled event type: ${event.type}`)
     }
 
+    // Mark event as processed
+    try {
+      await markEventProcessed(event.id, event.type, 'processed')
+    } catch (err) {
+      console.warn('[Webhook] Could not mark event as processed:', err)
+    }
+
     return NextResponse.json({ received: true })
   } catch (error) {
     console.error('Webhook handler error:', error)
+
+    // Mark event as failed for debugging
+    try {
+      await markEventProcessed(
+        event.id,
+        event.type,
+        'failed',
+        error instanceof Error ? error.message : 'Unknown error'
+      )
+    } catch (err) {
+      console.warn('[Webhook] Could not mark event as failed:', err)
+    }
+
     return NextResponse.json(
       { error: 'Webhook handler failed' },
       { status: 500 }
