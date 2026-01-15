@@ -405,7 +405,7 @@ Return ONLY valid JSON array, no markdown.${constraintInstructions ? `\n\nConstr
         if (jsonMatch) {
           const tracks = JSON.parse(jsonMatch[0])
           console.log('[OpenAI] Parsed', tracks.length, 'tracks')
-          return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+          return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10, true, 'openai')
         }
       } catch (parseError) {
         // Try to fix truncated JSON by finding last complete object
@@ -417,7 +417,7 @@ Return ONLY valid JSON array, no markdown.${constraintInstructions ? `\n\nConstr
           if (jsonMatch) {
             const tracks = JSON.parse(jsonMatch[0])
             console.log('[OpenAI] Recovered', tracks.length, 'tracks from truncated response')
-            return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+            return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10, true, 'openai')
           }
         }
         throw parseError
@@ -517,7 +517,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
       if (jsonMatch) {
         const tracks = JSON.parse(jsonMatch[0])
         console.log('[Claude] Parsed', tracks.length, 'tracks')
-        return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+        return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10, true, 'claude')
       }
     }
 
@@ -622,7 +622,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
         if (jsonMatch) {
           const tracks = JSON.parse(jsonMatch[0])
           console.log('[Gemini] Parsed', tracks.length, 'tracks')
-          return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+          return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10, true, 'gemini')
         }
       } catch (parseError) {
         // Try to fix truncated JSON by finding last complete object
@@ -636,7 +636,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
             try {
               const tracks = JSON.parse(recovered)
               console.log('[Gemini] Recovered', tracks.length, 'tracks (method 1: last },)')
-              return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+              return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10, true, 'gemini')
             } catch { /* continue to next method */ }
           }
 
@@ -647,7 +647,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
             try {
               const tracks = JSON.parse(recovered)
               console.log('[Gemini] Recovered', tracks.length, 'tracks (method 2: second-to-last)')
-              return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+              return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10, true, 'gemini')
             } catch { /* continue to next method */ }
           }
 
@@ -658,7 +658,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
             try {
               const tracks = JSON.parse(recovered)
               console.log('[Gemini] Recovered', tracks.length, 'tracks (method 3: }])')
-              return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+              return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10, true, 'gemini')
             } catch { /* continue to next method */ }
           }
 
@@ -670,7 +670,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
             try {
               const tracks = JSON.parse(recovered)
               console.log('[Gemini] Recovered', tracks.length, 'tracks (method 4: regex extraction)')
-              return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10)
+              return await tracksToPlaylistNodes(tracks, constraints?.energyTolerance || 10, true, 'gemini')
             } catch { /* give up */ }
           }
         }
@@ -690,7 +690,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
   }
 }
 
-async function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], energyTolerance: number = 10, skipYouTubeForAlternatives: boolean = true): Promise<PlaylistNode[]> {
+async function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], energyTolerance: number = 10, skipYouTubeForAlternatives: boolean = true, provider: AIProvider = 'openai'): Promise<PlaylistNode[]> {
   // Collect main tracks that need YouTube enrichment
   // Skip alternatives to save time on Netlify (can reduce from 24 searches to 8)
   const mainTracksToEnrich: Partial<Track>[] = tracks.map(track => ({
@@ -729,9 +729,9 @@ async function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], energyTo
   })
 
   return enrichedMainTracks.map((track, index) => ({
-    id: `node-${Date.now()}-${index}`,
+    id: `node-${provider}-${Date.now()}-${index}`,
     track: {
-      id: `track-${Date.now()}-${index}`,
+      id: `track-${provider}-${Date.now()}-${index}`,
       youtubeId: track.youtubeId || `yt-${Date.now()}-${index}`,
       title: track.title || 'Unknown Track',
       artist: track.artist || 'Unknown Artist',
@@ -743,6 +743,7 @@ async function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], energyTo
       aiReasoning: tracks[index].aiReasoning // Get from original tracks
     },
     position: index,
+    sourceProvider: provider, // Tag which AI generated this track
     alternatives: enrichedAlternatives.get(index) || [],
     transitionToNext: index < enrichedMainTracks.length - 1 ? {
       quality: calculateTransitionQuality(track, enrichedMainTracks[index + 1], energyTolerance),

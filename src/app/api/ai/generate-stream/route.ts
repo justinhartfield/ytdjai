@@ -613,10 +613,18 @@ function createStreamingResponse(
   const encoder = new TextEncoder()
 
   // Determine which providers are available (both configured and allowed by tier)
+  // Check for non-empty strings to handle shell env vars that might be set to ''
   const configuredProviders: AIProvider[] = []
-  if (process.env.OPENAI_API_KEY) configuredProviders.push('openai')
-  if (process.env.ANTHROPIC_API_KEY) configuredProviders.push('claude')
-  if (process.env.GOOGLE_AI_API_KEY) configuredProviders.push('gemini')
+
+  // Debug logging to identify env var issues
+  console.log('[Stream API] Checking API keys:')
+  console.log('  OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? `${process.env.OPENAI_API_KEY.substring(0, 10)}... (len: ${process.env.OPENAI_API_KEY.length})` : 'NOT SET')
+  console.log('  ANTHROPIC_API_KEY:', process.env.ANTHROPIC_API_KEY ? `${process.env.ANTHROPIC_API_KEY.substring(0, 10)}... (len: ${process.env.ANTHROPIC_API_KEY.length})` : 'NOT SET')
+  console.log('  GOOGLE_AI_API_KEY:', process.env.GOOGLE_AI_API_KEY ? `${process.env.GOOGLE_AI_API_KEY.substring(0, 10)}... (len: ${process.env.GOOGLE_AI_API_KEY.length})` : 'NOT SET')
+
+  if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim().length > 0) configuredProviders.push('openai')
+  if (process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY.trim().length > 0) configuredProviders.push('claude')
+  if (process.env.GOOGLE_AI_API_KEY && process.env.GOOGLE_AI_API_KEY.trim().length > 0) configuredProviders.push('gemini')
 
   // Filter to only allowed providers if specified (subscription tier restriction)
   const availableProviders: AIProvider[] = allowedProviders
