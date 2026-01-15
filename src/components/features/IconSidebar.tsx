@@ -1,7 +1,7 @@
 'use client'
 
-import { useRef } from 'react'
-import { Settings2, Music2, FolderOpen, ImagePlus, LayoutGrid, GitBranch, Home } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Settings2, FolderOpen, LayoutGrid, GitBranch, Home, LogOut, User, Circle, Camera } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
 
@@ -15,9 +15,23 @@ interface IconSidebarProps {
 }
 
 export function IconSidebar({ className, onViewChange, currentView, onGoHome }: IconSidebarProps) {
-  const { ui, setLeftSidebarPanel, currentSet, updateCoverArt } = useYTDJStore()
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { ui, setLeftSidebarPanel } = useYTDJStore()
+  const [isProfileOpen, setIsProfileOpen] = useState(false)
+  const [userAvatar, setUserAvatar] = useState<string | null>(null)
+  const profileRef = useRef<HTMLDivElement>(null)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
   const activePanel = ui.leftSidebarPanel
+
+  // Close profile menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const viewIcons = [
     {
@@ -49,32 +63,27 @@ export function IconSidebar({ className, onViewChange, currentView, onGoHome }: 
     }
   ]
 
-  const handleCoverArtClick = () => {
-    fileInputRef.current?.click()
-  }
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      return
-    }
+    if (!file.type.startsWith('image/')) return
 
-    // Convert to data URI
     const reader = new FileReader()
     reader.onload = (event) => {
       const dataUri = event.target?.result as string
-      updateCoverArt(dataUri)
+      setUserAvatar(dataUri)
+      // TODO: Persist to user profile in store/backend
     }
     reader.readAsDataURL(file)
-
-    // Reset input so same file can be selected again
     e.target.value = ''
   }
 
-  const coverArt = currentSet?.coverArt
+  const handleLogout = () => {
+    // TODO: Implement actual logout logic
+    console.log('Logging out...')
+    setIsProfileOpen(false)
+  }
 
   return (
     <aside className={cn(
@@ -97,36 +106,6 @@ export function IconSidebar({ className, onViewChange, currentView, onGoHome }: 
           </div>
         </button>
       )}
-
-      {/* Cover Art */}
-      <button
-        onClick={handleCoverArtClick}
-        className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center mb-4 transition-all hover:ring-2 hover:ring-cyan-500/50 group relative"
-        title="Click to change cover art"
-      >
-        {coverArt ? (
-          <img
-            src={coverArt}
-            alt="Cover art"
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-tr from-gray-700 to-gray-600 flex items-center justify-center">
-            <ImagePlus className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
-          </div>
-        )}
-        {/* Hover overlay */}
-        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <ImagePlus className="w-4 h-4 text-white" />
-        </div>
-      </button>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleFileChange}
-        className="hidden"
-      />
 
       {/* View Switcher Icons */}
       {onViewChange && (
@@ -190,11 +169,107 @@ export function IconSidebar({ className, onViewChange, currentView, onGoHome }: 
         ))}
       </nav>
 
-      {/* Bottom Section - could add user avatar or additional controls */}
-      <div className="mt-auto">
-        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-[10px] font-black text-white">
-          U
-        </div>
+      {/* Profile Menu */}
+      <div className="mt-auto relative" ref={profileRef}>
+        <button
+          onClick={() => setIsProfileOpen(!isProfileOpen)}
+          className={cn(
+            "w-10 h-10 rounded-full overflow-hidden flex items-center justify-center transition-all hover:ring-2 hover:ring-purple-500/50",
+            isProfileOpen && "ring-2 ring-purple-500"
+          )}
+          title="Profile"
+        >
+          {userAvatar ? (
+            <img
+              src={userAvatar}
+              alt="Profile"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-[10px] font-black text-white">
+              U
+            </div>
+          )}
+        </button>
+
+        {/* Profile Dropdown */}
+        {isProfileOpen && (
+          <div className="absolute bottom-full left-0 mb-2 w-56 bg-[#0a0b14] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+            {/* User Info Header */}
+            <div className="p-4 border-b border-white/5">
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <div className="w-10 h-10 rounded-full overflow-hidden">
+                    {userAvatar ? (
+                      <img
+                        src={userAvatar}
+                        alt="Profile"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-xs font-black text-white">
+                        U
+                      </div>
+                    )}
+                  </div>
+                  {/* Online status indicator */}
+                  <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-[#0a0b14]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">User</p>
+                  <div className="flex items-center gap-1.5">
+                    <Circle className="w-2 h-2 fill-green-500 text-green-500" />
+                    <span className="text-[10px] text-green-400">Online</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Menu Items */}
+            <div className="py-1">
+              {/* Change Avatar */}
+              <button
+                onClick={() => avatarInputRef.current?.click()}
+                className="w-full px-4 py-2.5 flex items-center gap-3 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+              >
+                <Camera className="w-4 h-4" />
+                <span>Change Avatar</span>
+              </button>
+
+              {/* Profile Settings */}
+              <button
+                onClick={() => {
+                  // TODO: Navigate to profile settings
+                  setIsProfileOpen(false)
+                }}
+                className="w-full px-4 py-2.5 flex items-center gap-3 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+              >
+                <User className="w-4 h-4" />
+                <span>Profile Settings</span>
+              </button>
+
+              <div className="my-1 border-t border-white/5" />
+
+              {/* Logout */}
+              <button
+                onClick={handleLogout}
+                className="w-full px-4 py-2.5 flex items-center gap-3 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Log Out</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Hidden file input for avatar upload */}
+        <input
+          ref={avatarInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleAvatarChange}
+          className="hidden"
+        />
       </div>
     </aside>
   )
