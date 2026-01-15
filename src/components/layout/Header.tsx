@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useSession, signOut } from 'next-auth/react'
+import Link from 'next/link'
 import {
   Settings,
   User,
@@ -15,7 +16,10 @@ import {
   FolderOpen,
   Plus,
   Check,
-  Loader2
+  Loader2,
+  Zap,
+  Crown,
+  CreditCard
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button, Badge, Dropdown } from '@/components/ui'
@@ -23,6 +27,7 @@ import { useYTDJStore } from '@/store'
 import { AISettingsModal } from '@/components/features/AISettingsModal'
 import { SaveSetDialog } from '@/components/features/SaveSetDialog'
 import { BrowseSetsModal } from '@/components/features/BrowseSetsModal'
+import { CreditsDisplay, SubscriptionBadge } from '@/components/features/Subscription'
 
 export function Header() {
   const { data: session, status: authStatus } = useSession()
@@ -31,7 +36,16 @@ export function Header() {
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [showBrowseSets, setShowBrowseSets] = useState(false)
   const [quickSaveStatus, setQuickSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
-  const { aiProvider, currentSet, sets, setCurrentSet, saveSetToCloud, isSyncing } = useYTDJStore()
+  const { aiProvider, currentSet, sets, setCurrentSet, saveSetToCloud, isSyncing, subscription, fetchSubscription } = useYTDJStore()
+
+  // Fetch subscription when authenticated
+  useEffect(() => {
+    if (authStatus === 'authenticated') {
+      fetchSubscription()
+    }
+  }, [authStatus, fetchSubscription])
+
+  const isPro = subscription.tier === 'pro'
 
   // Reset quick save status after showing success
   useEffect(() => {
@@ -138,8 +152,42 @@ export function Header() {
           </Button>
         </div>
 
-        {/* Right: AI Provider & Settings */}
+        {/* Right: Credits, AI Provider & Settings */}
         <div className="flex items-center gap-3">
+          {/* Credits Display (only when authenticated) */}
+          {authStatus === 'authenticated' && (
+            <Link
+              href="/account"
+              className={cn(
+                'flex items-center gap-2 px-3 py-1.5 rounded-lg',
+                'bg-white/5 border border-white/10',
+                'hover:border-white/20 transition-colors'
+              )}
+            >
+              <CreditsDisplay showLabel={true} />
+            </Link>
+          )}
+
+          {/* Upgrade Button (free users only) */}
+          {authStatus === 'authenticated' && !isPro && (
+            <Link
+              href="/pricing"
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg',
+                'bg-gradient-to-r from-purple-500/20 to-pink-500/20',
+                'border border-purple-500/30',
+                'hover:border-purple-500/50 transition-colors',
+                'text-purple-400 hover:text-purple-300'
+              )}
+            >
+              <Crown className="w-3.5 h-3.5" />
+              <span className="text-xs font-bold">Upgrade</span>
+            </Link>
+          )}
+
+          {/* Pro Badge */}
+          {isPro && <SubscriptionBadge />}
+
           {/* AI Provider Indicator */}
           <button
             onClick={() => setShowAISettings(true)}
@@ -185,14 +233,31 @@ export function Header() {
                   'shadow-xl shadow-black/50'
                 )}>
                   <div className="px-4 py-2 border-b border-white/10">
-                    <p className="text-sm font-medium text-white">DJ User</p>
-                    <p className="text-xs text-white/50">dj@example.com</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-white">
+                        {session?.user?.name || 'DJ User'}
+                      </p>
+                      {isPro && <SubscriptionBadge />}
+                    </div>
+                    <p className="text-xs text-white/50">{session?.user?.email || 'Not signed in'}</p>
                   </div>
                   <div className="py-1">
-                    <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-white/80 hover:bg-white/5">
-                      <User className="w-4 h-4" />
-                      Profile
-                    </button>
+                    <Link
+                      href="/account"
+                      onClick={() => setShowUserMenu(false)}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-white/80 hover:bg-white/5"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      Account & Billing
+                    </Link>
+                    <Link
+                      href="/pricing"
+                      onClick={() => setShowUserMenu(false)}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-white/80 hover:bg-white/5"
+                    >
+                      <Crown className="w-4 h-4" />
+                      {isPro ? 'Manage Plan' : 'Upgrade to Pro'}
+                    </Link>
                     <button
                       onClick={() => {
                         setShowUserMenu(false)
@@ -203,13 +268,12 @@ export function Header() {
                       <Bot className="w-4 h-4" />
                       AI Settings
                     </button>
-                    <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-white/80 hover:bg-white/5">
-                      <Settings className="w-4 h-4" />
-                      Preferences
-                    </button>
                   </div>
                   <div className="pt-1 border-t border-white/10">
-                    <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10">
+                    <button
+                      onClick={() => signOut()}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10"
+                    >
                       <LogOut className="w-4 h-4" />
                       Sign Out
                     </button>

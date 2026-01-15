@@ -91,8 +91,28 @@ interface GenerationControls {
   emojiVibesEnabled: boolean
 }
 
+// Subscription State
+interface SubscriptionState {
+  tier: 'free' | 'pro'
+  creditsRemaining: number
+  creditsResetAt: string | null
+  isLoadingSubscription: boolean
+  limits: {
+    monthlyCredits: number
+    maxCloudSaves: number | null
+    allowedProviders: string[]
+    hasWizardPro: boolean
+  }
+}
+
 // YTDJ Store Interface (simplified for main app)
 interface YTDJState {
+  // Subscription
+  subscription: SubscriptionState
+  fetchSubscription: () => Promise<void>
+  refreshCredits: () => Promise<void>
+  decrementLocalCredits: () => void
+
   // AI Provider
   aiProvider: AIProvider
   setAIProvider: (provider: AIProvider) => void
@@ -198,6 +218,78 @@ interface YTDJState {
 export const useYTDJStore = create<YTDJState>()(
   persist(
     (set, get) => ({
+      // Subscription
+      subscription: {
+        tier: 'free',
+        creditsRemaining: 5,
+        creditsResetAt: null,
+        isLoadingSubscription: false,
+        limits: {
+          monthlyCredits: 5,
+          maxCloudSaves: 3,
+          allowedProviders: ['openai'],
+          hasWizardPro: false,
+        },
+      },
+      fetchSubscription: async () => {
+        set((state) => ({
+          subscription: { ...state.subscription, isLoadingSubscription: true },
+        }))
+        try {
+          const response = await fetch('/api/user/subscription')
+          if (response.ok) {
+            const data = await response.json()
+            set((state) => ({
+              subscription: {
+                tier: data.tier,
+                creditsRemaining: data.creditsRemaining,
+                creditsResetAt: data.creditsResetAt,
+                isLoadingSubscription: false,
+                limits: {
+                  monthlyCredits: data.limits.monthlyCredits,
+                  maxCloudSaves: data.limits.maxCloudSaves,
+                  allowedProviders: data.limits.allowedProviders,
+                  hasWizardPro: data.limits.hasWizardPro,
+                },
+              },
+            }))
+          } else {
+            set((state) => ({
+              subscription: { ...state.subscription, isLoadingSubscription: false },
+            }))
+          }
+        } catch (error) {
+          console.error('Failed to fetch subscription:', error)
+          set((state) => ({
+            subscription: { ...state.subscription, isLoadingSubscription: false },
+          }))
+        }
+      },
+      refreshCredits: async () => {
+        try {
+          const response = await fetch('/api/user/subscription')
+          if (response.ok) {
+            const data = await response.json()
+            set((state) => ({
+              subscription: {
+                ...state.subscription,
+                creditsRemaining: data.creditsRemaining,
+              },
+            }))
+          }
+        } catch (error) {
+          console.error('Failed to refresh credits:', error)
+        }
+      },
+      decrementLocalCredits: () => {
+        set((state) => ({
+          subscription: {
+            ...state.subscription,
+            creditsRemaining: Math.max(0, state.subscription.creditsRemaining - 1),
+          },
+        }))
+      },
+
       // AI Provider
       aiProvider: 'openai',
       setAIProvider: (provider) => set({ aiProvider: provider }),

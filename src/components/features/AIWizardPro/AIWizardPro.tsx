@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X,
@@ -11,6 +11,7 @@ import {
   Zap
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useYTDJStore } from '@/store'
 import { WizardProgress } from './WizardProgress'
 import { FoundationStep } from './steps/FoundationStep'
 import { VibeCraftingStep } from './steps/VibeCraftingStep'
@@ -19,6 +20,7 @@ import { BoundariesStep } from './steps/BoundariesStep'
 import { ShapeLengthStep } from './steps/ShapeLengthStep'
 import { VocalBalanceStep } from './steps/VocalBalanceStep'
 import { DeepDiveStep } from './steps/DeepDiveStep'
+import { UpgradeModal } from '../Subscription/UpgradeModal'
 
 const TOTAL_STEPS = 7
 
@@ -31,6 +33,25 @@ interface AIWizardProProps {
 export function AIWizardPro({ isOpen, onClose, onGenerate }: AIWizardProProps) {
   const [currentStep, setCurrentStep] = useState(0)
   const [completedSteps, setCompletedSteps] = useState<number[]>([])
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const { subscription, fetchSubscription } = useYTDJStore()
+
+  // Check subscription when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchSubscription()
+    }
+  }, [isOpen, fetchSubscription])
+
+  // Determine if user has Wizard Pro access
+  const hasWizardAccess = subscription.limits.hasWizardPro
+
+  // Show upgrade modal if user doesn't have access
+  useEffect(() => {
+    if (isOpen && !subscription.isLoadingSubscription && !hasWizardAccess) {
+      setShowUpgradeModal(true)
+    }
+  }, [isOpen, hasWizardAccess, subscription.isLoadingSubscription])
 
   const handleNext = useCallback(() => {
     if (!completedSteps.includes(currentStep)) {
@@ -92,7 +113,24 @@ export function AIWizardPro({ isOpen, onClose, onGenerate }: AIWizardProProps) {
     }
   }
 
+  const handleUpgradeClose = useCallback(() => {
+    setShowUpgradeModal(false)
+    // Close the wizard too since they don't have access
+    onClose()
+  }, [onClose])
+
   if (!isOpen) return null
+
+  // Show upgrade modal if user doesn't have Pro access
+  if (showUpgradeModal && !hasWizardAccess) {
+    return (
+      <UpgradeModal
+        isOpen={true}
+        onClose={handleUpgradeClose}
+        feature="AI Wizard PRO"
+      />
+    )
+  }
 
   return (
     <AnimatePresence>

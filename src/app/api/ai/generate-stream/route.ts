@@ -1,4 +1,8 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { checkCanGenerate, consumeCredit, getUserSubscription } from '@/lib/subscription'
+import { TIER_CONFIG } from '@/lib/stripe'
 import type { AIProvider, GeneratePlaylistRequest, PlaylistNode, Track, AlternativeTrack, StreamEvent } from '@/types'
 
 // Next.js route segment config - increase timeout for serverless functions
@@ -601,14 +605,23 @@ async function enrichTrackWithYouTube(track: Partial<Track>, apiKey: string): Pr
 }
 
 // Helper to create the streaming response
-function createStreamingResponse(prompt: string, constraints: GeneratePlaylistRequest['constraints']) {
+function createStreamingResponse(
+  prompt: string,
+  constraints: GeneratePlaylistRequest['constraints'],
+  allowedProviders?: AIProvider[]
+) {
   const encoder = new TextEncoder()
 
-  // Determine which providers are available
-  const availableProviders: AIProvider[] = []
-  if (process.env.OPENAI_API_KEY) availableProviders.push('openai')
-  if (process.env.ANTHROPIC_API_KEY) availableProviders.push('claude')
-  if (process.env.GOOGLE_AI_API_KEY) availableProviders.push('gemini')
+  // Determine which providers are available (both configured and allowed by tier)
+  const configuredProviders: AIProvider[] = []
+  if (process.env.OPENAI_API_KEY) configuredProviders.push('openai')
+  if (process.env.ANTHROPIC_API_KEY) configuredProviders.push('claude')
+  if (process.env.GOOGLE_AI_API_KEY) configuredProviders.push('gemini')
+
+  // Filter to only allowed providers if specified (subscription tier restriction)
+  const availableProviders: AIProvider[] = allowedProviders
+    ? configuredProviders.filter(p => allowedProviders.includes(p))
+    : configuredProviders
 
   // Calculate per-provider track count to speed up generation when combining results
   // If 3 providers: each gets ~1/3 of tracks, combined = full count
@@ -774,6 +787,33 @@ function createStreamingResponse(prompt: string, constraints: GeneratePlaylistRe
 
 // GET handler - for EventSource which only supports GET
 export async function GET(request: NextRequest) {
+  // Check authentication
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) {
+    return NextResponse.json(
+      { error: 'Authentication required', code: 'auth_required' },
+      { status: 401 }
+    )
+  }
+
+  // Check credits
+  const canGenerate = await checkCanGenerate(session.user.email)
+  if (!canGenerate.allowed) {
+    return NextResponse.json(
+      {
+        error: 'No credits remaining',
+        code: 'no_credits',
+        tier: canGenerate.tier,
+        creditsRemaining: canGenerate.creditsRemaining
+      },
+      { status: 402 }
+    )
+  }
+
+  // Get subscription to check allowed providers
+  const subscription = await getUserSubscription(session.user.email)
+  const tierConfig = TIER_CONFIG[subscription.tier as keyof typeof TIER_CONFIG]
+
   const searchParams = request.nextUrl.searchParams
   const prompt = searchParams.get('prompt') || ''
   const trackCount = parseInt(searchParams.get('trackCount') || '8')
@@ -791,15 +831,48 @@ export async function GET(request: NextRequest) {
     energyRange: { min: energyMin, max: energyMax }
   }
 
-  return createStreamingResponse(prompt, finalConstraints)
+  // Consume credit before generation
+  await consumeCredit(session.user.email)
+
+  return createStreamingResponse(prompt, finalConstraints, tierConfig.allowedProviders as unknown as AIProvider[])
 }
 
 // POST handler - for more complex constraint data
 export async function POST(request: NextRequest) {
+  // Check authentication
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) {
+    return NextResponse.json(
+      { error: 'Authentication required', code: 'auth_required' },
+      { status: 401 }
+    )
+  }
+
+  // Check credits
+  const canGenerate = await checkCanGenerate(session.user.email)
+  if (!canGenerate.allowed) {
+    return NextResponse.json(
+      {
+        error: 'No credits remaining',
+        code: 'no_credits',
+        tier: canGenerate.tier,
+        creditsRemaining: canGenerate.creditsRemaining
+      },
+      { status: 402 }
+    )
+  }
+
+  // Get subscription to check allowed providers
+  const subscription = await getUserSubscription(session.user.email)
+  const tierConfig = TIER_CONFIG[subscription.tier as keyof typeof TIER_CONFIG]
+
   const body: GeneratePlaylistRequest = await request.json()
   const { prompt, constraints } = body
 
   console.log('[Stream API] POST request received')
 
-  return createStreamingResponse(prompt, constraints)
+  // Consume credit before generation
+  await consumeCredit(session.user.email)
+
+  return createStreamingResponse(prompt, constraints, tierConfig.allowedProviders as unknown as AIProvider[])
 }

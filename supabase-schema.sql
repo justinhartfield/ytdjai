@@ -57,3 +57,55 @@ CREATE TRIGGER update_dj_sets_updated_at
   BEFORE UPDATE ON dj_sets
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================
+-- SUBSCRIPTION & CREDITS TABLES
+-- ============================================
+
+-- User subscriptions table
+CREATE TABLE IF NOT EXISTS user_subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_email TEXT NOT NULL UNIQUE,
+  tier TEXT NOT NULL DEFAULT 'free', -- 'free' | 'pro'
+  stripe_customer_id TEXT,
+  stripe_subscription_id TEXT,
+  credits_remaining INTEGER NOT NULL DEFAULT 5,
+  credits_reset_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for user_subscriptions
+CREATE INDEX IF NOT EXISTS idx_user_subscriptions_email ON user_subscriptions(user_email);
+CREATE INDEX IF NOT EXISTS idx_user_subscriptions_stripe ON user_subscriptions(stripe_customer_id);
+
+-- Enable RLS
+ALTER TABLE user_subscriptions ENABLE ROW LEVEL SECURITY;
+
+-- RLS policies (security enforced at API layer)
+CREATE POLICY "Users can read their own subscription"
+  ON user_subscriptions FOR SELECT USING (true);
+CREATE POLICY "Users can insert their own subscription"
+  ON user_subscriptions FOR INSERT WITH CHECK (true);
+CREATE POLICY "Users can update their own subscription"
+  ON user_subscriptions FOR UPDATE USING (true);
+
+-- Trigger for updated_at
+CREATE TRIGGER update_user_subscriptions_updated_at
+  BEFORE UPDATE ON user_subscriptions
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- Credit transactions table (audit log)
+CREATE TABLE IF NOT EXISTS credit_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_email TEXT NOT NULL,
+  amount INTEGER NOT NULL, -- positive = add, negative = spend
+  reason TEXT NOT NULL, -- 'generation', 'monthly_reset', 'purchase', 'bonus'
+  metadata JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index for credit_transactions
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_email ON credit_transactions(user_email);
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_created_at ON credit_transactions(created_at DESC);

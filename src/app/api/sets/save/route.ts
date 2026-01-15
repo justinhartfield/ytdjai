@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getServerSupabase } from '@/lib/supabase'
+import { canSaveToCloud } from '@/lib/subscription'
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,6 +35,20 @@ export async function POST(req: NextRequest) {
       .eq('user_email', userEmail)
       .eq('set_id', setData.id)
       .single()
+
+    // For new sets, check cloud save limit
+    if (!existingSet) {
+      const canSave = await canSaveToCloud(userEmail)
+      if (!canSave.allowed) {
+        return NextResponse.json(
+          {
+            error: canSave.reason || 'Cloud save limit reached',
+            code: 'save_limit_reached'
+          },
+          { status: 402 }
+        )
+      }
+    }
 
     let result
 
