@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import {
   Sparkles,
@@ -12,7 +12,8 @@ import {
   Search,
   Music,
   Pin,
-  Check
+  Check,
+  Loader2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
@@ -20,6 +21,31 @@ import { WizardStep } from '../WizardStep'
 import type { AnchorTrack } from '@/types'
 
 type FoundationType = 'fresh' | 'playlist' | 'anchors'
+
+interface YouTubeSearchResult {
+  videoId: string
+  title: string
+  artist: string
+  thumbnail: string
+  channelTitle: string
+}
+
+// Debounce hook
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value)
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value)
+    }, delay)
+
+    return () => {
+      clearTimeout(handler)
+    }
+  }, [value, delay])
+
+  return debouncedValue
+}
 
 export function FoundationStep() {
   const {
@@ -38,6 +64,55 @@ export function FoundationStep() {
   const [urlInput, setUrlInput] = useState(generationControls.similarPlaylist?.url || '')
   const [modifierInput, setModifierInput] = useState(generationControls.similarPlaylist?.modifier || '')
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<YouTubeSearchResult[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [showResults, setShowResults] = useState(false)
+  const searchRef = useRef<HTMLDivElement>(null)
+
+  const debouncedQuery = useDebounce(searchQuery, 300)
+
+  // Search YouTube when debounced query changes
+  useEffect(() => {
+    const searchYouTube = async () => {
+      if (!debouncedQuery || debouncedQuery.trim().length < 2) {
+        setSearchResults([])
+        setShowResults(false)
+        return
+      }
+
+      setIsSearching(true)
+      try {
+        const response = await fetch(`/api/youtube/search?q=${encodeURIComponent(debouncedQuery)}&limit=5`)
+        const data = await response.json()
+
+        if (data.success && data.results) {
+          setSearchResults(data.results)
+          setShowResults(true)
+        } else {
+          setSearchResults([])
+        }
+      } catch (error) {
+        console.error('[YouTube Search] Error:', error)
+        setSearchResults([])
+      } finally {
+        setIsSearching(false)
+      }
+    }
+
+    searchYouTube()
+  }, [debouncedQuery])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowResults(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const handleSetPlaylist = () => {
     if (urlInput.trim()) {
@@ -46,6 +121,22 @@ export function FoundationStep() {
         modifier: modifierInput.trim() || undefined
       })
     }
+  }
+
+  const handleSelectTrack = (result: YouTubeSearchResult) => {
+    if (generationControls.anchorTracks.length >= 5) return
+
+    const track: AnchorTrack = {
+      id: `yt-${result.videoId}`,
+      title: result.title,
+      artist: result.artist,
+      youtubeId: result.videoId,
+      thumbnail: result.thumbnail
+    }
+    addAnchorTrack(track)
+    setSearchQuery('')
+    setSearchResults([])
+    setShowResults(false)
   }
 
   const handleQuickAddTrack = () => {
@@ -57,6 +148,8 @@ export function FoundationStep() {
     }
     addAnchorTrack(quickTrack)
     setSearchQuery('')
+    setSearchResults([])
+    setShowResults(false)
   }
 
   const options = [
@@ -203,10 +296,18 @@ export function FoundationStep() {
                   key={track.id}
                   className="flex items-center gap-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg group"
                 >
-                  <Pin className="w-4 h-4 text-amber-400" />
-                  <div className="w-10 h-10 rounded bg-amber-500/20 flex items-center justify-center">
-                    <Music className="w-4 h-4 text-amber-400" />
-                  </div>
+                  <Pin className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  {track.thumbnail ? (
+                    <img
+                      src={track.thumbnail}
+                      alt={track.title}
+                      className="w-10 h-10 rounded object-cover"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                      <Music className="w-4 h-4 text-amber-400" />
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-white font-medium truncate">{track.title}</p>
                     <p className="text-xs text-white/50 truncate">{track.artist}</p>
@@ -222,32 +323,70 @@ export function FoundationStep() {
             </div>
           )}
 
-          {/* Add input */}
+          {/* Search input with autocomplete */}
           {generationControls.anchorTracks.length < 5 && (
-            <div className="flex gap-2">
-              <div className="flex-1 relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleQuickAddTrack()}
-                  placeholder="Type song name and press Enter..."
-                  className="w-full px-4 py-3 pl-10 bg-black/50 border border-white/10 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50"
-                />
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+            <div ref={searchRef} className="relative">
+              <div className="flex gap-2">
+                <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onFocus={() => searchResults.length > 0 && setShowResults(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !showResults) {
+                        handleQuickAddTrack()
+                      } else if (e.key === 'Escape') {
+                        setShowResults(false)
+                      }
+                    }}
+                    placeholder="Search for a song on YouTube..."
+                    className="w-full px-4 py-3 pl-10 bg-black/50 border border-white/10 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50"
+                  />
+                  {isSearching ? (
+                    <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400 animate-spin" />
+                  ) : (
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                  )}
+                </div>
+                <button
+                  onClick={handleQuickAddTrack}
+                  disabled={!searchQuery.trim()}
+                  title="Add as custom track"
+                  className="px-4 py-3 bg-amber-500/20 border border-amber-500/30 rounded-lg text-amber-400 hover:bg-amber-500/30 transition-colors disabled:opacity-50"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
               </div>
-              <button
-                onClick={handleQuickAddTrack}
-                disabled={!searchQuery.trim()}
-                className="px-4 py-3 bg-amber-500/20 border border-amber-500/30 rounded-lg text-amber-400 hover:bg-amber-500/30 transition-colors disabled:opacity-50"
-              >
-                <Plus className="w-5 h-5" />
-              </button>
+
+              {/* Search Results Dropdown */}
+              {showResults && searchResults.length > 0 && (
+                <div className="absolute z-50 w-full mt-2 bg-[#0a0c1c] border border-amber-500/30 rounded-lg shadow-xl overflow-hidden">
+                  {searchResults.map((result) => (
+                    <button
+                      key={result.videoId}
+                      onClick={() => handleSelectTrack(result)}
+                      className="w-full flex items-center gap-3 p-3 hover:bg-amber-500/10 transition-colors text-left"
+                    >
+                      <img
+                        src={result.thumbnail}
+                        alt={result.title}
+                        className="w-12 h-12 rounded object-cover flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white font-medium truncate">{result.title}</p>
+                        <p className="text-xs text-white/50 truncate">{result.artist}</p>
+                      </div>
+                      <Plus className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           <p className="text-xs text-white/30">
-            {generationControls.anchorTracks.length}/5 tracks - AI will fill around these
+            {generationControls.anchorTracks.length}/5 tracks - AI will build your set around these
           </p>
         </motion.div>
       )}
