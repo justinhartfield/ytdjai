@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
 import {
   Settings,
   User,
@@ -12,7 +13,9 @@ import {
   ChevronDown,
   Save,
   FolderOpen,
-  Plus
+  Plus,
+  Check,
+  Loader2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button, Badge, Dropdown } from '@/components/ui'
@@ -22,11 +25,38 @@ import { SaveSetDialog } from '@/components/features/SaveSetDialog'
 import { BrowseSetsModal } from '@/components/features/BrowseSetsModal'
 
 export function Header() {
+  const { data: session, status: authStatus } = useSession()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showAISettings, setShowAISettings] = useState(false)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [showBrowseSets, setShowBrowseSets] = useState(false)
-  const { aiProvider, currentSet, sets, setCurrentSet } = useYTDJStore()
+  const [quickSaveStatus, setQuickSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
+  const { aiProvider, currentSet, sets, setCurrentSet, saveSetToCloud, isSyncing } = useYTDJStore()
+
+  // Reset quick save status after showing success
+  useEffect(() => {
+    if (quickSaveStatus === 'success') {
+      const timer = setTimeout(() => setQuickSaveStatus('idle'), 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [quickSaveStatus])
+
+  const handleSaveClick = async () => {
+    if (!currentSet || currentSet.playlist.length === 0) return
+
+    const isAuthenticated = authStatus === 'authenticated' && session?.user
+    const hasBeenSavedBefore = currentSet.savedToCloud
+
+    // If already saved to cloud and authenticated, do a quick save
+    if (isAuthenticated && hasBeenSavedBefore) {
+      setQuickSaveStatus('saving')
+      const result = await saveSetToCloud(currentSet.id)
+      setQuickSaveStatus(result.success ? 'success' : 'error')
+    } else {
+      // Otherwise show the full dialog (for first-time save or if not authenticated)
+      setShowSaveDialog(true)
+    }
+  }
 
   const providerLabels = {
     openai: 'GPT-4',
@@ -91,11 +121,20 @@ export function Header() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setShowSaveDialog(true)}
-            disabled={!currentSet || currentSet.playlist.length === 0}
+            onClick={handleSaveClick}
+            disabled={!currentSet || currentSet.playlist.length === 0 || quickSaveStatus === 'saving'}
+            className={cn(
+              quickSaveStatus === 'success' && 'text-green-400 hover:text-green-400'
+            )}
           >
-            <Save className="w-4 h-4 mr-1" />
-            Save
+            {quickSaveStatus === 'saving' ? (
+              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+            ) : quickSaveStatus === 'success' ? (
+              <Check className="w-4 h-4 mr-1" />
+            ) : (
+              <Save className="w-4 h-4 mr-1" />
+            )}
+            {quickSaveStatus === 'saving' ? 'Saving...' : quickSaveStatus === 'success' ? 'Saved!' : 'Save'}
           </Button>
         </div>
 

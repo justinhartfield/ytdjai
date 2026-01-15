@@ -855,6 +855,17 @@ export const useYTDJStore = create<YTDJState>()(
             return { success: false, error: data.error || 'Failed to save set' }
           }
 
+          // Mark the set as saved to cloud
+          const savedSetId = setToSave.id
+          set((state) => ({
+            currentSet: state.currentSet?.id === savedSetId
+              ? { ...state.currentSet, savedToCloud: true, updatedAt: new Date() }
+              : state.currentSet,
+            sets: state.sets.map(s =>
+              s.id === savedSetId ? { ...s, savedToCloud: true, updatedAt: new Date() } : s
+            )
+          }))
+
           return { success: true }
         } catch (error) {
           set({ isSyncing: false })
@@ -873,8 +884,8 @@ export const useYTDJStore = create<YTDJState>()(
             return { success: false, error: data.error || 'Failed to load set' }
           }
 
-          // Load the set and make it the current set
-          const loadedSet = data.set
+          // Load the set and make it the current set, mark as savedToCloud since it came from cloud
+          const loadedSet = { ...data.set, savedToCloud: true }
           set((state) => {
             const existingSetIndex = state.sets.findIndex(s => s.id === loadedSet.id)
             const newSets = existingSetIndex >= 0

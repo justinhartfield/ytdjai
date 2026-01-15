@@ -93,6 +93,7 @@ export interface Set {
   isExported?: boolean
   youtubePlaylistId?: string
   coverArt?: string // URL or data URI for the arrangement's cover art
+  savedToCloud?: boolean // Whether this set has been saved to the cloud
 }
 
 // Weighted prompt phrase for multi-phrase blending
