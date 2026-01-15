@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { checkCanGenerate, consumeCredit, getUserSubscription } from '@/lib/subscription'
+import { TIER_CONFIG } from '@/lib/stripe'
 import type { AIProvider, SwapTrackRequest, Track } from '@/types'
+
+// Next.js route segment config - increase timeout for serverless functions
+export const maxDuration = 60
 
 // YouTube Data API search
 interface YouTubeSearchResult {
@@ -315,6 +322,35 @@ async function enrichTrackWithYouTube(track: Partial<Track>): Promise<Track> {
 
 export async function POST(request: NextRequest) {
   try {
+    // Authentication check
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { success: false, error: 'Authentication required', code: 'auth_required' },
+        { status: 401 }
+      )
+    }
+
+    const userEmail = session.user.email
+
+    // Check if user can generate (has credits)
+    const canGenerate = await checkCanGenerate(userEmail)
+    if (!canGenerate.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: canGenerate.reason || 'No credits remaining',
+          code: 'no_credits',
+          creditsRemaining: 0
+        },
+        { status: 402 }
+      )
+    }
+
+    // Get subscription to check provider access
+    const subscription = await getUserSubscription(userEmail)
+    const tierConfig = TIER_CONFIG[subscription.tier]
+
     const body: SwapTrackRequest = await request.json()
     const {
       currentTrack,
@@ -326,7 +362,20 @@ export async function POST(request: NextRequest) {
       styleHint
     } = body
 
+    // Check if user has access to the requested provider
+    if (!tierConfig.providers.includes(provider)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `${provider} is not available on your plan. Upgrade to Pro for access to all AI providers.`,
+          code: 'provider_not_available'
+        },
+        { status: 403 }
+      )
+    }
+
     console.log('[Swap API] Request received:', {
+      user: userEmail,
       provider,
       targetEnergy,
       currentTrack: currentTrack?.title,
@@ -340,6 +389,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    // Consume credit before making AI request
+    await consumeCredit(userEmail)
 
     // Calculate target energy if not provided (1-100 scale)
     let finalTargetEnergy = targetEnergy

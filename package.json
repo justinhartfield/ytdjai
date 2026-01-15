@@ -13,6 +13,8 @@
     "@google/generative-ai": "^0.5.0",
     "@stripe/stripe-js": "^8.6.1",
     "@supabase/supabase-js": "^2.90.1",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.36.1",
     "clsx": "^2.1.0",
     "framer-motion": "^11.0.0",
     "lucide-react": "^0.344.0",
@@ -24,6 +26,7 @@
     "react-youtube": "^10.1.0",
     "stripe": "^20.1.2",
     "tailwind-merge": "^2.2.0",
+    "zod": "^3.25.76",
     "zustand": "^4.5.0"
   },
   "devDependencies": {

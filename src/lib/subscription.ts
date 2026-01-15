@@ -166,16 +166,19 @@ export async function upgradeToProTier(
 ): Promise<void> {
   const supabase = getServerSupabase()
 
+  // Use upsert to handle case where user doesn't have a subscription record yet
   const { error } = await supabase
     .from('user_subscriptions')
-    .update({
+    .upsert({
+      user_email: email,
       tier: 'pro',
       stripe_customer_id: stripeCustomerId,
       stripe_subscription_id: stripeSubscriptionId,
       credits_remaining: TIER_CONFIG.pro.monthlyCredits,
       credits_reset_at: new Date().toISOString(),
+    }, {
+      onConflict: 'user_email',
     })
-    .eq('user_email', email)
 
   if (error) {
     throw new Error(`Failed to upgrade to pro: ${error.message}`)
