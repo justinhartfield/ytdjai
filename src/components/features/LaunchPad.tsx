@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import Link from 'next/link'
 import { Sparkles, Check, Heart, Clock, Settings, ChevronDown, ChevronUp, Sliders } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
@@ -583,6 +584,19 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
             </div>
           </div>
         </div>
+
+        {/* Footer */}
+        <footer className="mt-16 pt-8 border-t border-white/5">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-600">
+              &copy; {new Date().getFullYear()} YTDJ.AI. All rights reserved.
+            </p>
+            <div className="flex items-center gap-6 text-xs text-gray-600">
+              <Link href="/privacy" className="hover:text-cyan-400 transition-colors">Privacy Policy</Link>
+              <Link href="/terms" className="hover:text-cyan-400 transition-colors">Terms of Service</Link>
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   )

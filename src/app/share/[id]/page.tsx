@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
+import Link from 'next/link'
 import { Play, Clock, Zap, Music2, ExternalLink, Copy, Check, Share2 } from 'lucide-react'
 import { cn, formatDuration } from '@/lib/utils'
 
@@ -297,7 +298,9 @@ export default function SharePage({ params }: SharePageProps) {
           <p className="text-sm text-gray-600">
             Generated with YTDJ.AI
           </p>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
+            <Link href="/privacy" className="text-sm text-gray-600 hover:text-cyan-400 transition-colors">Privacy Policy</Link>
+            <Link href="/terms" className="text-sm text-gray-600 hover:text-cyan-400 transition-colors">Terms of Service</Link>
             <button className="text-gray-600 hover:text-white transition-colors">
               <Share2 className="w-5 h-5" />
             </button>

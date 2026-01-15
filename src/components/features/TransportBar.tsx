@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react'
 import { formatDuration } from '@/lib/utils'
 import { formatTime } from './YouTubePlayer'
@@ -129,6 +130,12 @@ export function TransportBar() {
             {playlist[activeTrackIndex]?.track.artist || 'YouTube Source'}
           </div>
         </div>
+      </div>
+
+      {/* Legal Links */}
+      <div className="flex items-center gap-4 border-l border-white/10 pl-6 text-[9px] text-gray-600">
+        <Link href="/privacy" className="hover:text-cyan-400 transition-colors">Privacy</Link>
+        <Link href="/terms" className="hover:text-cyan-400 transition-colors">Terms</Link>
       </div>
     </footer>
   )
