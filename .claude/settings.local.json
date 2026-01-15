@@ -30,7 +30,9 @@
       "Bash(node -e:*)",
       "Bash(node test-env-check.js:*)",
       "Bash(env)",
-      "Bash(git diff:*)"
+      "Bash(git diff:*)",
+      "Bash(find:*)",
+      "Bash(claude mcp add gemini-design-mcp --env API_KEY=gd_g-VmUhylnM7Hd9R4DzwoJSpDcV16_QGo -- npx -y gemini-design-mcp@latest)"
     ]
   }
 }

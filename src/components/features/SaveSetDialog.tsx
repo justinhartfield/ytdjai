@@ -36,12 +36,14 @@ export function SaveSetDialog({ isOpen, onClose }: SaveSetDialogProps) {
     setSaveStatus('saving')
     setErrorMessage('')
 
-    // Update the set name if it changed
+    // Update the set name first if it changed, then wait for state to propagate
     if (setName !== currentSet.name) {
       updateSet(currentSet.id, { name: setName })
+      // Give Zustand a moment to propagate the state change
+      await new Promise(resolve => setTimeout(resolve, 50))
     }
 
-    const result = await saveSetToCloud(currentSet.id)
+    const result = await saveSetToCloud()
 
     if (result.success) {
       setSaveStatus('success')

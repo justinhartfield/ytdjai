@@ -832,13 +832,27 @@ export const useYTDJStore = create<YTDJState>()(
 
       saveSetToCloud: async (setId) => {
         const state = get()
-        const setToSave = setId
-          ? state.sets.find(s => s.id === setId) || state.currentSet
-          : state.currentSet
+        // Always prefer currentSet if it matches the requested ID, since it has the latest data
+        // Fall back to finding in sets array, then to currentSet as last resort
+        let setToSave = state.currentSet
+        if (setId) {
+          if (state.currentSet?.id === setId) {
+            setToSave = state.currentSet
+          } else {
+            setToSave = state.sets.find(s => s.id === setId) || state.currentSet
+          }
+        }
 
         if (!setToSave) {
           return { success: false, error: 'No set to save' }
         }
+
+        // Debug logging
+        console.log('[saveSetToCloud] Saving set:', {
+          id: setToSave.id,
+          name: setToSave.name,
+          playlistLength: setToSave.playlist?.length || 0
+        })
 
         try {
           set({ isSyncing: true })
