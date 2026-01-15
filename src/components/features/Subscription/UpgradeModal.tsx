@@ -88,11 +88,15 @@ export function UpgradeModal({ isOpen, onClose, feature }: UpgradeModalProps) {
               </div>
             </div>
             <h2 className="text-2xl font-black text-white text-center">
-              Upgrade to Pro
+              {feature === 'AI generations' ? "You've run out of credits" : 'Upgrade to Pro'}
             </h2>
             {feature && (
               <p className="text-sm text-white/60 text-center mt-2">
-                <span className="text-purple-400">{feature}</span> is a Pro feature
+                {feature === 'AI generations' ? (
+                  'Upgrade to Pro for 50 AI generations per month'
+                ) : (
+                  <><span className="text-purple-400">{feature}</span> is a Pro feature</>
+                )}
               </p>
             )}
           </div>

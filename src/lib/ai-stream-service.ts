@@ -7,6 +7,14 @@ import type {
   GeneratePlaylistRequest
 } from '@/types'
 
+// Error types for better handling
+export interface StreamError {
+  message: string
+  code?: 'auth_required' | 'no_credits' | 'rate_limited' | 'server_error'
+  tier?: string
+  creditsRemaining?: number
+}
+
 export interface StreamCallbacks {
   onStarted: (providers: AIProvider[]) => void
   onProviderStarted: (provider: AIProvider) => void
@@ -16,7 +24,7 @@ export interface StreamCallbacks {
   onTrackEnriched: (provider: AIProvider, index: number, track: Partial<Track>) => void
   onComplete: (summary: { primary: AIProvider | null; alternatives: AIProvider[]; failed: AIProvider[] }) => void
   onAllFailed: (errors: { provider: AIProvider; error: string }[]) => void
-  onError: (error: string) => void
+  onError: (error: string, details?: StreamError) => void
 }
 
 // Helper type for params
@@ -61,7 +69,21 @@ export function streamGeneratePlaylist(
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`)
+        // Try to parse error response for better error handling
+        try {
+          const errorData = await response.json()
+          const errorDetails: StreamError = {
+            message: errorData.error || `HTTP error: ${response.status}`,
+            code: errorData.code,
+            tier: errorData.tier,
+            creditsRemaining: errorData.creditsRemaining
+          }
+          callbacks.onError(errorDetails.message, errorDetails)
+          return
+        } catch {
+          // If we can't parse JSON, throw generic error
+          throw new Error(`HTTP error: ${response.status}`)
+        }
       }
 
       const reader = response.body?.getReader()

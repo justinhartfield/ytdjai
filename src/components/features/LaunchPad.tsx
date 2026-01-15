@@ -3,7 +3,12 @@
 import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
-import { Sparkles, Check, Heart, Clock, Settings, ChevronDown, ChevronUp, Sliders } from 'lucide-react'
+import {
+  Sparkles, Check, Heart, Clock, Settings, ChevronDown, ChevronUp, Sliders,
+  Sun, Moon, Cloud, Snowflake, CloudRain, CloudLightning,
+  Dumbbell, BookOpen, Briefcase, UtensilsCrossed, Car, Sofa, Music2,
+  User, Users, PartyPopper, Radio, Sunrise, Sunset, Leaf, Flower2
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
 import { generatePlaylist } from '@/lib/ai-service'
@@ -11,19 +16,55 @@ import { streamGeneratePlaylist } from '@/lib/ai-stream-service'
 import type { AIConstraints } from '@/types'
 import { AIConstraintsDrawer } from './AIConstraintsDrawer'
 import { AIWizardPro } from './AIWizardPro'
+import { UpgradeModal } from './Subscription/UpgradeModal'
+import type { StreamError } from '@/lib/ai-stream-service'
 
-const VIBE_TAGS = [
-  'CYBERPUNK',
-  'LATE NIGHT',
-  'CINEMATIC',
-  'DRIVING',
-  'DEEP BASS',
-  'EUPHORIC',
-  'DARK',
-  'MELODIC',
-  'MINIMAL',
-  'VOCAL'
-]
+// Context token options from the wizard - shown on homepage with truncation
+const CONTEXT_TOKEN_OPTIONS = {
+  timeOfDay: [
+    { id: 'morning', label: 'Morning', icon: Sunrise },
+    { id: 'afternoon', label: 'Afternoon', icon: Sun },
+    { id: 'evening', label: 'Evening', icon: Sunset },
+    { id: 'night', label: 'Night', icon: Moon },
+    { id: 'late-night', label: 'Late Night', icon: Sparkles }
+  ],
+  season: [
+    { id: 'spring', label: 'Spring', icon: Flower2 },
+    { id: 'summer', label: 'Summer', icon: Sun },
+    { id: 'fall', label: 'Fall', icon: Leaf },
+    { id: 'winter', label: 'Winter', icon: Snowflake }
+  ],
+  weather: [
+    { id: 'sunny', label: 'Sunny', icon: Sun },
+    { id: 'cloudy', label: 'Cloudy', icon: Cloud },
+    { id: 'rainy', label: 'Rainy', icon: CloudRain },
+    { id: 'stormy', label: 'Stormy', icon: CloudLightning },
+    { id: 'snowy', label: 'Snowy', icon: Snowflake }
+  ],
+  activity: [
+    { id: 'workout', label: 'Workout', icon: Dumbbell },
+    { id: 'study', label: 'Study', icon: BookOpen },
+    { id: 'work', label: 'Work', icon: Briefcase },
+    { id: 'dinner-party', label: 'Dinner Party', icon: UtensilsCrossed },
+    { id: 'driving', label: 'Driving', icon: Car },
+    { id: 'relaxing', label: 'Relaxing', icon: Sofa },
+    { id: 'dancing', label: 'Dancing', icon: Music2 }
+  ],
+  socialContext: [
+    { id: 'solo', label: 'Solo', icon: User },
+    { id: 'friends', label: 'Friends', icon: Users },
+    { id: 'date', label: 'Date', icon: Heart },
+    { id: 'party', label: 'Party', icon: PartyPopper },
+    { id: 'background', label: 'Background', icon: Radio }
+  ]
+}
+
+// How many tokens to show before "More Settings" in each category
+const VISIBLE_TOKEN_COUNTS = {
+  timeOfDay: 3,
+  activity: 4,
+  socialContext: 3
+}
 
 const ARC_TEMPLATES = [
   {
@@ -66,7 +107,6 @@ interface LaunchPadProps {
 
 export function LaunchPad({ onComplete }: LaunchPadProps) {
   const [prompt, setPrompt] = useState('')
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [novelty, setNovelty] = useState(50)
   const [duration, setDuration] = useState(45)
   const [selectedArc, setSelectedArc] = useState('mountain')
@@ -74,6 +114,8 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
   const [isGenerating, setIsGenerating] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
+  const [showAllTokens, setShowAllTokens] = useState(false)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
   const {
     aiProvider,
@@ -88,15 +130,32 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
     enrichTrack,
     completeGeneration,
     failAllGeneration,
-    updatePrompt
+    updatePrompt,
+    setContextToken,
+    clearContextToken,
+    setGenerationError
   } = useYTDJStore()
 
-  const toggleTag = (tag: string) => {
-    setSelectedTags(prev =>
-      prev.includes(tag)
-        ? prev.filter(t => t !== tag)
-        : [...prev, tag]
-    )
+  const { contextTokens } = generationControls
+
+  // Toggle context token
+  const toggleContextToken = (category: keyof typeof CONTEXT_TOKEN_OPTIONS, id: string) => {
+    if (contextTokens[category] === id) {
+      clearContextToken(category)
+    } else {
+      setContextToken(category, id as never)
+    }
+  }
+
+  // Get active context summary text
+  const getContextSummary = () => {
+    const parts: string[] = []
+    if (contextTokens.timeOfDay) parts.push(contextTokens.timeOfDay)
+    if (contextTokens.activity) parts.push(contextTokens.activity)
+    if (contextTokens.socialContext) parts.push(contextTokens.socialContext)
+    if (contextTokens.season) parts.push(contextTokens.season)
+    if (contextTokens.weather) parts.push(contextTokens.weather)
+    return parts.join(' / ')
   }
 
   const getNoveltyLabel = () => {
@@ -109,8 +168,7 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
     setIsGenerating(true)
     setStoreGenerating(true)
 
-    // Build display text for tags and weighted phrases (used in prompt display)
-    const tagsText = selectedTags.length > 0 ? selectedTags.join(', ') : ''
+    // Build display text for weighted phrases (used in prompt display)
     const weightedPhrasesText = generationControls.weightedPhrases.length > 0
       ? generationControls.weightedPhrases.map(p => {
           const totalWeight = generationControls.weightedPhrases.reduce((sum, wp) => sum + wp.weight, 0)
@@ -140,11 +198,6 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
         parts.push(weightedPhrasesText)
       } else if (prompt.trim()) {
         parts.push(prompt.trim())
-      }
-
-      // Add style tags if selected (and not redundant with user prompt)
-      if (tagsText && !parts.some(p => p === tagsText)) {
-        parts.push(tagsText)
       }
 
       // Add long-form inspiration if provided (truncated for display only)
@@ -282,19 +335,28 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
           setIsGenerating(false)
           setStoreGenerating(false)
         },
-        onError: (error) => {
-          console.error('[Stream] Error:', error)
+        onError: (error: string, details?: StreamError) => {
+          console.error('[Stream] Error:', error, details)
           setIsGenerating(false)
           setStoreGenerating(false)
+          // Set generation error in store so ArrangementIDE can show upgrade modal
+          if (details?.code) {
+            setGenerationError({
+              message: error,
+              code: details.code,
+              tier: details.tier
+            })
+          }
         }
       }
     )
   }, [
-    prompt, selectedTags, selectedArc, duration, energyRange, novelty,
+    prompt, selectedArc, duration, energyRange, novelty,
     aiProvider, constraints, generationControls,
     updatePrompt, startParallelGeneration, onComplete,
     receivePrimaryResult, receiveAlternativeResult, setProviderFailed,
-    enrichTrack, completeGeneration, failAllGeneration, setStoreGenerating
+    enrichTrack, completeGeneration, failAllGeneration, setStoreGenerating,
+    setGenerationError
   ])
 
   return (
@@ -314,6 +376,13 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
         isOpen={showWizard}
         onClose={() => setShowWizard(false)}
         onGenerate={handleGenerate}
+      />
+
+      {/* Upgrade Modal - shown when out of credits */}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        feature="AI Generation Credits"
       />
 
       {/* Background grid */}
@@ -374,23 +443,213 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
                 className="w-full h-32 bg-transparent text-white/70 placeholder:text-white/40 text-lg leading-relaxed resize-none focus:outline-none"
               />
 
-              {/* Vibe Tags */}
-              <div className="flex flex-wrap gap-2 mt-6">
-                {VIBE_TAGS.map((tag) => (
+              {/* Context Tokens - Truncated version from Wizard */}
+              <div className="mt-6 space-y-4">
+                {/* Header with expand button */}
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[10px] font-bold tracking-widest text-white/40 uppercase">
+                    When & Where Will You Listen?
+                  </h4>
                   <button
-                    key={tag}
-                    onClick={() => toggleTag(tag)}
-                    className={cn(
-                      'px-4 py-2 rounded-full text-xs font-bold tracking-wider',
-                      'border transition-all duration-200',
-                      selectedTags.includes(tag)
-                        ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
-                        : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white'
-                    )}
+                    onClick={() => setShowAllTokens(!showAllTokens)}
+                    className="flex items-center gap-1 text-[10px] font-bold text-cyan-400 hover:text-cyan-300 transition-colors"
                   >
-                    + {tag}
+                    {showAllTokens ? (
+                      <>
+                        <ChevronUp className="w-3 h-3" />
+                        Less
+                      </>
+                    ) : (
+                      <>
+                        <Settings className="w-3 h-3" />
+                        More Settings
+                      </>
+                    )}
                   </button>
-                ))}
+                </div>
+
+                {/* Time of Day - Always show first 3 */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider flex items-center gap-1.5">
+                    <Sun className="w-3 h-3" />
+                    Time of Day
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {CONTEXT_TOKEN_OPTIONS.timeOfDay
+                      .slice(0, showAllTokens ? undefined : VISIBLE_TOKEN_COUNTS.timeOfDay)
+                      .map((option) => {
+                        const Icon = option.icon
+                        return (
+                          <button
+                            key={option.id}
+                            onClick={() => toggleContextToken('timeOfDay', option.id)}
+                            className={cn(
+                              'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border',
+                              contextTokens.timeOfDay === option.id
+                                ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
+                                : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white'
+                            )}
+                          >
+                            <Icon className="w-3 h-3" />
+                            {option.label}
+                          </button>
+                        )
+                      })}
+                    {!showAllTokens && CONTEXT_TOKEN_OPTIONS.timeOfDay.length > VISIBLE_TOKEN_COUNTS.timeOfDay && (
+                      <span className="text-[10px] text-white/30 self-center">
+                        +{CONTEXT_TOKEN_OPTIONS.timeOfDay.length - VISIBLE_TOKEN_COUNTS.timeOfDay} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Activity - Always show first 4 */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider flex items-center gap-1.5">
+                    <Dumbbell className="w-3 h-3" />
+                    Activity
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {CONTEXT_TOKEN_OPTIONS.activity
+                      .slice(0, showAllTokens ? undefined : VISIBLE_TOKEN_COUNTS.activity)
+                      .map((option) => {
+                        const Icon = option.icon
+                        return (
+                          <button
+                            key={option.id}
+                            onClick={() => toggleContextToken('activity', option.id)}
+                            className={cn(
+                              'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border',
+                              contextTokens.activity === option.id
+                                ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
+                                : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white'
+                            )}
+                          >
+                            <Icon className="w-3 h-3" />
+                            {option.label}
+                          </button>
+                        )
+                      })}
+                    {!showAllTokens && CONTEXT_TOKEN_OPTIONS.activity.length > VISIBLE_TOKEN_COUNTS.activity && (
+                      <span className="text-[10px] text-white/30 self-center">
+                        +{CONTEXT_TOKEN_OPTIONS.activity.length - VISIBLE_TOKEN_COUNTS.activity} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Social Context - Always show first 3 */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider flex items-center gap-1.5">
+                    <Users className="w-3 h-3" />
+                    Social Context
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {CONTEXT_TOKEN_OPTIONS.socialContext
+                      .slice(0, showAllTokens ? undefined : VISIBLE_TOKEN_COUNTS.socialContext)
+                      .map((option) => {
+                        const Icon = option.icon
+                        return (
+                          <button
+                            key={option.id}
+                            onClick={() => toggleContextToken('socialContext', option.id)}
+                            className={cn(
+                              'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border',
+                              contextTokens.socialContext === option.id
+                                ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
+                                : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white'
+                            )}
+                          >
+                            <Icon className="w-3 h-3" />
+                            {option.label}
+                          </button>
+                        )
+                      })}
+                    {!showAllTokens && CONTEXT_TOKEN_OPTIONS.socialContext.length > VISIBLE_TOKEN_COUNTS.socialContext && (
+                      <span className="text-[10px] text-white/30 self-center">
+                        +{CONTEXT_TOKEN_OPTIONS.socialContext.length - VISIBLE_TOKEN_COUNTS.socialContext} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Season & Weather - Only show when expanded */}
+                <AnimatePresence>
+                  {showAllTokens && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="space-y-4 overflow-hidden"
+                    >
+                      {/* Season */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider flex items-center gap-1.5">
+                          <Leaf className="w-3 h-3" />
+                          Season
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {CONTEXT_TOKEN_OPTIONS.season.map((option) => {
+                            const Icon = option.icon
+                            return (
+                              <button
+                                key={option.id}
+                                onClick={() => toggleContextToken('season', option.id)}
+                                className={cn(
+                                  'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border',
+                                  contextTokens.season === option.id
+                                    ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
+                                    : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white'
+                                )}
+                              >
+                                <Icon className="w-3 h-3" />
+                                {option.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Weather */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider flex items-center gap-1.5">
+                          <Cloud className="w-3 h-3" />
+                          Weather
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {CONTEXT_TOKEN_OPTIONS.weather.map((option) => {
+                            const Icon = option.icon
+                            return (
+                              <button
+                                key={option.id}
+                                onClick={() => toggleContextToken('weather', option.id)}
+                                className={cn(
+                                  'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border',
+                                  contextTokens.weather === option.id
+                                    ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
+                                    : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white'
+                                )}
+                              >
+                                <Icon className="w-3 h-3" />
+                                {option.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Active context summary */}
+                {getContextSummary() && (
+                  <div className="pt-3 border-t border-white/5">
+                    <p className="text-[10px] text-cyan-400">
+                      Context: <span className="text-white/60">{getContextSummary()}</span>
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 

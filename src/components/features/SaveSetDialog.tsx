@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useSession, signIn } from 'next-auth/react'
-import { Save, AlertCircle, CheckCircle2, Loader2, LogIn } from 'lucide-react'
+import Link from 'next/link'
+import { Save, AlertCircle, CheckCircle2, Loader2, LogIn, ArrowRight } from 'lucide-react'
 import { Modal, Button, Input } from '@/components/ui'
 import { useYTDJStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -145,9 +146,19 @@ export function SaveSetDialog({ isOpen, onClose }: SaveSetDialogProps) {
               {saveStatus === 'error' && errorMessage && (
                 <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
                   <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm font-medium text-red-400">Save Failed</p>
                     <p className="text-xs text-red-400/80 mt-1">{errorMessage}</p>
+                    {(errorMessage.includes('Upgrade') || errorMessage.includes('limited')) && (
+                      <Link
+                        href="/pricing"
+                        onClick={onClose}
+                        className="inline-flex items-center gap-1 mt-2 text-xs font-semibold text-cyan-400 hover:text-cyan-300 transition-colors"
+                      >
+                        View Pricing & Upgrade
+                        <ArrowRight className="w-3 h-3" />
+                      </Link>
+                    )}
                   </div>
                 </div>
               )}

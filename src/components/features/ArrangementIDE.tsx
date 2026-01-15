@@ -21,6 +21,7 @@ import { SaveSetDialog } from './SaveSetDialog'
 import { BrowseSetsModal } from './BrowseSetsModal'
 import type { PlaylistNode, Track, AIConstraints, Set, AIProvider } from '@/types'
 import { GhostTrackNode, AIProviderBadge } from './GhostTrackNode'
+import { UpgradeModal } from './Subscription/UpgradeModal'
 
 interface ArrangementIDEProps {
   onViewChange: (view: 'arrangement' | 'session') => void
@@ -55,7 +56,9 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
     setActiveArcTemplate,
     generationProgress,
     swapWithProviderAlternative,
-    combineAllProviders
+    combineAllProviders,
+    generationError,
+    clearGenerationError
   } = useYTDJStore()
   const playlist = currentSet?.playlist || []
   const [editingPrompt, setEditingPrompt] = useState(currentSet?.prompt || '')
@@ -86,6 +89,15 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [showBrowseSets, setShowBrowseSets] = useState(false)
   const [isFixingTrack, setIsFixingTrack] = useState(false)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+
+  // Show upgrade modal when there's a no_credits error
+  useEffect(() => {
+    if (generationError?.code === 'no_credits') {
+      setShowUpgradeModal(true)
+      clearGenerationError()
+    }
+  }, [generationError, clearGenerationError])
 
   // Player state from store
   const { isPlaying, playingNodeIndex, currentTime, duration, volume } = player
@@ -1427,6 +1439,13 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
 
       {/* Browse Sets Modal */}
       <BrowseSetsModal isOpen={showBrowseSets} onClose={() => setShowBrowseSets(false)} />
+
+      {/* Upgrade Modal - shown when credits are exhausted */}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        feature="AI generations"
+      />
     </div>
   )
 }

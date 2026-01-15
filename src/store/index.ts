@@ -159,6 +159,15 @@ interface YTDJState {
   isGenerating: boolean
   setIsGenerating: (loading: boolean) => void
 
+  // Generation Error State
+  generationError: {
+    message: string
+    code?: 'auth_required' | 'no_credits' | 'rate_limited' | 'server_error'
+    tier?: string
+  } | null
+  setGenerationError: (error: { message: string; code?: 'auth_required' | 'no_credits' | 'rate_limited' | 'server_error'; tier?: string } | null) => void
+  clearGenerationError: () => void
+
   // History (Undo/Redo)
   history: Set[]
   historyIndex: number
@@ -518,6 +527,11 @@ export const useYTDJStore = create<YTDJState>()(
       // Loading States
       isGenerating: false,
       setIsGenerating: (loading) => set({ isGenerating: loading }),
+
+      // Generation Error State
+      generationError: null,
+      setGenerationError: (error) => set({ generationError: error }),
+      clearGenerationError: () => set({ generationError: null }),
 
       // History (Undo/Redo)
       history: [],
