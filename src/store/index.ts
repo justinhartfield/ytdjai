@@ -184,6 +184,7 @@ interface YTDJState {
   failAllGeneration: (errors: { provider: AIProvider; error: string }[]) => void
   resetGenerationProgress: () => void
   swapWithProviderAlternative: (provider: AIProvider) => void
+  combineAllProviders: () => void
 
   // Cloud Sync
   saveSetToCloud: (setId?: string) => Promise<{ success: boolean; error?: string }>
@@ -754,6 +755,73 @@ export const useYTDJStore = create<YTDJState>()(
           generationProgress: {
             ...state.generationProgress,
             primaryProvider: provider
+          }
+        }
+      }),
+
+      // Combine tracks from all providers into one playlist
+      combineAllProviders: () => set((state) => {
+        const { providerPlaylists } = state.generationProgress
+        if (providerPlaylists.length < 2 || !state.currentSet) return state
+
+        // Collect all tracks from all providers
+        const allTracks: PlaylistNode[] = []
+        const providerOrder: AIProvider[] = ['openai', 'claude', 'gemini']
+
+        // Sort playlists by provider order for consistency
+        const sortedPlaylists = [...providerPlaylists].sort((a, b) => {
+          return providerOrder.indexOf(a.provider) - providerOrder.indexOf(b.provider)
+        })
+
+        // Interleave tracks from each provider to create variety
+        // Round-robin: take 1 track from each provider in sequence
+        const maxTracks = Math.max(...sortedPlaylists.map(p => p.tracks.length))
+
+        for (let i = 0; i < maxTracks; i++) {
+          for (const playlist of sortedPlaylists) {
+            if (i < playlist.tracks.length) {
+              const track = playlist.tracks[i]
+              // Ensure sourceProvider is set
+              allTracks.push({
+                ...track,
+                id: `combined-${Date.now()}-${allTracks.length}`,
+                position: allTracks.length,
+                sourceProvider: playlist.provider
+              })
+            }
+          }
+        }
+
+        // Apply the active arc template's energy curve to combined tracks
+        const activeTemplate = arcTemplates.find(t => t.id === state.activeArcTemplate)
+        if (activeTemplate && allTracks.length > 0 && activeTemplate.energyProfile.length > 0) {
+          const profile = activeTemplate.energyProfile
+          // Map each track to the energy curve by interpolating the profile
+          allTracks.forEach((node, index) => {
+            const progress = index / (allTracks.length - 1 || 1)
+            // Interpolate from energyProfile array
+            const profileIndex = progress * (profile.length - 1)
+            const lowerIndex = Math.floor(profileIndex)
+            const upperIndex = Math.min(lowerIndex + 1, profile.length - 1)
+            const fraction = profileIndex - lowerIndex
+            const targetEnergy = profile[lowerIndex] + (profile[upperIndex] - profile[lowerIndex]) * fraction
+            // Update track energy to match template
+            node.track = {
+              ...node.track,
+              energy: Math.round(targetEnergy)
+            }
+          })
+        }
+
+        return {
+          currentSet: {
+            ...state.currentSet,
+            playlist: allTracks,
+            updatedAt: new Date()
+          },
+          generationProgress: {
+            ...state.generationProgress,
+            primaryProvider: null // null indicates combined mode
           }
         }
       }),

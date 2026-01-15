@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Undo2, Redo2, Play, Pause,
   Lock, X, Plus, Sparkles, Info, Loader2, Cloud, FolderOpen, GripVertical,
-  ChevronLeft, ChevronRight, AlertTriangle, Zap, RefreshCw
+  ChevronLeft, ChevronRight, AlertTriangle, Zap, RefreshCw, Layers
 } from 'lucide-react'
 import { cn, formatDuration } from '@/lib/utils'
 import { TransportBar } from './TransportBar'
@@ -58,7 +58,8 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
     canRedo,
     activeArcTemplate,
     generationProgress,
-    swapWithProviderAlternative
+    swapWithProviderAlternative,
+    combineAllProviders
   } = useYTDJStore()
   const playlist = currentSet?.playlist || []
 
@@ -723,15 +724,31 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
                       key={provider}
                       onClick={() => swapWithProviderAlternative(provider)}
                       className={cn(
-                        'px-3 py-1 rounded text-[9px] font-bold uppercase tracking-wider transition-all',
+                        'flex items-center gap-1.5 px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-wider transition-all',
                         generationProgress.primaryProvider === provider
                           ? 'bg-cyan-500 text-black'
                           : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
                       )}
+                      title={`Use ${provider === 'openai' ? 'OpenAI' : provider === 'claude' ? 'Claude' : 'Gemini'} results`}
                     >
-                      {provider === 'openai' ? 'GPT-4o' : provider === 'claude' ? 'Claude' : 'Gemini'}
+                      <AIProviderBadge provider={provider} size="sm" />
+                      <span>{provider === 'openai' ? 'OpenAI' : provider === 'claude' ? 'Claude' : 'Gemini'}</span>
                     </button>
                   ))}
+                  {/* Combine All Button */}
+                  <button
+                    onClick={() => combineAllProviders()}
+                    className={cn(
+                      'flex items-center gap-1.5 px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-wider transition-all',
+                      generationProgress.primaryProvider === null
+                        ? 'bg-gradient-to-r from-[#10a37f] via-[#d97706] to-[#4285f4] text-white'
+                        : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
+                    )}
+                    title="Combine tracks from all AI providers and fit to arc template"
+                  >
+                    <Layers className="w-3 h-3" />
+                    <span>Combine All</span>
+                  </button>
                 </div>
               )}
 
