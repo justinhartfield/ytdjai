@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getStripe, CREDIT_PACK_AMOUNTS, STRIPE_PRICES } from '@/lib/stripe'
+import { getStripe, getCreditAmountForPrice } from '@/lib/stripe'
 import {
   upgradeToProTier,
   downgradeToFreeTier,
@@ -106,13 +106,17 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     const lineItems = await stripe.checkout.sessions.listLineItems(session.id)
     const priceId = lineItems.data[0]?.price?.id
 
-    if (priceId && CREDIT_PACK_AMOUNTS[priceId]) {
-      const creditAmount = CREDIT_PACK_AMOUNTS[priceId]
-      await addCredits(userEmail, creditAmount, 'purchase', {
-        stripe_session_id: session.id,
-        price_type: priceType,
-      })
-      console.log(`Added ${creditAmount} credits to ${userEmail}`)
+    if (priceId) {
+      const creditAmount = getCreditAmountForPrice(priceId)
+      if (creditAmount) {
+        await addCredits(userEmail, creditAmount, 'purchase', {
+          stripe_session_id: session.id,
+          price_type: priceType,
+        })
+        console.log(`Added ${creditAmount} credits to ${userEmail}`)
+      } else {
+        console.error(`Unknown credit pack price ID: ${priceId}`)
+      }
     }
   }
 

@@ -26,12 +26,18 @@ export const STRIPE_PRICES = {
   CREDITS_100: process.env.STRIPE_CREDITS_100_PRICE_ID || '',
 } as const
 
-// Credit amounts for each pack
-export const CREDIT_PACK_AMOUNTS: Record<string, number> = {
-  [STRIPE_PRICES.CREDITS_10]: 10,
-  [STRIPE_PRICES.CREDITS_30]: 30,
-  [STRIPE_PRICES.CREDITS_100]: 100,
+// Credit amounts for each pack - lookup by price ID at runtime
+export function getCreditAmountForPrice(priceId: string): number | null {
+  const priceToCredits: Record<string, number> = {
+    [process.env.STRIPE_CREDITS_10_PRICE_ID || '']: 10,
+    [process.env.STRIPE_CREDITS_30_PRICE_ID || '']: 30,
+    [process.env.STRIPE_CREDITS_100_PRICE_ID || '']: 100,
+  }
+  return priceToCredits[priceId] ?? null
 }
+
+// Legacy export for backward compatibility
+export const CREDIT_PACK_AMOUNTS: Record<string, number> = {}
 
 // Tier configuration
 export const TIER_CONFIG = {
