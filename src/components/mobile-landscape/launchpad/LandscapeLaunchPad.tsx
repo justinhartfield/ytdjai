@@ -43,7 +43,7 @@ export function LandscapeLaunchPad({ onComplete }: LandscapeLaunchPadProps) {
   const [selectedArc, setSelectedArc] = useState('mountain')
   const [isGenerating, setIsGenerating] = useState(false)
 
-  const { aiProvider, updateSetWithPrompt, setIsGenerating: setStoreGenerating, constraints } = useYTDJStore()
+  const { aiProvider, updateSetWithPrompt, setIsGenerating: setStoreGenerating, constraints, setActiveArcTemplate } = useYTDJStore()
 
   const toggleTag = (tagId: string) => {
     haptics.light()
@@ -91,6 +91,7 @@ export function LandscapeLaunchPad({ onComplete }: LandscapeLaunchPadProps) {
       if (result.success && result.playlist) {
         haptics.success()
         updateSetWithPrompt(result.playlist, fullPrompt)
+        setActiveArcTemplate(selectedArc)
         onComplete()
       } else {
         haptics.error()
@@ -102,7 +103,7 @@ export function LandscapeLaunchPad({ onComplete }: LandscapeLaunchPadProps) {
       setIsGenerating(false)
       setStoreGenerating(false)
     }
-  }, [prompt, selectedTags, selectedArc, duration, aiProvider, constraints, updateSetWithPrompt, setStoreGenerating, onComplete])
+  }, [prompt, selectedTags, selectedArc, duration, aiProvider, constraints, updateSetWithPrompt, setStoreGenerating, setActiveArcTemplate, onComplete])
 
   return (
     <div className="h-full w-full flex flex-col p-4 overflow-hidden">

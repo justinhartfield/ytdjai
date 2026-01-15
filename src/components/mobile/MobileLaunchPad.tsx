@@ -34,7 +34,7 @@ export function MobileLaunchPad({ onComplete }: MobileLaunchPadProps) {
   const [isGenerating, setIsGenerating] = useState(false)
   const [showArcPicker, setShowArcPicker] = useState(false)
 
-  const { aiProvider, updateSetWithPrompt, setIsGenerating: setStoreGenerating, constraints } = useYTDJStore()
+  const { aiProvider, updateSetWithPrompt, setIsGenerating: setStoreGenerating, constraints, setActiveArcTemplate } = useYTDJStore()
 
   const toggleTag = (tag: string) => {
     setSelectedTags(prev =>
@@ -78,6 +78,7 @@ export function MobileLaunchPad({ onComplete }: MobileLaunchPadProps) {
 
       if (result.success && result.playlist) {
         updateSetWithPrompt(result.playlist, fullPrompt)
+        setActiveArcTemplate(selectedArc)
         onComplete()
       }
     } catch (error) {
@@ -86,7 +87,7 @@ export function MobileLaunchPad({ onComplete }: MobileLaunchPadProps) {
       setIsGenerating(false)
       setStoreGenerating(false)
     }
-  }, [prompt, selectedTags, selectedArc, duration, aiProvider, constraints, updateSetWithPrompt, setStoreGenerating, onComplete])
+  }, [prompt, selectedTags, selectedArc, duration, aiProvider, constraints, updateSetWithPrompt, setStoreGenerating, setActiveArcTemplate, onComplete])
 
   const selectedArcTemplate = ARC_TEMPLATES.find(a => a.id === selectedArc)
 

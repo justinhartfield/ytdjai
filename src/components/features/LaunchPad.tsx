@@ -133,7 +133,8 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
     updatePrompt,
     setContextToken,
     clearContextToken,
-    setGenerationError
+    setGenerationError,
+    setActiveArcTemplate
   } = useYTDJStore()
 
   const { contextTokens } = generationControls
@@ -267,6 +268,9 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
     // Start parallel generation - fires all 3 AIs simultaneously
     startParallelGeneration(effectiveTrackCount)
 
+    // Sync selected arc to store before transitioning
+    setActiveArcTemplate(selectedArc)
+
     // Immediately transition to IDE (shows ghost tracks while loading)
     onComplete()
 
@@ -353,7 +357,7 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
   }, [
     prompt, selectedArc, duration, energyRange, novelty,
     aiProvider, constraints, generationControls,
-    updatePrompt, startParallelGeneration, onComplete,
+    updatePrompt, startParallelGeneration, onComplete, setActiveArcTemplate,
     receivePrimaryResult, receiveAlternativeResult, setProviderFailed,
     enrichTrack, completeGeneration, failAllGeneration, setStoreGenerating,
     setGenerationError
