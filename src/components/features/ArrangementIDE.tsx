@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Zap, Undo2, Redo2, Download, Play, Pause,
   Lock, Unlock, Trash2, X, RefreshCw, Settings2, Sparkles, Loader2,
-  Plus, Clock, Cloud, FolderOpen, Layers
+  Plus, Clock, Cloud, FolderOpen, Layers, AlertTriangle
 } from 'lucide-react'
 import { cn, formatDuration } from '@/lib/utils'
 import { useYTDJStore, arcTemplates } from '@/store'
@@ -60,7 +60,13 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
   const playlist = currentSet?.playlist || []
   const [editingPrompt, setEditingPrompt] = useState(currentSet?.prompt || '')
   const [isPromptEditing, setIsPromptEditing] = useState(false)
-  const [pendingArcChange, setPendingArcChange] = useState<string | null>(null)
+  const [arcMismatchInfo, setArcMismatchInfo] = useState<{
+    arcId: string
+    arcName: string
+    poorFitCount: number
+    poorFitPositions: number[]
+  } | null>(null)
+  const [isRegenerating, setIsRegenerating] = useState(false)
 
   const [selectedNodeIndex, setSelectedNodeIndex] = useState<number | null>(0)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
@@ -452,6 +458,9 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
     const arc = arcTemplates.find(a => a.id === arcId)
     if (!arc) return
 
+    // Energy tolerance threshold - tracks more than this off from target are "poor fit"
+    const POOR_FIT_THRESHOLD = 20
+
     // Interpolate the arc's energy profile to match the playlist length
     const targetEnergies: number[] = []
     for (let i = 0; i < playlist.length; i++) {
@@ -487,10 +496,15 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
     // For each unlocked position, find the best matching unlocked track
     const newPlaylist: PlaylistNode[] = new Array(playlist.length)
     const usedTracks = new Set<string>()
+    const poorFitPositions: number[] = []
 
-    // First, place locked tracks
+    // First, place locked tracks and check if they fit
     lockedPositions.forEach((node, index) => {
       newPlaylist[index] = node
+      const energyDiff = Math.abs((node.track.energy || 50) - targetEnergies[index])
+      if (energyDiff > POOR_FIT_THRESHOLD) {
+        poorFitPositions.push(index)
+      }
     })
 
     // Then, for each unlocked position, find the best matching track
@@ -516,39 +530,71 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
           targetEnergy: targetEnergy
         }
         usedTracks.add(bestMatch.node.id)
+
+        // Check if this is a poor fit
+        if (bestDiff > POOR_FIT_THRESHOLD) {
+          poorFitPositions.push(i)
+        }
       }
     }
 
-    updatePlaylist(newPlaylist)
+    // If there are poor fits, show the confirmation modal
+    if (poorFitPositions.length > 0) {
+      setArcMismatchInfo({
+        arcId,
+        arcName: arc.name,
+        poorFitCount: poorFitPositions.length,
+        poorFitPositions
+      })
+      // Still apply the best-effort rearrangement
+      updatePlaylist(newPlaylist)
+    } else {
+      // Perfect fit - just update
+      updatePlaylist(newPlaylist)
+    }
   }, [playlist, updatePlaylist])
 
-  const handleArcChange = useCallback((arcId: string) => {
-    if (arcId === activeArcTemplate) return
-    setPendingArcChange(arcId)
-  }, [activeArcTemplate])
+  // Regenerate poor fit tracks to match arc
+  const handleRegeneratePoorFits = useCallback(async () => {
+    if (!arcMismatchInfo || isRegenerating) return
 
-  const confirmArcChange = useCallback(async () => {
-    if (!pendingArcChange || isGenerating) return
-
-    const arc = arcTemplates.find(a => a.id === pendingArcChange)
+    const arc = arcTemplates.find(a => a.id === arcMismatchInfo.arcId)
     if (!arc) return
 
-    setActiveArcTemplate(pendingArcChange)
-    setPendingArcChange(null)
-    setIsGenerating(true)
+    setIsRegenerating(true)
+    setArcMismatchInfo(null)
 
     try {
-      // Build prompt with arc description
-      const basePrompt = currentSet?.prompt || 'Create an amazing DJ set'
-      const arcPrompt = `${basePrompt}. Energy arc style: ${arc.name} - create a ${arc.name.toLowerCase()} energy progression throughout the set.`
+      // Calculate target energies for each position
+      const targetEnergies: number[] = []
+      for (let i = 0; i < playlist.length; i++) {
+        const position = i / (playlist.length - 1)
+        const profileIndex = position * (arc.energyProfile.length - 1)
+        const lowerIndex = Math.floor(profileIndex)
+        const upperIndex = Math.ceil(profileIndex)
+        const fraction = profileIndex - lowerIndex
 
-      const trackCount = playlist.length || 8
+        if (upperIndex >= arc.energyProfile.length) {
+          targetEnergies.push(arc.energyProfile[arc.energyProfile.length - 1])
+        } else {
+          const interpolatedEnergy = arc.energyProfile[lowerIndex] * (1 - fraction) + arc.energyProfile[upperIndex] * fraction
+          targetEnergies.push(Math.round(interpolatedEnergy))
+        }
+      }
+
+      // Generate replacement tracks for poor fit positions
+      const poorFitPositions = arcMismatchInfo.poorFitPositions.filter(pos => !playlist[pos]?.isLocked)
+
+      if (poorFitPositions.length === 0) {
+        // All poor fits are locked, nothing we can do
+        return
+      }
+
       const result = await generatePlaylist({
-        prompt: arcPrompt,
+        prompt: `${currentSet?.prompt || 'Generate tracks'}. Focus on tracks with these specific energy levels: ${poorFitPositions.map(pos => `position ${pos + 1} needs energy ~${targetEnergies[pos]}`).join(', ')}`,
         constraints: {
-          trackCount,
-          energyRange: { min: 20, max: 80 },
-          // Include all extended constraints
+          trackCount: poorFitPositions.length,
+          energyRange: { min: 1, max: 100 },
           energyTolerance: constraints.energyTolerance,
           syncopation: constraints.syncopation,
           keyMatch: constraints.keyMatch,
@@ -560,15 +606,33 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
         provider: aiProvider
       })
 
-      if (result.success && result.playlist) {
-        updateSetWithPrompt(result.playlist, arcPrompt)
+      if (result.success && result.playlist && result.playlist.length > 0) {
+        // Replace poor fit tracks with new ones
+        const newPlaylist = [...playlist]
+        result.playlist.forEach((newNode, idx) => {
+          if (idx < poorFitPositions.length) {
+            const targetPos = poorFitPositions[idx]
+            newPlaylist[targetPos] = {
+              ...newNode,
+              targetEnergy: targetEnergies[targetPos]
+            }
+          }
+        })
+        updatePlaylist(newPlaylist)
       }
     } catch (error) {
-      console.error('Failed to regenerate with arc:', error)
+      console.error('Failed to regenerate poor fit tracks:', error)
     } finally {
-      setIsGenerating(false)
+      setIsRegenerating(false)
     }
-  }, [pendingArcChange, isGenerating, currentSet?.prompt, playlist.length, aiProvider, constraints, updateSetWithPrompt, setIsGenerating])
+  }, [arcMismatchInfo, isRegenerating, playlist, currentSet, constraints, aiProvider, updatePlaylist])
+
+  const handleArcChange = useCallback((arcId: string) => {
+    if (arcId === activeArcTemplate) return
+    // Set the arc template and fit tracks to it (same behavior as SessionView)
+    setActiveArcTemplate(arcId)
+    handleFitToArc(arcId)
+  }, [activeArcTemplate, setActiveArcTemplate, handleFitToArc])
 
   const selectedNode = selectedNodeIndex !== null ? playlist[selectedNodeIndex] : null
   const totalDuration = playlist.reduce((acc, node) => acc + node.track.duration, 0)
@@ -1273,62 +1337,79 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
       {/* Bottom Transport Bar */}
       <TransportBar />
 
-      {/* Arc Change Confirmation Modal */}
+      {/* Arc Mismatch Modal */}
       <AnimatePresence>
-        {pendingArcChange && (
+        {arcMismatchInfo && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[100] flex items-center justify-center p-6"
           >
-            <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={() => setPendingArcChange(null)} />
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={() => setArcMismatchInfo(null)} />
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               className="relative bg-[#0a0c1c] border border-white/10 max-w-md w-full p-8 rounded-3xl overflow-hidden"
             >
-              <div className="absolute -top-24 -right-24 w-64 h-64 bg-pink-500/10 blur-[100px]" />
+              <div className="absolute -top-24 -right-24 w-64 h-64 bg-orange-500/10 blur-[100px]" />
 
-              <h2 className="text-2xl font-black tracking-tighter mb-2 uppercase">Change Arc Template?</h2>
-              <p className="text-gray-400 text-sm mb-6">
-                This will regenerate your entire set with the <span className="text-cyan-400 font-bold">{arcTemplates.find(a => a.id === pendingArcChange)?.name}</span> energy arc. Your current tracks will be replaced.
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-orange-500/20 flex items-center justify-center">
+                  <AlertTriangle className="w-6 h-6 text-orange-400" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black tracking-tighter uppercase">Energy Mismatch</h2>
+                  <p className="text-sm text-gray-500">{arcMismatchInfo.arcName} Arc</p>
+                </div>
+              </div>
+
+              <p className="text-gray-400 text-sm mb-4">
+                <span className="text-orange-400 font-bold">{arcMismatchInfo.poorFitCount} track{arcMismatchInfo.poorFitCount > 1 ? 's' : ''}</span> {arcMismatchInfo.poorFitCount > 1 ? "don't" : "doesn't"} have the right energy level to match this curve.
               </p>
 
-              {/* Preview the arc */}
-              <div className="p-4 bg-white/5 rounded-xl border border-white/10 mb-6">
-                <svg className="w-full h-12" viewBox="0 0 100 30">
-                  <path
-                    d={arcTemplates.find(a => a.id === pendingArcChange)?.svgPath}
-                    fill="none"
-                    stroke="#00f2ff"
-                    strokeWidth="2"
-                  />
-                </svg>
+              <div className="bg-white/5 rounded-xl p-4 mb-6 border border-white/5">
+                <div className="text-[10px] font-bold text-gray-500 uppercase mb-3">Affected Positions</div>
+                <div className="flex flex-wrap gap-2">
+                  {arcMismatchInfo.poorFitPositions.slice(0, 8).map((pos) => (
+                    <div key={pos} className="px-3 py-1.5 bg-orange-500/20 border border-orange-500/30 rounded-lg text-orange-400 text-xs font-bold">
+                      Slot {pos + 1}
+                    </div>
+                  ))}
+                  {arcMismatchInfo.poorFitPositions.length > 8 && (
+                    <div className="px-3 py-1.5 bg-white/10 rounded-lg text-gray-400 text-xs font-bold">
+                      +{arcMismatchInfo.poorFitPositions.length - 8} more
+                    </div>
+                  )}
+                </div>
               </div>
+
+              <p className="text-gray-500 text-xs mb-6">
+                We've rearranged your tracks as best as possible. Would you like to regenerate {arcMismatchInfo.poorFitCount > 1 ? 'these' : 'this'} track{arcMismatchInfo.poorFitCount > 1 ? 's' : ''} with better energy matches?
+              </p>
 
               <div className="flex gap-4">
                 <button
-                  onClick={() => setPendingArcChange(null)}
+                  onClick={() => setArcMismatchInfo(null)}
                   className="flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest text-white bg-white/5 hover:bg-white/10 transition-all"
                 >
-                  Cancel
+                  Keep As Is
                 </button>
                 <button
-                  onClick={confirmArcChange}
-                  disabled={isGenerating}
+                  onClick={handleRegeneratePoorFits}
+                  disabled={isRegenerating}
                   className="flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest text-black bg-cyan-500 hover:bg-cyan-400 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {isGenerating ? (
+                  {isRegenerating ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      Generating...
+                      Regenerating...
                     </>
                   ) : (
                     <>
                       <Zap className="w-4 h-4" />
-                      Regenerate
+                      Regenerate {arcMismatchInfo.poorFitCount}
                     </>
                   )}
                 </button>
