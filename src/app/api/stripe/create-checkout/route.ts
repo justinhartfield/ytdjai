@@ -35,8 +35,13 @@ export async function POST(req: NextRequest) {
 
     const priceId = priceMap[priceType]
     if (!priceId) {
+      console.error(`[Stripe] Price ID not configured for type: ${priceType}`, {
+        priceType,
+        availablePrices: Object.keys(priceMap).filter(k => priceMap[k]),
+        STRIPE_PRO_PRICE_ID: process.env.STRIPE_PRO_PRICE_ID ? 'set' : 'NOT SET',
+      })
       return NextResponse.json(
-        { error: 'Invalid price type' },
+        { error: `Stripe price not configured for ${priceType}. Please contact support.` },
         { status: 400 }
       )
     }

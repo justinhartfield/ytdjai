@@ -21,9 +21,11 @@ const PRO_FEATURES = [
 
 export function UpgradeModal({ isOpen, onClose, feature }: UpgradeModalProps) {
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleUpgrade = async () => {
     setIsLoading(true)
+    setError(null)
     try {
       const response = await fetch('/api/stripe/create-checkout', {
         method: 'POST',
@@ -36,11 +38,13 @@ export function UpgradeModal({ isOpen, onClose, feature }: UpgradeModalProps) {
       if (data.url) {
         window.location.href = data.url
       } else {
-        console.error('No checkout URL returned')
+        console.error('No checkout URL returned:', data)
+        setError(data.error || 'Unable to start checkout. Please try again.')
         setIsLoading(false)
       }
     } catch (error) {
       console.error('Failed to create checkout:', error)
+      setError('Network error. Please check your connection and try again.')
       setIsLoading(false)
     }
   }
@@ -119,6 +123,13 @@ export function UpgradeModal({ isOpen, onClose, feature }: UpgradeModalProps) {
               <span className="text-4xl font-black text-white">$12</span>
               <span className="text-white/50">/month</span>
             </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                <p className="text-sm text-red-400 text-center">{error}</p>
+              </div>
+            )}
 
             {/* CTA Button */}
             <motion.button
