@@ -437,6 +437,19 @@ function createStreamingResponse(prompt: string, constraints: GeneratePlaylistRe
         const failures: { provider: AIProvider; error: string }[] = []
         const youtubeApiKey = process.env.YOUTUBE_API_KEY || process.env.GOOGLE_AI_API_KEY
 
+        // Send heartbeat to keep connection alive (Netlify has 26s timeout)
+        let heartbeatActive = true
+        const heartbeatInterval = setInterval(() => {
+          if (heartbeatActive) {
+            try {
+              controller.enqueue(encoder.encode(`: heartbeat\n\n`))
+            } catch {
+              // Connection closed, stop heartbeat
+              heartbeatActive = false
+            }
+          }
+        }, 5000) // Send heartbeat every 5 seconds
+
         // Use Promise.race pattern to get first result quickly while others continue
         const generateForProvider = async (provider: AIProvider): Promise<{
           provider: AIProvider
@@ -518,6 +531,10 @@ function createStreamingResponse(prompt: string, constraints: GeneratePlaylistRe
         } else {
           sendEvent({ event: 'all-failed', errors: failures })
         }
+
+        // Stop heartbeat
+        heartbeatActive = false
+        clearInterval(heartbeatInterval)
       } catch (error) {
         console.error('[Stream API] Fatal error:', error)
         sendEvent({ event: 'all-failed', errors: [{ provider: 'openai', error: error instanceof Error ? error.message : 'Unknown fatal error' }] })

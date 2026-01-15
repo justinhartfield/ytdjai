@@ -26,7 +26,10 @@
       "Bash(git reset:*)",
       "Bash(grep:*)",
       "Bash(curl:*)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Bash(node -e:*)",
+      "Bash(node test-env-check.js:*)",
+      "Bash(env)"
     ]
   }
 }
