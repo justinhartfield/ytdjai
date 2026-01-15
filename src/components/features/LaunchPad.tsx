@@ -130,8 +130,8 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
     // Use the legacy duration-based count if no advanced controls used
     const effectiveTrackCount = generationControls.lengthTarget ? trackCount : Math.round(duration / 5)
 
-    // Build a clean, focused prompt based on what the user actually specified
-    // All other settings (context, vocal, energy, etc.) are passed via constraints to the backend
+    // Build a clean, focused prompt that shows what the user actually configured
+    // This is for display purposes - the actual generation uses the constraints object
     const buildCleanPrompt = (): string => {
       const parts: string[] = []
 
@@ -149,8 +149,53 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
 
       // Add long-form inspiration if provided (truncated for display only)
       if (generationControls.longFormInput) {
-        const truncated = generationControls.longFormInput.substring(0, 200)
-        parts.push(`Inspired by: "${truncated}${generationControls.longFormInput.length > 200 ? '...' : ''}"`)
+        const truncated = generationControls.longFormInput.substring(0, 150)
+        parts.push(`Inspired by: "${truncated}${generationControls.longFormInput.length > 150 ? '...' : ''}"`)
+      }
+
+      // Add context tokens summary
+      const contextParts: string[] = []
+      if (generationControls.contextTokens.activity) contextParts.push(generationControls.contextTokens.activity)
+      if (generationControls.contextTokens.timeOfDay) contextParts.push(generationControls.contextTokens.timeOfDay)
+      if (generationControls.contextTokens.socialContext) contextParts.push(generationControls.contextTokens.socialContext)
+      if (contextParts.length > 0) {
+        parts.push(`Context: ${contextParts.join(', ')}`)
+      }
+
+      // Add anchor tracks
+      if (generationControls.anchorTracks.length > 0) {
+        const anchorNames = generationControls.anchorTracks.map(t => `"${t.title}"`).join(', ')
+        parts.push(`Must include: ${anchorNames}`)
+      }
+
+      // Add vocal preferences summary
+      const vocalParts: string[] = []
+      if (generationControls.vocalDensity.instrumentalVsVocal < 30) vocalParts.push('instrumental')
+      else if (generationControls.vocalDensity.instrumentalVsVocal > 70) vocalParts.push('vocal-heavy')
+      if (generationControls.vocalDensity.hookyVsAtmospheric > 70) vocalParts.push('atmospheric')
+      if (vocalParts.length > 0) {
+        parts.push(`Vocals: ${vocalParts.join(', ')}`)
+      }
+
+      // Add energy preset
+      if (generationControls.energyPreset && generationControls.energyPreset !== 'custom') {
+        const presetLabels: Record<string, string> = {
+          'no-slow-songs': 'No slow songs',
+          'keep-it-mellow': 'Keep it mellow',
+          'mid-tempo-groove': 'Mid-tempo groove',
+          'bpm-ramp': 'BPM ramp up'
+        }
+        parts.push(`Energy: ${presetLabels[generationControls.energyPreset] || generationControls.energyPreset}`)
+      }
+
+      // Add content mode
+      if (generationControls.contentMode && generationControls.contentMode !== 'explicit-ok') {
+        parts.push(generationControls.contentMode === 'clean' ? 'Clean only' : 'Family-friendly')
+      }
+
+      // Add avoid concepts
+      if (generationControls.avoidConcepts.length > 0) {
+        parts.push(`Avoid: ${generationControls.avoidConcepts.slice(0, 3).join(', ')}${generationControls.avoidConcepts.length > 3 ? '...' : ''}`)
       }
 
       // If still empty, use a minimal default
@@ -158,7 +203,7 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
         return 'Generate a DJ set'
       }
 
-      return parts.join('. ')
+      return parts.join(' · ')
     }
 
     const fullPrompt = buildCleanPrompt()

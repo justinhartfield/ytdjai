@@ -29,7 +29,8 @@
       "Bash(git status:*)",
       "Bash(node -e:*)",
       "Bash(node test-env-check.js:*)",
-      "Bash(env)"
+      "Bash(env)",
+      "Bash(git diff:*)"
     ]
   }
 }
