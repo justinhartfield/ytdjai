@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { checkCanGenerate, consumeCredit, getUserSubscription } from '@/lib/subscription'
 import { TIER_CONFIG } from '@/lib/stripe'
 import { rateLimits, checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
-import type { AIProvider, GeneratePlaylistRequest, PlaylistNode, Track, AlternativeTrack, StreamEvent } from '@/types'
+import type { AIProvider, GeneratePlaylistRequest, PlaylistNode, Track, AlternativeTrack, StreamEvent, SegmentContext } from '@/types'
 
 // Next.js route segment config - increase timeout for serverless functions
 export const maxDuration = 60
@@ -261,6 +261,88 @@ function buildConstraintInstructions(constraints: GeneratePlaylistRequest['const
   if (constraints?.longFormInput && constraints.longFormInput.trim()) {
     const truncated = constraints.longFormInput.substring(0, 500)
     instructions.push(`DEEP CONTEXT: Use this as inspiration for the playlist mood and theme: "${truncated}${constraints.longFormInput.length > 500 ? '...' : ''}"`)
+  }
+
+  return instructions.join('\n')
+}
+
+// Build segment-specific instructions for AI prompt
+function buildSegmentInstructions(segment: SegmentContext): string {
+  const instructions: string[] = []
+
+  // Segment name and track count
+  instructions.push(`\n=== SEGMENT: ${segment.name.toUpperCase()} ===`)
+  instructions.push(`Generate exactly ${segment.targetTrackCount} tracks for the "${segment.name}" segment of this DJ set.`)
+
+  // Segment-specific prompt if provided
+  if (segment.prompt?.trim()) {
+    instructions.push(`SEGMENT VIBE: ${segment.prompt}`)
+  }
+
+  // Segment constraints
+  const sc = segment.constraints
+
+  if (sc.energyRange) {
+    instructions.push(`ENERGY FOR THIS SEGMENT: Keep energy between ${sc.energyRange.min}-${sc.energyRange.max} (1-100 scale)`)
+  }
+
+  if (sc.bpmRange) {
+    instructions.push(`BPM FOR THIS SEGMENT: Keep BPM between ${sc.bpmRange.min}-${sc.bpmRange.max}`)
+  }
+
+  if (sc.moods && sc.moods.length > 0) {
+    instructions.push(`MOODS FOR THIS SEGMENT: Focus on ${sc.moods.join(', ')} vibes`)
+  }
+
+  if (sc.preferredGenres && sc.preferredGenres.length > 0) {
+    instructions.push(`PREFERRED GENRES: ${sc.preferredGenres.join(', ')}`)
+  }
+
+  if (sc.avoidGenres && sc.avoidGenres.length > 0) {
+    instructions.push(`AVOID GENRES: ${sc.avoidGenres.join(', ')}`)
+  }
+
+  if (sc.activeDecades && sc.activeDecades.length > 0) {
+    const decadeRanges: Record<string, string> = {
+      '80s': '1980-1989', '90s': '1990-1999', '00s': '2000-2009', '10s': '2010-2019', '20s': '2020-present'
+    }
+    const ranges = sc.activeDecades.map(d => decadeRanges[d] || d).join(', ')
+    instructions.push(`ERA FOR THIS SEGMENT: ${ranges}`)
+  }
+
+  if (sc.avoidExplicit) {
+    instructions.push('CONTENT: Clean tracks only - no explicit content')
+  }
+
+  if (sc.discovery !== undefined) {
+    if (sc.discovery < 30) {
+      instructions.push('TRACK SELECTION: Use well-known hits for this segment')
+    } else if (sc.discovery > 70) {
+      instructions.push('TRACK SELECTION: Use deep cuts and obscure selections for this segment')
+    }
+  }
+
+  // Anchor tracks that MUST be included
+  if (segment.anchorTracks && segment.anchorTracks.length > 0) {
+    const anchors = segment.anchorTracks.map(t => `"${t.title}" by ${t.artist}`).join(', ')
+    instructions.push(`MUST INCLUDE IN THIS SEGMENT: ${anchors}`)
+  }
+
+  // Context tracks for smooth transitions
+  if (segment.contextTracks) {
+    if (segment.contextTracks.before && segment.contextTracks.before.length > 0) {
+      const prevTracks = segment.contextTracks.before
+        .map(n => `"${n.track.title}" by ${n.track.artist} (energy: ${n.track.energy || 'N/A'})`)
+        .join(', ')
+      instructions.push(`TRANSITION FROM: Previous segment ends with: ${prevTracks}. Start this segment with a smooth transition from these tracks.`)
+    }
+
+    if (segment.contextTracks.after && segment.contextTracks.after.length > 0) {
+      const nextTracks = segment.contextTracks.after
+        .map(n => `"${n.track.title}" by ${n.track.artist} (energy: ${n.track.energy || 'N/A'})`)
+        .join(', ')
+      instructions.push(`TRANSITION TO: Next segment starts with: ${nextTracks}. End this segment in a way that transitions smoothly to these tracks.`)
+    }
   }
 
   return instructions.join('\n')

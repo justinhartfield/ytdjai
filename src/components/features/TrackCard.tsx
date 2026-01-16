@@ -12,7 +12,10 @@ import {
   Trash2,
   ChevronUp,
   ChevronDown,
-  Sparkles
+  Sparkles,
+  Youtube,
+  Loader2,
+  AlertCircle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatDuration, getTransitionQualityColor, getTransitionQualityLabel } from '@/lib/utils'
@@ -35,6 +38,7 @@ interface TrackCardProps {
   onMoveDown?: () => void
   onSwapWithAlternative?: (alternative: AlternativeTrack) => void
   onSwapWithProviderTrack?: (provider: AIProvider) => void
+  onRefreshYouTube?: (newData: { youtubeId: string; thumbnail?: string; duration?: number }) => void
   onDragStart?: (e: React.DragEvent) => void
   onDragEnd?: (e: React.DragEvent) => void
   onDragOver?: (e: React.DragEvent) => void
@@ -59,6 +63,7 @@ export function TrackCard({
   onMoveDown,
   onSwapWithAlternative,
   onSwapWithProviderTrack,
+  onRefreshYouTube,
   onDragStart,
   onDragEnd,
   onDragOver,
@@ -69,8 +74,54 @@ export function TrackCard({
   const [showMenu, setShowMenu] = useState(false)
   const [showAlternatives, setShowAlternatives] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [refreshError, setRefreshError] = useState<string | null>(null)
 
   const totalAlternatives = alternatives.length + providerAlternatives.length
+
+  // Check if track is missing YouTube ID
+  const needsYouTubeId = !track.youtubeId || track.youtubeId.startsWith('yt-')
+
+  // Handle YouTube refresh
+  const handleRefreshYouTube = async () => {
+    if (isRefreshing) return
+
+    setIsRefreshing(true)
+    setRefreshError(null)
+
+    try {
+      const response = await fetch('/api/video/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          artist: track.artist,
+          title: track.title,
+          useYouTube: true, // Use YouTube API for manual refresh
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch YouTube data')
+      }
+
+      const data = await response.json()
+
+      if (data.success && data.videoId) {
+        onRefreshYouTube?.({
+          youtubeId: data.videoId,
+          thumbnail: data.thumbnail,
+          duration: data.duration,
+        })
+      } else {
+        setRefreshError('Track not found on YouTube')
+      }
+    } catch (error) {
+      console.error('[TrackCard] YouTube refresh error:', error)
+      setRefreshError('Failed to refresh')
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   const handleDragStart = (e: React.DragEvent) => {
     setIsDragging(true)
@@ -167,6 +218,34 @@ export function TrackCard({
             title={`${totalAlternatives} alternative${totalAlternatives > 1 ? 's' : ''} available`}
           >
             {totalAlternatives}
+          </button>
+        )}
+
+        {/* Missing YouTube ID Warning */}
+        {needsYouTubeId && (
+          <button
+            onClick={handleRefreshYouTube}
+            disabled={isRefreshing}
+            className={cn(
+              'absolute -bottom-1 -right-1 z-10',
+              'w-5 h-5 rounded-full',
+              'flex items-center justify-center',
+              'transition-all',
+              refreshError
+                ? 'bg-red-500 hover:bg-red-400'
+                : 'bg-yellow-500 hover:bg-yellow-400',
+              'shadow-lg',
+              isRefreshing && 'opacity-50 cursor-wait'
+            )}
+            title={refreshError || 'Click to find on YouTube'}
+          >
+            {isRefreshing ? (
+              <Loader2 className="w-3 h-3 text-black animate-spin" />
+            ) : refreshError ? (
+              <AlertCircle className="w-3 h-3 text-black" />
+            ) : (
+              <Youtube className="w-3 h-3 text-black" />
+            )}
           </button>
         )}
       </div>
@@ -333,6 +412,24 @@ export function TrackCard({
               >
                 <RefreshCw className="w-4 h-4" />
                 AI Swap Track
+              </button>
+              <button
+                onClick={() => {
+                  handleRefreshYouTube()
+                  setShowMenu(false)
+                }}
+                disabled={isRefreshing}
+                className={cn(
+                  "w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-white/5",
+                  needsYouTubeId ? "text-yellow-400" : "text-white/80"
+                )}
+              >
+                {isRefreshing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Youtube className="w-4 h-4" />
+                )}
+                {needsYouTubeId ? 'Find on YouTube' : 'Refresh YouTube Data'}
               </button>
               <button
                 onClick={() => {

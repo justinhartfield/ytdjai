@@ -21,8 +21,14 @@ import type {
   SimilarPlaylistRef,
   PromptTemplate,
   GenerationProgress,
-  ProviderPlaylist
+  ProviderPlaylist,
+  SetSegment,
+  SegmentConstraints,
+  SegmentPreset,
+  AutoMixState,
+  DualPlayerState,
 } from '@/types'
+import { SEGMENT_PRESETS } from '@/types'
 
 // Player State
 interface PlayerState {
@@ -102,6 +108,7 @@ interface SubscriptionState {
     maxCloudSaves: number | null
     allowedProviders: string[]
     hasWizardPro: boolean
+    hasSegmentedSets: boolean
   }
 }
 
@@ -215,6 +222,24 @@ interface YTDJState {
   swapWithProviderAlternative: (provider: AIProvider) => void
   combineAllProviders: () => void
 
+  // Segmented Set Designer (Pro feature)
+  segments: SetSegment[]
+  activeSegmentId: string | null
+  isRegeneratingSegment: string | null
+  setSegments: (segments: SetSegment[]) => void
+  addSegment: (segment: SetSegment) => void
+  updateSegment: (id: string, updates: Partial<SetSegment>) => void
+  removeSegment: (id: string) => void
+  reorderSegments: (fromIndex: number, toIndex: number) => void
+  setActiveSegment: (id: string | null) => void
+  calculateSegmentBoundaries: () => void
+  getTracksForSegment: (segmentId: string) => PlaylistNode[]
+  applySegmentPreset: (segmentId: string, preset: SegmentPreset) => void
+  initializeDefaultSegments: () => void
+  setIsRegeneratingSegment: (id: string | null) => void
+  enableSegmentedMode: () => void
+  disableSegmentedMode: () => void
+
   // Cloud Sync
   saveSetToCloud: (setId?: string) => Promise<{ success: boolean; error?: string }>
   loadSetFromCloud: (setId: string) => Promise<{ success: boolean; error?: string }>
@@ -222,6 +247,21 @@ interface YTDJState {
   deleteSetFromCloud: (setId: string) => Promise<{ success: boolean; error?: string }>
   isSyncing: boolean
   setSyncing: (syncing: boolean) => void
+
+  // AutoMix State
+  autoMix: AutoMixState
+  setAutoMixEnabled: (enabled: boolean) => void
+  setAutoMixMode: (mode: 'seamless' | 'gapped') => void
+  setAutoMixCrossfadeDuration: (seconds: number) => void
+
+  // Dual Player State (for AutoMix crossfade)
+  dualPlayer: DualPlayerState
+  setDualPlayerState: (state: Partial<DualPlayerState>) => void
+  resetDualPlayer: () => void
+
+  // Track BPM/Key enrichment
+  enrichTrackBpmKey: (nodeIndex: number, bpm: number, key: string, camelotCode?: string) => void
+  batchEnrichBpmKey: (updates: Array<{ nodeIndex: number; bpm: number; key: string; camelotCode?: string }>) => void
 }
 
 export const useYTDJStore = create<YTDJState>()(
@@ -238,6 +278,7 @@ export const useYTDJStore = create<YTDJState>()(
           maxCloudSaves: 3,
           allowedProviders: ['openai'],
           hasWizardPro: false,
+          hasSegmentedSets: false,
         },
       },
       fetchSubscription: async () => {
@@ -259,6 +300,7 @@ export const useYTDJStore = create<YTDJState>()(
                   maxCloudSaves: data.limits.maxCloudSaves,
                   allowedProviders: data.limits.allowedProviders,
                   hasWizardPro: data.limits.hasWizardPro,
+                  hasSegmentedSets: data.limits.hasSegmentedSets ?? false,
                 },
               },
             }))
@@ -932,6 +974,207 @@ export const useYTDJStore = create<YTDJState>()(
         }
       }),
 
+      // Segmented Set Designer (Pro feature)
+      segments: [],
+      activeSegmentId: null,
+      isRegeneratingSegment: null,
+
+      setSegments: (segments) => set({ segments }),
+
+      addSegment: (segment) => set((state) => ({
+        segments: [...state.segments, segment].map((s, i) => ({ ...s, order: i })),
+        currentSet: state.currentSet
+          ? { ...state.currentSet, segments: [...state.segments, segment].map((s, i) => ({ ...s, order: i })), isSegmented: true }
+          : state.currentSet
+      })),
+
+      updateSegment: (id, updates) => set((state) => ({
+        segments: state.segments.map((s) => s.id === id ? { ...s, ...updates } : s),
+        currentSet: state.currentSet
+          ? { ...state.currentSet, segments: state.segments.map((s) => s.id === id ? { ...s, ...updates } : s) }
+          : state.currentSet
+      })),
+
+      removeSegment: (id) => set((state) => {
+        const newSegments = state.segments.filter((s) => s.id !== id).map((s, i) => ({ ...s, order: i }))
+        return {
+          segments: newSegments,
+          activeSegmentId: state.activeSegmentId === id ? null : state.activeSegmentId,
+          currentSet: state.currentSet
+            ? { ...state.currentSet, segments: newSegments, isSegmented: newSegments.length > 0 }
+            : state.currentSet
+        }
+      }),
+
+      reorderSegments: (fromIndex, toIndex) => set((state) => {
+        const newSegments = [...state.segments]
+        const [moved] = newSegments.splice(fromIndex, 1)
+        newSegments.splice(toIndex, 0, moved)
+        const reordered = newSegments.map((s, i) => ({ ...s, order: i }))
+        return {
+          segments: reordered,
+          currentSet: state.currentSet
+            ? { ...state.currentSet, segments: reordered }
+            : state.currentSet
+        }
+      }),
+
+      setActiveSegment: (id) => set({ activeSegmentId: id }),
+
+      setIsRegeneratingSegment: (id) => set({ isRegeneratingSegment: id }),
+
+      calculateSegmentBoundaries: () => {
+        const state = get()
+        if (!state.segments.length || !state.currentSet?.playlist.length) return
+
+        const playlist = state.currentSet.playlist
+        const totalTracks = playlist.length
+
+        let currentIndex = 0
+        const updatedSegments = state.segments.map((segment) => {
+          const startIndex = currentIndex
+          let endIndex: number
+
+          if (segment.duration.type === 'tracks') {
+            endIndex = Math.min(startIndex + segment.duration.count - 1, totalTracks - 1)
+          } else {
+            // Duration in minutes - find tracks that fit within the time
+            let segmentDuration = 0
+            const targetDuration = segment.duration.duration * 60 // convert to seconds
+            endIndex = startIndex
+
+            while (endIndex < totalTracks && segmentDuration < targetDuration) {
+              segmentDuration += playlist[endIndex].track.duration
+              if (segmentDuration <= targetDuration || endIndex === startIndex) {
+                endIndex++
+              } else {
+                break
+              }
+            }
+            endIndex = Math.max(startIndex, endIndex - 1)
+          }
+
+          currentIndex = endIndex + 1
+          return { ...segment, startIndex, endIndex }
+        })
+
+        set({
+          segments: updatedSegments,
+          currentSet: state.currentSet
+            ? { ...state.currentSet, segments: updatedSegments }
+            : state.currentSet
+        })
+      },
+
+      getTracksForSegment: (segmentId) => {
+        const state = get()
+        const segment = state.segments.find((s) => s.id === segmentId)
+        if (!segment || segment.startIndex === undefined || segment.endIndex === undefined) {
+          return []
+        }
+        return state.currentSet?.playlist.slice(segment.startIndex, segment.endIndex + 1) || []
+      },
+
+      applySegmentPreset: (segmentId, preset) => set((state) => {
+        const presetConfig = SEGMENT_PRESETS[preset]
+        if (!presetConfig) return state
+
+        return {
+          segments: state.segments.map((s) =>
+            s.id === segmentId
+              ? {
+                  ...s,
+                  name: presetConfig.name,
+                  color: presetConfig.suggestedColor,
+                  duration: presetConfig.defaultDuration,
+                  constraints: { ...s.constraints, ...presetConfig.defaultConstraints }
+                }
+              : s
+          ),
+          currentSet: state.currentSet
+            ? {
+                ...state.currentSet,
+                segments: state.segments.map((s) =>
+                  s.id === segmentId
+                    ? {
+                        ...s,
+                        name: presetConfig.name,
+                        color: presetConfig.suggestedColor,
+                        duration: presetConfig.defaultDuration,
+                        constraints: { ...s.constraints, ...presetConfig.defaultConstraints }
+                      }
+                    : s
+                )
+              }
+            : state.currentSet
+        }
+      }),
+
+      initializeDefaultSegments: () => set((state) => {
+        const defaultSegments: SetSegment[] = [
+          {
+            id: `segment-${Date.now()}-warmup`,
+            name: 'Warmup',
+            color: '#3B82F6',
+            duration: { type: 'minutes', duration: 15 },
+            order: 0,
+            constraints: { energyRange: { min: 30, max: 55 }, discovery: 40 }
+          },
+          {
+            id: `segment-${Date.now()}-build`,
+            name: 'Build',
+            color: '#8B5CF6',
+            duration: { type: 'minutes', duration: 25 },
+            order: 1,
+            constraints: { energyRange: { min: 50, max: 75 } }
+          },
+          {
+            id: `segment-${Date.now()}-peak`,
+            name: 'Peak',
+            color: '#EC4899',
+            duration: { type: 'minutes', duration: 30 },
+            order: 2,
+            constraints: { energyRange: { min: 75, max: 100 } }
+          },
+          {
+            id: `segment-${Date.now()}-land`,
+            name: 'Land',
+            color: '#06B6D4',
+            duration: { type: 'minutes', duration: 20 },
+            order: 3,
+            constraints: { energyRange: { min: 40, max: 65 } }
+          }
+        ]
+
+        return {
+          segments: defaultSegments,
+          currentSet: state.currentSet
+            ? { ...state.currentSet, segments: defaultSegments, isSegmented: true }
+            : state.currentSet
+        }
+      }),
+
+      enableSegmentedMode: () => {
+        const state = get()
+        if (state.segments.length === 0) {
+          // Initialize with default segments
+          get().initializeDefaultSegments()
+        } else {
+          set((state) => ({
+            currentSet: state.currentSet
+              ? { ...state.currentSet, isSegmented: true }
+              : state.currentSet
+          }))
+        }
+      },
+
+      disableSegmentedMode: () => set((state) => ({
+        currentSet: state.currentSet
+          ? { ...state.currentSet, isSegmented: false }
+          : state.currentSet,
+        activeSegmentId: null
+      })),
+
       // Cloud Sync
       isSyncing: false,
       setSyncing: (syncing) => set({ isSyncing: syncing }),
@@ -1067,7 +1310,94 @@ export const useYTDJStore = create<YTDJState>()(
           set({ isSyncing: false })
           return { success: false, error: 'Network error' }
         }
-      }
+      },
+
+      // AutoMix State
+      autoMix: {
+        enabled: false,
+        mode: 'seamless',
+        crossfadeDuration: 10,
+      },
+      setAutoMixEnabled: (enabled) =>
+        set((state) => ({ autoMix: { ...state.autoMix, enabled } })),
+      setAutoMixMode: (mode) =>
+        set((state) => ({ autoMix: { ...state.autoMix, mode } })),
+      setAutoMixCrossfadeDuration: (seconds) =>
+        set((state) => ({
+          autoMix: { ...state.autoMix, crossfadeDuration: Math.max(5, Math.min(30, seconds)) },
+        })),
+
+      // Dual Player State
+      dualPlayer: {
+        activePlayer: 'A',
+        playerAVideoId: null,
+        playerBVideoId: null,
+        playerAVolume: 100,
+        playerBVolume: 0,
+        isCrossfading: false,
+        crossfadeProgress: 0,
+        nextTrackPreloaded: false,
+        transitionScheduledAt: null,
+      },
+      setDualPlayerState: (updates) =>
+        set((state) => ({ dualPlayer: { ...state.dualPlayer, ...updates } })),
+      resetDualPlayer: () =>
+        set({
+          dualPlayer: {
+            activePlayer: 'A',
+            playerAVideoId: null,
+            playerBVideoId: null,
+            playerAVolume: 100,
+            playerBVolume: 0,
+            isCrossfading: false,
+            crossfadeProgress: 0,
+            nextTrackPreloaded: false,
+            transitionScheduledAt: null,
+          },
+        }),
+
+      // Track BPM/Key enrichment
+      enrichTrackBpmKey: (nodeIndex, bpm, key, camelotCode) => {
+        set((state) => {
+          if (!state.currentSet) return state
+          const playlist = [...state.currentSet.playlist]
+          if (!playlist[nodeIndex]) return state
+          playlist[nodeIndex] = {
+            ...playlist[nodeIndex],
+            track: {
+              ...playlist[nodeIndex].track,
+              bpm,
+              key,
+              camelotCode,
+            },
+          }
+          return {
+            currentSet: { ...state.currentSet, playlist, updatedAt: new Date() },
+          }
+        })
+      },
+      batchEnrichBpmKey: (updates) => {
+        set((state) => {
+          if (!state.currentSet) return state
+          const playlist = [...state.currentSet.playlist]
+          for (const { nodeIndex, bpm, key, camelotCode } of updates) {
+            if (playlist[nodeIndex]) {
+              playlist[nodeIndex] = {
+                ...playlist[nodeIndex],
+                track: {
+                  ...playlist[nodeIndex].track,
+                  bpm,
+                  key,
+                  camelotCode,
+                },
+              }
+            }
+          }
+          return {
+            currentSet: { ...state.currentSet, playlist, updatedAt: new Date() },
+          }
+        })
+      },
     }),
     {
       name: 'ytdj-ai-storage',
@@ -1078,6 +1408,8 @@ export const useYTDJStore = create<YTDJState>()(
         constraints: state.constraints,
         activeArcTemplate: state.activeArcTemplate,
         generationControls: state.generationControls,
+        autoMix: state.autoMix,
+        segments: state.segments,
       }),
     }
   )

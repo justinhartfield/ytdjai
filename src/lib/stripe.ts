@@ -46,12 +46,14 @@ export const TIER_CONFIG = {
     maxCloudSaves: 3,
     allowedProviders: ['openai'] as const,
     hasWizardPro: false,
+    hasSegmentedSets: false,
   },
   pro: {
     monthlyCredits: 50,
     maxCloudSaves: Infinity,
     allowedProviders: ['openai', 'claude', 'gemini'] as const,
     hasWizardPro: true,
+    hasSegmentedSets: true,
   },
 } as const
 

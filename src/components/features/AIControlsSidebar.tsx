@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useYTDJStore, arcTemplates } from '@/store'
+import { AutoMixPanel } from './AutoMixPanel'
 
 interface AIControlsSidebarProps {
   onRegenerate: (mode?: 'replace' | 'append', prompt?: string) => void
@@ -138,6 +139,9 @@ export function AIControlsSidebar({
             </div>
           )}
         </div>
+
+        {/* AutoMix Panel */}
+        <AutoMixPanel />
 
         {/* Arc Template Selector */}
         <div className="space-y-4">

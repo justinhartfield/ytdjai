@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { LaunchPad, ArrangementIDE, SessionView, YouTubePlayer } from '@/components/features'
+import { DualYouTubePlayer } from '@/components/features/DualYouTubePlayer'
 import { LandscapeApp } from '@/components/mobile-landscape/LandscapeApp'
 import { useYTDJStore } from '@/store'
 import { useMobileDetect } from '@/hooks/useMobileDetect'
@@ -10,7 +11,7 @@ import { useMobileDetect } from '@/hooks/useMobileDetect'
 type IDEView = 'arrangement' | 'session'
 
 export default function Home() {
-  const { initializeStore, currentSet } = useYTDJStore()
+  const { initializeStore, currentSet, autoMix } = useYTDJStore()
   const [showLaunchPad, setShowLaunchPad] = useState(true)
   const [currentView, setCurrentView] = useState<IDEView>('arrangement')
   const { isMobileLandscape } = useMobileDetect()
@@ -66,7 +67,8 @@ export default function Home() {
           className="h-screen bg-[#05060f] overflow-hidden"
         >
           {/* YouTube Player - persists across view changes */}
-          <YouTubePlayer />
+          {/* Use DualYouTubePlayer when AutoMix is enabled for crossfade support */}
+          {autoMix.enabled ? <DualYouTubePlayer /> : <YouTubePlayer />}
 
           {currentView === 'arrangement' ? (
             <ArrangementIDE

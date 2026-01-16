@@ -20,7 +20,7 @@ interface ExportFlowProps {
 
 type ExportStep = 'auth' | 'metadata' | 'settings' | 'progress' | 'success' | 'error'
 type Visibility = 'public' | 'unlisted' | 'private'
-type Destination = 'youtube-music' | 'youtube'
+type Destination = 'youtube-music' | 'youtube' | 'spotify'
 
 interface ExportState {
   name: string
@@ -118,67 +118,101 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
     setProgress(0)
     setProgressMessage('Preparing export...')
 
+    const isSpotifyExport = exportState.destination === 'spotify'
+
     try {
       // Initial progress
       setProgress(5)
       setProgressMessage('Validating tracks...')
       await new Promise(resolve => setTimeout(resolve, 300))
 
-      // First, collect tracks that already have youtubeId and those that need enrichment
-      const tracksWithYoutubeId: { youtubeId: string; title: string; artist: string }[] = []
-      const tracksNeedingEnrichment: { title: string; artist: string; index: number }[] = []
+      // Collect all tracks
+      const allTracks = playlist.map((node) => ({
+        youtubeId: node.track?.youtubeId || '',
+        title: node.track?.title || 'Unknown',
+        artist: node.track?.artist || 'Unknown',
+      }))
 
-      playlist.forEach((node, index) => {
-        const youtubeId = node.track?.youtubeId || ''
-        const title = node.track?.title || 'Unknown'
-        const artist = node.track?.artist || 'Unknown'
+      // For Spotify export, we don't need YouTube IDs - just artist/title
+      if (isSpotifyExport) {
+        setProgress(20)
+        setProgressMessage('Creating Spotify playlist...')
 
-        if (youtubeId) {
-          tracksWithYoutubeId.push({ youtubeId, title, artist })
-        } else {
-          tracksNeedingEnrichment.push({ title, artist, index })
+        const response = await fetch('/api/spotify/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: exportState.name,
+            description: exportState.description,
+            visibility: exportState.visibility === 'public' ? 'public' : 'private',
+            tracks: allTracks.map(t => ({ artist: t.artist, title: t.title })),
+          }),
+        })
+
+        const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Spotify export failed')
         }
-      })
 
-      // If no tracks have youtubeId, enrich them on-demand
-      if (tracksWithYoutubeId.length === 0 && tracksNeedingEnrichment.length > 0) {
+        setProgress(100)
+        setProgressMessage('Complete!')
+
+        setExportState(prev => ({
+          ...prev,
+          playlistUrl: data.playlistUrl,
+          shareUrl: data.playlistUrl,
+          addedCount: data.results?.added || 0,
+          failedCount: data.results?.failed || 0,
+        }))
+
+        await new Promise(resolve => setTimeout(resolve, 500))
+        setStep('success')
+        return
+      }
+
+      // YouTube/YouTube Music export path
+      // Separate tracks with and without YouTube IDs
+      const tracksWithYoutubeId = allTracks.filter(t => t.youtubeId && !t.youtubeId.startsWith('yt-'))
+      const tracksNeedingEnrichment = allTracks.filter(t => !t.youtubeId || t.youtubeId.startsWith('yt-'))
+
+      console.log(`[Export] ${tracksWithYoutubeId.length} tracks have YouTube IDs, ${tracksNeedingEnrichment.length} need enrichment`)
+
+      // Enrich tracks that don't have YouTube IDs using the video search API with YouTube fallback
+      if (tracksNeedingEnrichment.length > 0) {
         setProgress(10)
         setProgressMessage(`Finding ${tracksNeedingEnrichment.length} tracks on YouTube...`)
 
-        // Enrich tracks in parallel (with a limit to avoid rate limiting)
-        const enrichBatchSize = 5
-        for (let i = 0; i < tracksNeedingEnrichment.length; i += enrichBatchSize) {
-          const batch = tracksNeedingEnrichment.slice(i, i + enrichBatchSize)
-          const enrichPromises = batch.map(async (track) => {
-            try {
-              const response = await fetch('/api/youtube/enrich', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ artist: track.artist, title: track.title }),
-              })
-              if (response.ok) {
-                const data = await response.json()
-                if (data.success && data.youtubeId) {
-                  return { youtubeId: data.youtubeId, title: track.title, artist: track.artist }
+        try {
+          // Use the new video search API with YouTube enabled (export-time only)
+          const response = await fetch('/api/video/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tracks: tracksNeedingEnrichment.map(t => ({ artist: t.artist, title: t.title })),
+              useYouTube: true, // Only use YouTube API at export time
+            }),
+          })
+
+          if (response.ok) {
+            const data = await response.json()
+            if (data.success && data.tracks) {
+              for (const enrichedTrack of data.tracks) {
+                if (enrichedTrack.videoId) {
+                  tracksWithYoutubeId.push({
+                    youtubeId: enrichedTrack.videoId,
+                    title: enrichedTrack.title,
+                    artist: enrichedTrack.artist,
+                  })
                 }
               }
-              return null
-            } catch {
-              return null
+              setProgress(15)
+              setProgressMessage(`Found ${data.stats?.withVideoId || 0} of ${tracksNeedingEnrichment.length} tracks...`)
             }
-          })
-
-          const results = await Promise.all(enrichPromises)
-          results.forEach((result) => {
-            if (result) {
-              tracksWithYoutubeId.push(result)
-            }
-          })
-
-          // Update progress
-          const progressPercent = Math.min(10 + Math.round((i + batch.length) / tracksNeedingEnrichment.length * 10), 20)
-          setProgress(progressPercent)
-          setProgressMessage(`Found ${tracksWithYoutubeId.length} of ${tracksNeedingEnrichment.length} tracks...`)
+          }
+        } catch (error) {
+          console.error('[Export] Enrichment error:', error)
+          // Continue with whatever tracks we have
         }
       }
 
@@ -255,7 +289,7 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
     }
   }
 
-  const handleSignIn = () => {
+  const handleSignIn = (provider: 'google' | 'spotify' = 'google') => {
     // Save current state to localStorage before OAuth redirect
     // This ensures the Zustand persist middleware has written the latest state
     const zustandStorage = localStorage.getItem('ytdj-ai-storage')
@@ -278,7 +312,20 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
     // Also save a flag to auto-open export modal on return
     sessionStorage.setItem('ytdj-auto-open-export', 'true')
 
-    signIn('google', { callbackUrl: window.location.href })
+    signIn(provider, { callbackUrl: window.location.href })
+  }
+
+  // Check if user needs to authenticate for the selected destination
+  const needsAuth = () => {
+    if (exportState.destination === 'spotify') {
+      return !session?.spotifyAccessToken
+    }
+    return status === 'unauthenticated' || !session?.accessToken
+  }
+
+  // Get the required provider for auth
+  const getAuthProvider = (): 'google' | 'spotify' => {
+    return exportState.destination === 'spotify' ? 'spotify' : 'google'
   }
 
   const visibilityOptions = [
@@ -349,7 +396,7 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
                   </div>
 
                   <button
-                    onClick={handleSignIn}
+                    onClick={() => handleSignIn('google')}
                     className="w-full py-4 bg-white text-black font-black text-xs uppercase tracking-widest rounded-xl hover:bg-gray-100 transition-all flex items-center justify-center gap-3"
                   >
                     <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -498,6 +545,27 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
                         )} />
                         <span className="text-xs font-bold">YouTube</span>
                       </button>
+                      <button
+                        onClick={() => setExportState(prev => ({ ...prev, destination: 'spotify' }))}
+                        className={cn(
+                          "p-4 rounded-xl border transition-all flex flex-col items-center gap-2",
+                          exportState.destination === 'spotify'
+                            ? "bg-green-500/10 border-green-500/50"
+                            : "bg-white/5 border-white/10 hover:border-white/20"
+                        )}
+                      >
+                        <svg
+                          className={cn(
+                            "w-8 h-8",
+                            exportState.destination === 'spotify' ? "text-green-400" : "text-gray-500"
+                          )}
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                        >
+                          <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                        </svg>
+                        <span className="text-xs font-bold">Spotify</span>
+                      </button>
                     </div>
                   </div>
 
@@ -508,12 +576,31 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
                     >
                       Back
                     </button>
-                    <button
-                      onClick={handleExport}
-                      className="flex-[2] py-4 bg-gradient-to-r from-cyan-500 to-pink-500 text-black font-black text-xs uppercase tracking-widest rounded-xl hover:opacity-90 transition-all"
-                    >
-                      Export to {exportState.destination === 'youtube-music' ? 'YT Music' : 'YouTube'}
-                    </button>
+                    {needsAuth() ? (
+                      <button
+                        onClick={() => handleSignIn(getAuthProvider())}
+                        className={cn(
+                          "flex-[2] py-4 text-black font-black text-xs uppercase tracking-widest rounded-xl hover:opacity-90 transition-all",
+                          exportState.destination === 'spotify'
+                            ? "bg-green-500"
+                            : "bg-gradient-to-r from-cyan-500 to-pink-500"
+                        )}
+                      >
+                        Sign in to {exportState.destination === 'spotify' ? 'Spotify' : 'Google'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleExport}
+                        className={cn(
+                          "flex-[2] py-4 text-black font-black text-xs uppercase tracking-widest rounded-xl hover:opacity-90 transition-all",
+                          exportState.destination === 'spotify'
+                            ? "bg-green-500"
+                            : "bg-gradient-to-r from-cyan-500 to-pink-500"
+                        )}
+                      >
+                        Export to {exportState.destination === 'youtube-music' ? 'YT Music' : exportState.destination === 'spotify' ? 'Spotify' : 'YouTube'}
+                      </button>
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -562,7 +649,10 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
                   <div>
                     <p className="text-lg font-bold text-white">{progressMessage}</p>
                     <p className="text-xs text-gray-500 mt-2">
-                      Creating your playlist on {exportState.destination === 'youtube-music' ? 'YouTube Music' : 'YouTube'}
+                      Creating your playlist on {
+                        exportState.destination === 'youtube-music' ? 'YouTube Music' :
+                        exportState.destination === 'spotify' ? 'Spotify' : 'YouTube'
+                      }
                     </p>
                   </div>
                 </motion.div>
@@ -628,14 +718,22 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
                   animate={{ opacity: 1, scale: 1 }}
                   className="py-6 text-center space-y-6"
                 >
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-cyan-500 to-pink-500 flex items-center justify-center mx-auto">
+                  <div className={cn(
+                    "w-20 h-20 rounded-full flex items-center justify-center mx-auto",
+                    exportState.destination === 'spotify'
+                      ? "bg-green-500"
+                      : "bg-gradient-to-tr from-cyan-500 to-pink-500"
+                  )}>
                     <Check className="w-10 h-10 text-black" />
                   </div>
 
                   <div>
                     <h3 className="text-xl font-black text-white">{exportState.name}</h3>
                     <p className="text-sm text-gray-500 mt-1">
-                      Successfully exported to {exportState.destination === 'youtube-music' ? 'YouTube Music' : 'YouTube'}
+                      Successfully exported to {
+                        exportState.destination === 'youtube-music' ? 'YouTube Music' :
+                        exportState.destination === 'spotify' ? 'Spotify' : 'YouTube'
+                      }
                     </p>
                     {exportState.failedCount !== undefined && exportState.failedCount > 0 && (
                       <p className="text-xs text-yellow-400 mt-2">
@@ -650,7 +748,12 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
                       href={exportState.playlistUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="w-full py-4 bg-cyan-500 text-black font-black text-xs uppercase tracking-widest rounded-xl hover:bg-cyan-400 transition-all flex items-center justify-center gap-2"
+                      className={cn(
+                        "w-full py-4 text-black font-black text-xs uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2",
+                        exportState.destination === 'spotify'
+                          ? "bg-green-500 hover:bg-green-400"
+                          : "bg-cyan-500 hover:bg-cyan-400"
+                      )}
                     >
                       <ExternalLink className="w-4 h-4" />
                       Open Playlist

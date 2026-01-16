@@ -24,6 +24,12 @@ import type { PlaylistNode, Track, AIConstraints, Set, AIProvider } from '@/type
 import { GhostTrackNode, AIProviderBadge } from './GhostTrackNode'
 import { UpgradeModal } from './Subscription/UpgradeModal'
 import { CreditsDisplay } from './Subscription/CreditsDisplay'
+import { useAutoMix } from '@/hooks/useAutoMix'
+import { getKeyCompatibility, getCompatibilityColor } from '@/lib/camelot'
+import { AutoMixPanel } from './AutoMixPanel'
+import { SegmentBar } from './SegmentBar'
+import { SegmentEditor } from './SegmentEditor'
+import { AddSegmentButton } from './SegmentPresetPicker'
 
 interface ArrangementIDEProps {
   onViewChange: (view: 'arrangement' | 'session') => void
@@ -60,7 +66,16 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
     swapWithProviderAlternative,
     combineAllProviders,
     generationError,
-    clearGenerationError
+    clearGenerationError,
+    // Segment state
+    segments,
+    activeSegmentId,
+    setActiveSegment,
+    addSegment,
+    enableSegmentedMode,
+    disableSegmentedMode,
+    calculateSegmentBoundaries,
+    subscription
   } = useYTDJStore()
   const playlist = currentSet?.playlist || []
   const [editingPrompt, setEditingPrompt] = useState(currentSet?.prompt || '')
@@ -93,6 +108,18 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
   const [isFixingTrack, setIsFixingTrack] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [showDJExport, setShowDJExport] = useState(false)
+  const [showSegmentEditor, setShowSegmentEditor] = useState(false)
+
+  // Derived segment state
+  const isSegmented = currentSet?.isSegmented && segments.length > 0
+  const canUseSegments = subscription.limits.hasSegmentedSets
+
+  // Recalculate segment boundaries when playlist changes
+  useEffect(() => {
+    if (isSegmented && playlist.length > 0) {
+      calculateSegmentBoundaries()
+    }
+  }, [isSegmented, playlist.length, calculateSegmentBoundaries])
 
   // Show upgrade modal when there's a no_credits error
   useEffect(() => {
@@ -105,6 +132,9 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
   // Player state from store
   const { isPlaying, playingNodeIndex, currentTime, duration, volume } = player
   const activeTrackIndex = playingNodeIndex ?? 0
+
+  // AutoMix hook for transition analysis
+  const { transitionAnalyses, isEnabled: autoMixEnabled } = useAutoMix()
 
   const canvasRef = useRef<HTMLDivElement>(null)
   const swapDebounceRef = useRef<NodeJS.Timeout | null>(null)
@@ -876,6 +906,43 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
             )}
           </div>
 
+          {/* Segment Bar (Pro feature) */}
+          {isSegmented && (
+            <div className="px-6 py-2 border-b border-white/5 bg-black/20">
+              <SegmentBar
+                onSegmentClick={(segmentId) => {
+                  setActiveSegment(segmentId)
+                  setShowSegmentEditor(true)
+                }}
+                onAddSegment={() => {
+                  const newSegment = {
+                    id: `segment-${Date.now()}`,
+                    name: 'New Segment',
+                    color: '#6B7280',
+                    duration: { type: 'minutes' as const, duration: 15 },
+                    order: segments.length,
+                    constraints: {}
+                  }
+                  addSegment(newSegment)
+                }}
+              />
+            </div>
+          )}
+
+          {/* Segment Mode Toggle (when not segmented) */}
+          {!isSegmented && canUseSegments && (
+            <div className="px-6 py-2 border-b border-white/5 bg-black/20">
+              <button
+                onClick={() => enableSegmentedMode()}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 transition-colors"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                Enable Segment Mode
+                <span className="px-1.5 py-0.5 bg-gradient-to-r from-cyan-500 to-pink-500 text-white text-[9px] font-bold rounded">PRO</span>
+              </button>
+            </div>
+          )}
+
           {/* Grid Background */}
           <div
             className="flex-1 relative"
@@ -915,6 +982,23 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
                   strokeLinejoin="round"
                   className="drop-shadow-[0_0_8px_rgba(0,242,255,0.5)]"
                 />
+              )}
+              {/* AutoMix Transition Indicators */}
+              {autoMixEnabled && transitionAnalyses.length > 0 && nodePositions.length > 1 && (
+                transitionAnalyses.map((analysis, index) => {
+                  if (index >= nodePositions.length - 1) return null
+                  const fromPos = nodePositions[index]
+                  const toPos = nodePositions[index + 1]
+                  const midX = (fromPos.x + toPos.x) / 2
+                  const midY = (fromPos.y + toPos.y) / 2
+                  const color = getCompatibilityColor(analysis.keyCompatibility)
+                  return (
+                    <g key={`transition-${index}`}>
+                      <circle cx={midX} cy={midY} r="2" fill={color} opacity="0.3" />
+                      <circle cx={midX} cy={midY} r="1" fill={color} />
+                    </g>
+                  )
+                })
               )}
             </svg>
 
@@ -1353,6 +1437,30 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
                   </button>
                 </div>
               </div>
+            </motion.aside>
+          )}
+        </AnimatePresence>
+
+        {/* Right Sidebar: Segment Editor */}
+        <AnimatePresence>
+          {showSegmentEditor && activeSegmentId && (
+            <motion.aside
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 320, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              className="bg-[#0a0c1c]/80 backdrop-blur-xl border-l border-white/5 flex flex-col overflow-hidden"
+            >
+              <SegmentEditor
+                segmentId={activeSegmentId}
+                onClose={() => {
+                  setShowSegmentEditor(false)
+                  setActiveSegment(null)
+                }}
+                onRegenerate={(segmentId) => {
+                  // TODO: Implement segment regeneration
+                  console.log('Regenerate segment:', segmentId)
+                }}
+              />
             </motion.aside>
           )}
         </AnimatePresence>

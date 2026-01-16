@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { AIProvider, GeneratePlaylistRequest, PlaylistNode, Track, AlternativeTrack } from '@/types'
+import { batchSearchVideoData, type EnrichedTrackData } from '@/lib/video-search'
+import { keyToCamelot } from '@/lib/camelot'
 
 // Next.js route segment config - increase timeout for serverless functions
 export const maxDuration = 60 // seconds (requires Netlify Pro or Vercel Pro)
@@ -12,8 +14,8 @@ function timeRemaining(): number {
   return Math.max(0, NETLIFY_SAFE_TIMEOUT - (Date.now() - requestStartTime))
 }
 
-function shouldSkipYouTube(): boolean {
-  // Skip YouTube enrichment if we have less than 8 seconds remaining
+function shouldSkipEnrichment(): boolean {
+  // Skip enrichment if we have less than 8 seconds remaining
   return timeRemaining() < 8000
 }
 
@@ -40,19 +42,6 @@ interface AITrackWithAlternatives {
   }[]
 }
 
-// YouTube Data API search
-interface YouTubeSearchResult {
-  videoId: string
-  title: string
-  thumbnail: string
-  channelTitle: string
-  duration?: number
-}
-
-// Track if YouTube API quota is exhausted to skip further calls
-let youtubeQuotaExhausted = false
-let quotaExhaustedAt = 0
-
 // Fetch with timeout - abort if we're running out of time
 async function fetchWithTimeout(url: string, options?: RequestInit, timeoutMs?: number): Promise<Response> {
   const timeout = timeoutMs || Math.min(timeRemaining(), 5000)
@@ -69,190 +58,60 @@ async function fetchWithTimeout(url: string, options?: RequestInit, timeoutMs?: 
   }
 }
 
-// Search YouTube for a video (without fetching duration - that's batched later)
-async function searchYouTubeVideo(query: string, apiKey: string): Promise<{ videoId: string; title: string; thumbnail: string } | null> {
-  // Skip if we know quota is exhausted (reset after 5 minutes to retry)
-  if (youtubeQuotaExhausted && Date.now() - quotaExhaustedAt < 5 * 60 * 1000) {
-    return null
+/**
+ * Enrich tracks using the new video search service
+ * Uses Invidious/Piped + iTunes for album art - NO YouTube API calls
+ * YouTube API is only used at export time now
+ */
+async function enrichTracksWithVideoSearch(tracks: Partial<Track>[]): Promise<Partial<Track>[]> {
+  // Check if we should skip enrichment entirely due to time constraints
+  if (shouldSkipEnrichment()) {
+    console.log('[VideoSearch] Skipping enrichment - running low on time')
+    return tracks.map(track => ({
+      ...track,
+      thumbnail: track.thumbnail || `https://picsum.photos/seed/${Date.now()}/200/200`,
+    }))
   }
 
-  // Skip if we're running out of time
-  if (shouldSkipYouTube()) {
-    console.log('[YouTube] Skipping search - running low on time')
-    return null
-  }
+  console.log(`[VideoSearch] Enriching ${tracks.length} tracks via Invidious/Piped + iTunes (${timeRemaining()}ms remaining)...`)
 
-  try {
-    const searchResponse = await fetchWithTimeout(
-      `https://www.googleapis.com/youtube/v3/search?` +
-      `part=snippet&type=video&maxResults=1&q=${encodeURIComponent(query)}&key=${apiKey}`,
-      undefined,
-      4000 // 4 second timeout per search
-    )
+  // Build track list for batch search
+  const trackList = tracks.map(t => ({
+    artist: t.artist || 'Unknown Artist',
+    title: t.title || 'Unknown Track',
+  }))
 
-    if (!searchResponse.ok) {
-      if (searchResponse.status === 403) {
-        console.error('[YouTube] Quota exhausted (403) - skipping further YouTube calls')
-        youtubeQuotaExhausted = true
-        quotaExhaustedAt = Date.now()
-      } else {
-        console.error('YouTube search failed:', searchResponse.status)
-      }
-      return null
-    }
+  // Use the new video search service (NO YouTube API calls)
+  const results = await batchSearchVideoData(trackList, {
+    skipYouTube: true, // Never use YouTube API during generation
+    preferAlbumArt: true, // Use iTunes for high-quality album art
+  })
 
-    // Reset quota flag on success
-    youtubeQuotaExhausted = false
+  // Merge results back into tracks
+  const enrichedTracks = tracks.map(track => {
+    const key = `${track.artist}:${track.title}`
+    const enrichment = results.get(key)
 
-    const searchData = await searchResponse.json()
-
-    if (!searchData.items?.[0]) {
-      return null
-    }
-
-    const item = searchData.items[0]
-    return {
-      videoId: item.id.videoId,
-      title: item.snippet.title,
-      thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url
-    }
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.log('[YouTube] Search timed out for:', query)
-    } else {
-      console.error('YouTube search error:', error)
-    }
-    return null
-  }
-}
-
-// Batch fetch durations for multiple video IDs in a single API call
-async function batchFetchDurations(videoIds: string[], apiKey: string): Promise<Map<string, number>> {
-  const durations = new Map<string, number>()
-
-  if (videoIds.length === 0) return durations
-
-  // Skip if we're running out of time
-  if (shouldSkipYouTube()) {
-    console.log('[YouTube] Skipping duration fetch - running low on time')
-    return durations
-  }
-
-  try {
-    // YouTube API allows up to 50 video IDs per request
-    const batchSize = 50
-    for (let i = 0; i < videoIds.length; i += batchSize) {
-      const batch = videoIds.slice(i, i + batchSize)
-      const idsParam = batch.join(',')
-
-      const response = await fetchWithTimeout(
-        `https://www.googleapis.com/youtube/v3/videos?` +
-        `part=contentDetails&id=${idsParam}&key=${apiKey}`,
-        undefined,
-        4000 // 4 second timeout
-      )
-
-      if (response.ok) {
-        const data = await response.json()
-        for (const item of data.items || []) {
-          if (item.contentDetails?.duration) {
-            durations.set(item.id, parseISO8601Duration(item.contentDetails.duration))
-          }
-        }
-      }
-    }
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.log('[YouTube] Duration fetch timed out')
-    } else {
-      console.error('YouTube batch duration fetch error:', error)
-    }
-  }
-
-  return durations
-}
-
-function parseISO8601Duration(duration: string): number {
-  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
-  if (!match) return 240 // default 4 min
-
-  const hours = parseInt(match[1] || '0', 10)
-  const minutes = parseInt(match[2] || '0', 10)
-  const seconds = parseInt(match[3] || '0', 10)
-
-  return hours * 3600 + minutes * 60 + seconds
-}
-
-async function enrichTracksWithYouTube(tracks: Partial<Track>[], fetchDurations: boolean = true): Promise<Partial<Track>[]> {
-  const apiKey = process.env.YOUTUBE_API_KEY || process.env.GOOGLE_AI_API_KEY
-
-  if (!apiKey) {
-    console.error('[YouTube] ERROR: No YOUTUBE_API_KEY or GOOGLE_AI_API_KEY environment variable set!')
-    return tracks
-  }
-
-  // Check if we should skip YouTube entirely due to time constraints
-  if (shouldSkipYouTube()) {
-    console.log('[YouTube] Skipping all YouTube enrichment - running low on time')
-    return tracks
-  }
-
-  // Step 1: Run all searches in parallel (no duration fetch yet)
-  // But limit concurrency to avoid overwhelming the API and taking too long
-  console.log(`[YouTube] Searching for ${tracks.length} tracks (${timeRemaining()}ms remaining)...`)
-
-  // Process in smaller batches to allow early exit if running low on time
-  const batchSize = 5
-  const searchResults: { track: Partial<Track>; result: { videoId: string; title: string; thumbnail: string } | null }[] = []
-
-  for (let i = 0; i < tracks.length; i += batchSize) {
-    if (shouldSkipYouTube()) {
-      console.log(`[YouTube] Stopping early at track ${i}/${tracks.length} - running low on time`)
-      // Add remaining tracks without YouTube data
-      for (let j = i; j < tracks.length; j++) {
-        searchResults.push({ track: tracks[j], result: null })
-      }
-      break
-    }
-
-    const batch = tracks.slice(i, i + batchSize)
-    const batchResults = await Promise.all(
-      batch.map(async (track) => {
-        const query = `${track.artist} - ${track.title} official audio`
-        const result = await searchYouTubeVideo(query, apiKey)
-        return { track, result }
-      })
-    )
-    searchResults.push(...batchResults)
-  }
-
-  // Step 2: Collect all video IDs that need duration lookup
-  const videoIds = searchResults
-    .filter(r => r.result !== null)
-    .map(r => r.result!.videoId)
-
-  // Step 3: Batch fetch all durations in ONE API call (instead of N calls)
-  let durations = new Map<string, number>()
-  if (fetchDurations && videoIds.length > 0 && !shouldSkipYouTube()) {
-    console.log(`[YouTube] Batch fetching durations for ${videoIds.length} videos...`)
-    durations = await batchFetchDurations(videoIds, apiKey)
-  }
-
-  // Step 4: Merge results
-  const enrichedTracks = searchResults.map(({ track, result }) => {
-    if (result) {
-      console.log(`[YouTube] Found: "${track.artist} - ${track.title}" -> ${result.videoId}`)
+    if (enrichment) {
+      console.log(`[VideoSearch] Enriched: "${track.artist} - ${track.title}" -> videoId: ${enrichment.videoId || 'none'}, source: ${enrichment.source}`)
       return {
         ...track,
-        youtubeId: result.videoId,
-        thumbnail: result.thumbnail,
-        duration: durations.get(result.videoId) || track.duration || 240
+        youtubeId: enrichment.videoId || track.youtubeId || '',
+        thumbnail: enrichment.thumbnail || track.thumbnail || `https://picsum.photos/seed/${Date.now()}/200/200`,
+        duration: enrichment.duration || track.duration || 240,
       }
     }
 
-    console.warn(`[YouTube] Not found: "${track.artist} - ${track.title}"`)
-    return track
+    console.warn(`[VideoSearch] No enrichment for: "${track.artist} - ${track.title}"`)
+    return {
+      ...track,
+      thumbnail: track.thumbnail || `https://picsum.photos/seed/${Date.now()}/200/200`,
+    }
   })
+
+  const withVideoId = enrichedTracks.filter(t => t.youtubeId).length
+  const withThumbnail = enrichedTracks.filter(t => t.thumbnail && !t.thumbnail.includes('picsum')).length
+  console.log(`[VideoSearch] Enrichment complete: ${withVideoId}/${tracks.length} with videoId, ${withThumbnail}/${tracks.length} with album art`)
 
   return enrichedTracks
 }
@@ -367,11 +226,12 @@ async function generateWithOpenAI(prompt: string, constraints: GeneratePlaylistR
           {
             role: 'system',
             content: `You are a DJ curator. Generate a playlist as a JSON array. Each track object has:
-- title, artist, key (e.g. "Am"), genre, energy (1-100 intensity), duration (seconds)
+- title, artist, bpm (estimated tempo 60-200), key (e.g. "Am"), genre, energy (1-100 intensity), duration (seconds)
 - aiReasoning: 1 sentence on why it fits the theme
-- alternatives: array of 2 objects with title, artist, key, genre, energy, duration, whyNotChosen (1 sentence), matchScore (70-95)
+- alternatives: array of 2 objects with title, artist, bpm, key, genre, energy, duration, whyNotChosen (1 sentence), matchScore (70-95)
 
 Energy scale: 1-20 chill, 21-40 groovy, 41-60 moderate, 61-80 driving, 81-100 peak.
+BPM guide: house~125, techno~130, dnb~174, hip-hop~90, pop~110.
 Return ONLY valid JSON array, no markdown.${constraintInstructions ? `\n\nConstraints:\n${constraintInstructions}` : ''}`
           },
           {
@@ -473,6 +333,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
             Return ONLY a JSON array of track objects with these fields:
             - title: string (track name)
             - artist: string (artist name)
+            - bpm: number (estimated tempo 60-200, e.g. house~125, techno~130, dnb~174, hip-hop~90)
             - key: string (musical key like "Am", "F#m", "C")
             - genre: string (music genre)
             - energy: number (1-100 subjective intensity scale, NOT tempo)
@@ -485,7 +346,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
             - duration: number (in seconds)
             - aiReasoning: string (IMPORTANT: 1-2 sentences explaining how this specific track fits the user's theme "${prompt}" AND how it transitions from the previous track. Reference the theme directly in your reasoning.)
             - alternatives: array of 2 alternative track objects, each with:
-              - title, artist, key, genre, energy, duration (same fields as main track)
+              - title, artist, bpm, key, genre, energy, duration (same fields as main track)
               - whyNotChosen: string (1 sentence explaining why this wasn't the primary pick but is still a great alternative)
               - matchScore: number (70-95, how well this alternative fits the slot)
 
@@ -569,6 +430,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
                   Return ONLY a JSON array of track objects with these fields:
                   - title: string (track name)
                   - artist: string (artist name)
+                  - bpm: number (estimated tempo 60-200, e.g. house~125, techno~130, dnb~174, hip-hop~90)
                   - key: string (musical key like "Am", "F#m", "C")
                   - genre: string (music genre)
                   - energy: number (1-100 subjective intensity scale, NOT tempo)
@@ -581,7 +443,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
                   - duration: number (in seconds)
                   - aiReasoning: string (IMPORTANT: 1-2 sentences explaining how this specific track fits the user's theme "${prompt}" AND how it transitions from the previous track. Reference the theme directly in your reasoning.)
                   - alternatives: array of 2 alternative track objects, each with:
-                    - title, artist, key, genre, energy, duration (same fields as main track)
+                    - title, artist, bpm, key, genre, energy, duration (same fields as main track)
                     - whyNotChosen: string (1 sentence explaining why this wasn't the primary pick but is still a great alternative)
                     - matchScore: number (70-95, how well this alternative fits the slot)
 
@@ -691,7 +553,7 @@ ${constraintInstructions ? `CURATION CONSTRAINTS (follow these carefully):\n${co
 }
 
 async function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], energyTolerance: number = 10, skipYouTubeForAlternatives: boolean = true, provider: AIProvider = 'openai'): Promise<PlaylistNode[]> {
-  // Collect main tracks that need YouTube enrichment
+  // Collect main tracks that need enrichment
   // Skip alternatives to save time on Netlify (can reduce from 24 searches to 8)
   const mainTracksToEnrich: Partial<Track>[] = tracks.map(track => ({
     title: track.title,
@@ -703,9 +565,10 @@ async function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], energyTo
     aiReasoning: track.aiReasoning
   }))
 
-  // Enrich ONLY main tracks with YouTube data (8 searches instead of 24)
-  console.log(`[Generate] Enriching ${mainTracksToEnrich.length} main tracks with YouTube data (skipping ${tracks.reduce((acc, t) => acc + (t.alternatives?.length || 0), 0)} alternatives to save time)`)
-  const enrichedMainTracks = await enrichTracksWithYouTube(mainTracksToEnrich)
+  // Enrich main tracks using Invidious/Piped + iTunes (NO YouTube API calls)
+  // YouTube API is only used at export time now to save quota
+  console.log(`[Generate] Enriching ${mainTracksToEnrich.length} main tracks via Invidious/Piped + iTunes (skipping ${tracks.reduce((acc, t) => acc + (t.alternatives?.length || 0), 0)} alternatives)`)
+  const enrichedMainTracks = await enrichTracksWithVideoSearch(mainTracksToEnrich)
 
   // Build alternatives without YouTube enrichment (they'll get enriched on-demand when swapped)
   const enrichedAlternatives: Map<number, AlternativeTrack[]> = new Map()
@@ -736,7 +599,9 @@ async function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], energyTo
       title: track.title || 'Unknown Track',
       artist: track.artist || 'Unknown Artist',
       duration: track.duration || 240,
+      bpm: tracks[index].bpm,
       key: track.key,
+      camelotCode: track.key ? keyToCamelot(track.key) || undefined : undefined,
       genre: track.genre,
       energy: track.energy,
       thumbnail: track.thumbnail || `https://picsum.photos/seed/${Date.now() + index}/200/200`,

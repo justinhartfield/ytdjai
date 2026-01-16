@@ -52,6 +52,8 @@ export interface PlaylistNode {
   startTime?: number // Start playback at this time (in seconds) - useful for skipping intros
   alternatives?: AlternativeTrack[] // Alternative tracks that could work in this slot
   sourceProvider?: AIProvider // Which AI provider generated this track
+  // Segmented Set Designer
+  segmentId?: string // Which segment this track belongs to
 }
 
 export type NodeState =
@@ -94,6 +96,140 @@ export interface Set {
   youtubePlaylistId?: string
   coverArt?: string // URL or data URI for the arrangement's cover art
   savedToCloud?: boolean // Whether this set has been saved to the cloud
+  // Segmented Set Designer (Pro feature)
+  segments?: SetSegment[] // If undefined/empty, set is not segmented
+  isSegmented?: boolean // Quick check flag
+}
+
+// ===== SEGMENTED SET DESIGNER TYPES =====
+
+// Segment duration: can be specified by track count OR minutes
+export type SegmentDuration =
+  | { type: 'tracks'; count: number }
+  | { type: 'minutes'; duration: number }
+
+// Per-segment constraints (subset of AIConstraints)
+export interface SegmentConstraints {
+  energyRange?: { min: number; max: number }
+  bpmRange?: { min: number; max: number }
+  moods?: Mood[]
+  preferredGenres?: string[]
+  avoidGenres?: string[]
+  activeDecades?: string[]
+  avoidExplicit?: boolean
+  discovery?: number // 0-100 (familiar to deep cuts)
+  vocalDensity?: VocalDensity
+}
+
+// Individual segment definition
+export interface SetSegment {
+  id: string
+  name: string // e.g., "Warmup", "Build", "Peak", "Land"
+  color: string // Hex color for visual identification
+  duration: SegmentDuration
+  order: number // Position in segment sequence (0-indexed)
+
+  // Per-segment constraints (override set-level)
+  constraints: SegmentConstraints
+
+  // Segment-specific prompt (appended to set prompt)
+  prompt?: string
+
+  // Locked anchor tracks that MUST appear in this segment
+  anchorTracks?: AnchorTrack[]
+
+  // Calculated at runtime - indices into playlist array
+  startIndex?: number
+  endIndex?: number
+}
+
+// Segment preset identifiers
+export type SegmentPreset = 'warmup' | 'build' | 'peak' | 'land' | 'breakdown' | 'custom'
+
+// Segment preset configuration
+export interface SegmentPresetConfig {
+  name: string
+  defaultDuration: SegmentDuration
+  defaultConstraints: Partial<SegmentConstraints>
+  energyCurveHint: 'ascending' | 'descending' | 'peak' | 'steady' | 'dip'
+  suggestedColor: string
+}
+
+// Predefined segment presets
+export const SEGMENT_PRESETS: Record<SegmentPreset, SegmentPresetConfig> = {
+  warmup: {
+    name: 'Warmup',
+    defaultDuration: { type: 'minutes', duration: 15 },
+    defaultConstraints: {
+      energyRange: { min: 30, max: 55 },
+      discovery: 40, // Familiar tracks to warm up the crowd
+    },
+    energyCurveHint: 'ascending',
+    suggestedColor: '#3B82F6', // Blue
+  },
+  build: {
+    name: 'Build',
+    defaultDuration: { type: 'minutes', duration: 25 },
+    defaultConstraints: {
+      energyRange: { min: 50, max: 75 },
+    },
+    energyCurveHint: 'ascending',
+    suggestedColor: '#8B5CF6', // Purple
+  },
+  peak: {
+    name: 'Peak',
+    defaultDuration: { type: 'minutes', duration: 30 },
+    defaultConstraints: {
+      energyRange: { min: 75, max: 100 },
+    },
+    energyCurveHint: 'peak',
+    suggestedColor: '#EC4899', // Pink
+  },
+  land: {
+    name: 'Land',
+    defaultDuration: { type: 'minutes', duration: 20 },
+    defaultConstraints: {
+      energyRange: { min: 40, max: 65 },
+    },
+    energyCurveHint: 'descending',
+    suggestedColor: '#06B6D4', // Cyan
+  },
+  breakdown: {
+    name: 'Breakdown',
+    defaultDuration: { type: 'tracks', count: 3 },
+    defaultConstraints: {
+      energyRange: { min: 20, max: 45 },
+      vocalDensity: {
+        instrumentalVsVocal: 30, // More instrumental
+        hookyVsAtmospheric: 80, // Atmospheric
+        lyricClarity: 70,
+      },
+    },
+    energyCurveHint: 'dip',
+    suggestedColor: '#10B981', // Green
+  },
+  custom: {
+    name: 'Custom',
+    defaultDuration: { type: 'tracks', count: 5 },
+    defaultConstraints: {},
+    energyCurveHint: 'steady',
+    suggestedColor: '#6B7280', // Gray
+  },
+}
+
+// Segment context for segment-aware generation
+export interface SegmentContext {
+  id: string
+  name: string
+  constraints: SegmentConstraints
+  targetTrackCount: number
+  prompt?: string // Segment-specific prompt
+  anchorTracks?: AnchorTrack[]
+  // Context from adjacent segments for smooth transitions
+  contextTracks?: {
+    before: PlaylistNode[] // Last 2 tracks from previous segment
+    after: PlaylistNode[] // First 2 tracks from next segment
+  }
 }
 
 // Weighted prompt phrase for multi-phrase blending
@@ -217,6 +353,8 @@ export interface GeneratePlaylistRequest {
   trackCount?: number
   constraints?: AIConstraints
   provider: AIProvider
+  // Segment-aware generation
+  segment?: SegmentContext
 }
 
 export interface SwapTrackRequest {
@@ -281,3 +419,36 @@ export type StreamEvent =
   | { event: 'track-enriched'; provider: AIProvider; index: number; track: Partial<Track> }
   | { event: 'complete'; summary: { primary: AIProvider | null; alternatives: AIProvider[]; failed: AIProvider[] } }
   | { event: 'all-failed'; errors: { provider: AIProvider; error: string }[] }
+
+// ============================================================================
+// AutoMix Types
+// ============================================================================
+
+export type KeyCompatibility = 'perfect' | 'compatible' | 'warning' | 'clash'
+
+export interface AutoMixState {
+  enabled: boolean
+  mode: 'seamless' | 'gapped' // seamless = crossfade, gapped = 2s silence
+  crossfadeDuration: number // Default crossfade duration in seconds (5-30)
+}
+
+export interface DualPlayerState {
+  activePlayer: 'A' | 'B'
+  playerAVideoId: string | null
+  playerBVideoId: string | null
+  playerAVolume: number // 0-100
+  playerBVolume: number // 0-100
+  isCrossfading: boolean
+  crossfadeProgress: number // 0-1 during crossfade
+  nextTrackPreloaded: boolean
+  transitionScheduledAt: number | null // timestamp when crossfade should start
+}
+
+export interface TransitionAnalysis {
+  fromTrack: Track
+  toTrack: Track
+  keyCompatibility: KeyCompatibility
+  bpmDifference: number
+  overallScore: number // 0-100
+  recommendedCrossfadeDuration: number
+}

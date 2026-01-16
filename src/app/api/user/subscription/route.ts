@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
         maxCloudSaves: tierConfig.maxCloudSaves === Infinity ? null : tierConfig.maxCloudSaves,
         allowedProviders: tierConfig.allowedProviders,
         hasWizardPro: tierConfig.hasWizardPro,
+        hasSegmentedSets: tierConfig.hasSegmentedSets,
       },
       usage: {
         cloudSaves: cloudSaveCount,
