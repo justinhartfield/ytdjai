@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { checkCanGenerate, consumeCredit, getUserSubscription } from '@/lib/subscription'
 import { TIER_CONFIG } from '@/lib/stripe'
 import { rateLimits, checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
+import { batchSearchVideoData } from '@/lib/video-search'
 import type { AIProvider, GeneratePlaylistRequest, PlaylistNode, Track, AlternativeTrack, StreamEvent, SegmentContext } from '@/types'
 
 // Next.js route segment config - increase timeout for serverless functions
@@ -599,8 +600,8 @@ Return ONLY a JSON array with: title, artist, key, genre, energy (1-100), durati
   throw new Error('Gemini returned no valid content')
 }
 
-// Convert AI tracks to PlaylistNodes
-function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], provider: AIProvider, segmentId?: string): PlaylistNode[] {
+// Convert AI tracks to PlaylistNodes with video enrichment (Invidious/Piped + iTunes)
+async function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], provider: AIProvider, segmentId?: string): Promise<PlaylistNode[]> {
   // Validate tracks is an array
   if (!tracks || !Array.isArray(tracks)) {
     console.error(`[${provider}] Invalid tracks data:`, tracks)
@@ -612,42 +613,61 @@ function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], provider: AIPr
     throw new Error(`${provider} returned empty playlist`)
   }
 
-  return tracks.map((track, index) => ({
-    id: `node-${provider}-${Date.now()}-${index}`,
-    track: {
-      id: `track-${provider}-${Date.now()}-${index}`,
-      youtubeId: '', // Will be enriched later
-      title: track.title || 'Unknown Track',
-      artist: track.artist || 'Unknown Artist',
-      duration: track.duration || 240,
-      key: track.key,
-      genre: track.genre,
-      energy: track.energy,
-      thumbnail: `https://picsum.photos/seed/${Date.now() + index}/200/200`,
-      aiReasoning: track.aiReasoning
-    },
-    position: index,
-    sourceProvider: provider, // Tag which AI generated this track
-    segmentId, // Tag which segment this track belongs to (for segmented sets)
-    alternatives: (track.alternatives || []).map((alt, altIndex) => ({
-      id: `alt-${provider}-${Date.now()}-${index}-${altIndex}`,
-      youtubeId: '',
-      title: alt.title,
-      artist: alt.artist,
-      duration: alt.duration || 240,
-      key: alt.key,
-      genre: alt.genre,
-      energy: alt.energy,
-      thumbnail: `https://picsum.photos/seed/${Date.now() + index + altIndex + 100}/200/200`,
-      whyNotChosen: alt.whyNotChosen,
-      matchScore: alt.matchScore
-    })),
-    transitionToNext: index < tracks.length - 1 ? {
-      quality: 'good' as const,
-      type: 'blend' as const,
-      duration: 16
-    } : undefined
+  // Prepare tracks for batch video search (Invidious/Piped + iTunes - NO YouTube API)
+  const tracksToSearch = tracks.map(track => ({
+    title: track.title || 'Unknown Track',
+    artist: track.artist || 'Unknown Artist'
   }))
+
+  console.log(`[${provider}] Enriching ${tracksToSearch.length} tracks via Invidious/Piped + iTunes...`)
+
+  // Batch search for video data (uses free APIs, no YouTube quota)
+  const enrichedResults = await batchSearchVideoData(tracksToSearch, {
+    skipYouTube: true,  // Never use YouTube API during generation
+    preferAlbumArt: true  // Prefer iTunes album art
+  })
+
+  return tracks.map((track, index) => {
+    const enriched = enrichedResults.get(String(index))
+    const timestamp = Date.now()
+
+    return {
+      id: `node-${provider}-${timestamp}-${index}`,
+      track: {
+        id: `track-${provider}-${timestamp}-${index}`,
+        youtubeId: enriched?.videoId || '',
+        title: track.title || 'Unknown Track',
+        artist: track.artist || 'Unknown Artist',
+        duration: enriched?.duration || track.duration || 240,
+        key: track.key,
+        genre: track.genre,
+        energy: track.energy,
+        thumbnail: enriched?.thumbnail || `https://picsum.photos/seed/${timestamp + index}/200/200`,
+        aiReasoning: track.aiReasoning
+      },
+      position: index,
+      sourceProvider: provider,
+      segmentId,
+      alternatives: (track.alternatives || []).map((alt, altIndex) => ({
+        id: `alt-${provider}-${timestamp}-${index}-${altIndex}`,
+        youtubeId: '',
+        title: alt.title,
+        artist: alt.artist,
+        duration: alt.duration || 240,
+        key: alt.key,
+        genre: alt.genre,
+        energy: alt.energy,
+        thumbnail: `https://picsum.photos/seed/${timestamp + index + altIndex + 100}/200/200`,
+        whyNotChosen: alt.whyNotChosen,
+        matchScore: alt.matchScore
+      })),
+      transitionToNext: index < tracks.length - 1 ? {
+        quality: 'good' as const,
+        type: 'blend' as const,
+        duration: 16
+      } : undefined
+    }
+  })
 }
 
 // YouTube search with duration fetch
@@ -818,25 +838,14 @@ function createStreamingResponse(
             }
 
             console.log(`[Stream API] ${provider} returned ${tracks.length} tracks`)
-            const playlistNodes = tracksToPlaylistNodes(tracks, provider, segment?.id)
+            // Enrich all providers with Invidious/Piped + iTunes (no YouTube API used here)
+            const playlistNodes = await tracksToPlaylistNodes(tracks, provider, segment?.id)
 
             // Determine if this is primary or alternative
             if (primaryProvider === null) {
               primaryProvider = provider
               console.log(`[Stream API] ${provider} is primary, sending result...`)
               sendEvent({ event: 'primary-result', provider, tracks: playlistNodes })
-
-              // Start YouTube enrichment for primary tracks (limit to avoid timeout)
-              if (youtubeApiKey) {
-                const enrichLimit = Math.min(playlistNodes.length, 5) // Limit to 5 to avoid timeout
-                for (let i = 0; i < enrichLimit; i++) {
-                  const track = playlistNodes[i].track
-                  const enrichedTrack = await enrichTrackWithYouTube(track, youtubeApiKey)
-                  if (enrichedTrack.youtubeId && !enrichedTrack.youtubeId.startsWith('pending-')) {
-                    sendEvent({ event: 'track-enriched', provider, index: i, track: enrichedTrack })
-                  }
-                }
-              }
             } else {
               console.log(`[Stream API] ${provider} is alternative, sending result...`)
               sendEvent({ event: 'alternative-result', provider, tracks: playlistNodes })
