@@ -454,13 +454,24 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
 
   const handleRegenerateWithCount = useCallback(async (mode: 'replace' | 'append', promptOverride?: string) => {
     const prompt = promptOverride || currentSet?.prompt || ''
-    if (!prompt.trim() || isGenerating) return
+    if (!prompt.trim()) {
+      console.warn('[Regenerate] No prompt provided')
+      return
+    }
+    if (isGenerating) {
+      console.warn('[Regenerate] Already generating')
+      return
+    }
 
+    console.log('[Regenerate] Starting generation:', { mode, prompt: prompt.substring(0, 50), provider: aiProvider })
     setIsGenerating(true)
+
     try {
       const countToGenerate = mode === 'append'
         ? Math.min(targetTrackCount, 20 - playlist.length)
         : targetTrackCount
+
+      console.log('[Regenerate] Requesting', countToGenerate, 'tracks')
 
       const result = await generatePlaylist({
         prompt,
@@ -479,22 +490,34 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
         provider: aiProvider
       })
 
-      if (result.success && result.playlist) {
+      console.log('[Regenerate] API response:', { success: result.success, trackCount: result.playlist?.length, error: result.error })
+
+      if (result.success && result.playlist && result.playlist.length > 0) {
         if (mode === 'append') {
           // Append new tracks to existing playlist
           const newPlaylist = [...playlist, ...result.playlist]
           updateSetWithPrompt(newPlaylist, prompt)
+          console.log('[Regenerate] Appended', result.playlist.length, 'tracks, total:', newPlaylist.length)
         } else {
           // Replace entire playlist
           updateSetWithPrompt(result.playlist, prompt)
+          console.log('[Regenerate] Replaced playlist with', result.playlist.length, 'tracks')
         }
+      } else if (result.error) {
+        console.error('[Regenerate] API error:', result.error)
+        // Check if it's a credits error
+        if (result.error.includes('credits') || result.error.includes('limit')) {
+          setShowUpgradeModal(true)
+        }
+      } else {
+        console.error('[Regenerate] No tracks returned from API')
       }
     } catch (error) {
-      console.error('Failed to regenerate playlist:', error)
+      console.error('[Regenerate] Exception:', error)
     } finally {
       setIsGenerating(false)
     }
-  }, [currentSet?.prompt, isGenerating, targetTrackCount, playlist, aiProvider, constraints, updateSetWithPrompt, setIsGenerating])
+  }, [currentSet?.prompt, isGenerating, targetTrackCount, playlist, aiProvider, constraints, updateSetWithPrompt, setIsGenerating, setShowUpgradeModal])
 
   // Fit songs to arc - rearrange unlocked tracks to best match the energy curve
   const handleFitToArc = useCallback((arcId: string) => {

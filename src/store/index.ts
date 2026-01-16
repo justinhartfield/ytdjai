@@ -1177,9 +1177,25 @@ export const useYTDJStore = create<YTDJState>()(
       })),
 
       regenerateSegment: async (segmentId: string) => {
+        console.log('[regenerateSegment] Starting for segment:', segmentId)
+
+        // Ensure segment boundaries are calculated first
+        get().calculateSegmentBoundaries()
+
         const state = get()
         const segment = state.segments.find((s) => s.id === segmentId)
-        if (!segment || !state.currentSet) return
+
+        if (!segment) {
+          console.error('[regenerateSegment] Segment not found:', segmentId)
+          return
+        }
+
+        if (!state.currentSet) {
+          console.error('[regenerateSegment] No current set')
+          return
+        }
+
+        console.log('[regenerateSegment] Segment found:', segment.name, 'startIndex:', segment.startIndex, 'endIndex:', segment.endIndex)
 
         // Calculate target track count for this segment
         let targetTrackCount: number
@@ -1189,6 +1205,8 @@ export const useYTDJStore = create<YTDJState>()(
           // Estimate tracks from duration (assume ~3.5 min avg per track)
           targetTrackCount = Math.max(1, Math.round(segment.duration.duration / 3.5))
         }
+
+        console.log('[regenerateSegment] Target track count:', targetTrackCount)
 
         // Get context tracks from adjacent segments
         const playlist = state.currentSet.playlist
@@ -1229,6 +1247,8 @@ export const useYTDJStore = create<YTDJState>()(
             })
           })
 
+          console.log('[regenerateSegment] API response status:', response.status)
+
           if (!response.ok) {
             const error = await response.json()
             console.error('[regenerateSegment] API error:', error)
@@ -1237,7 +1257,10 @@ export const useYTDJStore = create<YTDJState>()(
 
           // Handle streaming response
           const reader = response.body?.getReader()
-          if (!reader) return
+          if (!reader) {
+            console.error('[regenerateSegment] No response body reader')
+            return
+          }
 
           const decoder = new TextDecoder()
           let newTracks: PlaylistNode[] = []
@@ -1252,14 +1275,21 @@ export const useYTDJStore = create<YTDJState>()(
             for (const line of lines) {
               try {
                 const data = JSON.parse(line.slice(6))
+                console.log('[regenerateSegment] Received event:', data.event)
                 if (data.event === 'primary-result' && data.tracks) {
                   newTracks = data.tracks
+                  console.log('[regenerateSegment] Received', newTracks.length, 'new tracks')
+                }
+                if (data.event === 'all-failed') {
+                  console.error('[regenerateSegment] Generation failed:', data.errors)
                 }
               } catch {
                 // Ignore parse errors for incomplete chunks
               }
             }
           }
+
+          console.log('[regenerateSegment] Stream complete. New tracks:', newTracks.length, 'Segment bounds:', segment.startIndex, '-', segment.endIndex)
 
           // Replace tracks in the segment
           if (newTracks.length > 0 && segment.startIndex !== undefined && segment.endIndex !== undefined) {
@@ -1291,8 +1321,12 @@ export const useYTDJStore = create<YTDJState>()(
                 : currentState.currentSet
             })
 
+            console.log('[regenerateSegment] Updated playlist with', finalPlaylist.length, 'total tracks')
+
             // Recalculate segment boundaries
             get().calculateSegmentBoundaries()
+          } else {
+            console.warn('[regenerateSegment] Skipping playlist update - newTracks:', newTracks.length, 'startIndex:', segment.startIndex, 'endIndex:', segment.endIndex)
           }
         } catch (error) {
           console.error('[regenerateSegment] Error:', error)
