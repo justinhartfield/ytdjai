@@ -295,6 +295,57 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
     setAuditioningTrack(null)
   }, [playlist, updatePlaylist])
 
+  // Add alternative track to playlist (insert before or after current position)
+  const handleAddAlternativeTrack = useCallback(async (track: Track, columnIndex: number, position: 'before' | 'after') => {
+    // If the track doesn't have a youtubeId, fetch it first
+    let enrichedTrack = track
+    if (!track.youtubeId) {
+      try {
+        const response = await fetch('/api/youtube/enrich', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ artist: track.artist, title: track.title })
+        })
+        const result = await response.json()
+        if (result.success && result.youtubeId) {
+          enrichedTrack = {
+            ...track,
+            youtubeId: result.youtubeId,
+            thumbnail: result.thumbnail || track.thumbnail,
+            duration: result.duration || track.duration
+          }
+        }
+      } catch (error) {
+        console.error('[SessionView] Failed to enrich track with YouTube data:', error)
+      }
+    }
+
+    // Determine insert index
+    const insertIndex = position === 'before' ? columnIndex : columnIndex + 1
+
+    // Create a new playlist node for this track
+    const newNode: PlaylistNode = {
+      id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      position: insertIndex,
+      targetEnergy: enrichedTrack.energy || 50,
+      track: enrichedTrack,
+      isLocked: false
+    }
+
+    // Insert at the calculated index
+    const newPlaylist = [...playlist]
+    newPlaylist.splice(insertIndex, 0, newNode)
+
+    // Update positions
+    newPlaylist.forEach((node, idx) => {
+      node.position = idx
+    })
+
+    updatePlaylist(newPlaylist)
+    setSelectedTrack(enrichedTrack)
+    setAuditioningTrack(null)
+  }, [playlist, updatePlaylist])
+
   const handleLockToggle = useCallback((columnIndex: number) => {
     const newPlaylist = [...playlist]
     newPlaylist[columnIndex] = {
@@ -1115,12 +1166,28 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
                                 <p className="text-[8px] text-gray-400 italic leading-relaxed line-clamp-2">{track.whyNotChosen}</p>
                               </div>
                             )}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleSwapIn(track, colIdx); }}
-                              className="mt-2 w-full opacity-0 group-hover:opacity-100 text-[8px] bg-cyan-500 text-black px-1.5 py-1 rounded font-bold uppercase transition-opacity"
-                            >
-                              Swap In
-                            </button>
+                            <div className="mt-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleSwapIn(track, colIdx); }}
+                                className="flex-1 text-[8px] bg-cyan-500 text-black px-1.5 py-1 rounded font-bold uppercase hover:bg-cyan-400 transition-colors"
+                              >
+                                Swap In
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleAddAlternativeTrack(track, colIdx, 'before'); }}
+                                className="text-[8px] bg-pink-500 text-white px-1.5 py-1 rounded font-bold uppercase hover:bg-pink-400 transition-colors"
+                                title="Add before this slot"
+                              >
+                                +Prev
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleAddAlternativeTrack(track, colIdx, 'after'); }}
+                                className="text-[8px] bg-pink-500 text-white px-1.5 py-1 rounded font-bold uppercase hover:bg-pink-400 transition-colors"
+                                title="Add after this slot"
+                              >
+                                +Next
+                              </button>
+                            </div>
                           </div>
                         ))
                       ) : (
