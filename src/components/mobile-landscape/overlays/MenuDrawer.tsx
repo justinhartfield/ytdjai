@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Sparkles, Share2, Settings, Cloud, Download, X, Music } from 'lucide-react'
+import { Sparkles, Share2, Settings, Cloud, Download, X, Music, FileSpreadsheet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
 import { haptics } from '@/lib/haptics'
@@ -11,6 +11,7 @@ interface MenuDrawerProps {
   onClose: () => void
   onNewSet: () => void
   onExport: () => void
+  onDJExport?: () => void
 }
 
 const menuItems = [
@@ -18,10 +19,11 @@ const menuItems = [
   { id: 'share', icon: Share2, label: 'Share Set', color: 'text-white' },
   { id: 'settings', icon: Settings, label: 'AI Settings', color: 'text-white' },
   { id: 'cloud', icon: Cloud, label: 'Cloud Save', color: 'text-white' },
+  { id: 'dj-tools', icon: FileSpreadsheet, label: 'DJ Tools', color: 'text-orange-400' },
   { id: 'export', icon: Download, label: 'Export Set', color: 'text-white' }
 ]
 
-export function MenuDrawer({ onClose, onNewSet, onExport }: MenuDrawerProps) {
+export function MenuDrawer({ onClose, onNewSet, onExport, onDJExport }: MenuDrawerProps) {
   const { currentSet } = useYTDJStore()
   const playlist = currentSet?.playlist || []
 
@@ -47,6 +49,11 @@ export function MenuDrawer({ onClose, onNewSet, onExport }: MenuDrawerProps) {
       case 'cloud':
         // TODO: Open cloud save modal
         onClose()
+        break
+      case 'dj-tools':
+        if (onDJExport) {
+          onDJExport()
+        }
         break
       case 'export':
         onExport()

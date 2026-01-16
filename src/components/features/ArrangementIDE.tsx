@@ -19,6 +19,7 @@ import { ExportFlow } from './ExportFlow'
 import { AIControlsSidebar } from './AIControlsSidebar'
 import { SaveSetDialog } from './SaveSetDialog'
 import { BrowseSetsModal } from './BrowseSetsModal'
+import { DJExportModal } from './DJExportModal'
 import type { PlaylistNode, Track, AIConstraints, Set, AIProvider } from '@/types'
 import { GhostTrackNode, AIProviderBadge } from './GhostTrackNode'
 import { UpgradeModal } from './Subscription/UpgradeModal'
@@ -91,6 +92,7 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
   const [showBrowseSets, setShowBrowseSets] = useState(false)
   const [isFixingTrack, setIsFixingTrack] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const [showDJExport, setShowDJExport] = useState(false)
 
   // Show upgrade modal when there's a no_credits error
   useEffect(() => {
@@ -731,6 +733,13 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
             >
               <Cloud className="w-4 h-4" />
               Save to Cloud
+            </button>
+            <button
+              onClick={() => setShowDJExport(true)}
+              disabled={playlist.length === 0}
+              className="px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white text-xs font-black rounded hover:opacity-90 hover:scale-105 transition-all shadow-[0_0_20px_rgba(255,127,0,0.2)] uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+            >
+              DJ Tools
             </button>
             <button
               onClick={() => setShowExport(true)}
@@ -1442,6 +1451,9 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
 
       {/* Browse Sets Modal */}
       <BrowseSetsModal isOpen={showBrowseSets} onClose={() => setShowBrowseSets(false)} />
+
+      {/* DJ Export Modal */}
+      <DJExportModal isOpen={showDJExport} onClose={() => setShowDJExport(false)} />
 
       {/* Upgrade Modal - shown when credits are exhausted */}
       <UpgradeModal

@@ -19,6 +19,7 @@ import { ExportFlow } from './ExportFlow'
 import { AIControlsSidebar } from './AIControlsSidebar'
 import { SaveSetDialog } from './SaveSetDialog'
 import { BrowseSetsModal } from './BrowseSetsModal'
+import { DJExportModal } from './DJExportModal'
 import type { PlaylistNode, Track, Set, AIConstraints, AlternativeTrack, AIProvider } from '@/types'
 import { GhostTrackCard, AIProviderBadge } from './GhostTrackNode'
 
@@ -67,6 +68,7 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
   const [selectedColumnIndex, setSelectedColumnIndex] = useState<number | null>(null)
   const [auditioningTrack, setAuditioningTrack] = useState<Track | null>(null)
   const [showExport, setShowExport] = useState(false)
+  const [showDJExport, setShowDJExport] = useState(false)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [showBrowseSets, setShowBrowseSets] = useState(false)
   const [isRegenerating, setIsRegenerating] = useState(false)
@@ -657,6 +659,13 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
             >
               <Cloud className="w-4 h-4" />
               Save to Cloud
+            </button>
+            <button
+              onClick={() => setShowDJExport(true)}
+              disabled={playlist.length === 0}
+              className="px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white text-xs font-black rounded hover:opacity-90 hover:scale-105 transition-all shadow-[0_0_20px_rgba(255,127,0,0.2)] uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+            >
+              DJ Tools
             </button>
             <button
               onClick={() => setShowExport(true)}
@@ -1283,6 +1292,9 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
 
       {/* Browse Sets Modal */}
       <BrowseSetsModal isOpen={showBrowseSets} onClose={() => setShowBrowseSets(false)} />
+
+      {/* DJ Export Modal */}
+      <DJExportModal isOpen={showDJExport} onClose={() => setShowDJExport(false)} />
 
       {/* Arc Mismatch Modal */}
       <AnimatePresence>

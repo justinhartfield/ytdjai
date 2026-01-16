@@ -13,6 +13,7 @@ import { TransportBar } from './player/TransportBar'
 import { MenuDrawer } from './overlays/MenuDrawer'
 import { TrackInspector } from './overlays/TrackInspector'
 import { SideSheet } from './overlays/SideSheet'
+import { DJExportModal } from '@/components/features/DJExportModal'
 import { generatePlaylist } from '@/lib/ai-service'
 import type { AIConstraints } from '@/types'
 
@@ -42,6 +43,7 @@ export function LandscapeLayout({ onNewSet }: LandscapeLayoutProps) {
   const [selectedNodeIndex, setSelectedNodeIndex] = useState<number | null>(null)
   const [showInspector, setShowInspector] = useState(false)
   const [targetTrackCount, setTargetTrackCount] = useState(8)
+  const [showDJExport, setShowDJExport] = useState(false)
 
   const handleSelectTrack = useCallback((index: number) => {
     haptics.light()
@@ -222,6 +224,10 @@ export function LandscapeLayout({ onNewSet }: LandscapeLayoutProps) {
               setShowMenu(false)
               setShowExportModal(true)
             }}
+            onDJExport={() => {
+              setShowMenu(false)
+              setShowDJExport(true)
+            }}
           />
         )}
       </AnimatePresence>
@@ -292,6 +298,9 @@ export function LandscapeLayout({ onNewSet }: LandscapeLayoutProps) {
           </button>
         </div>
       </SideSheet>
+
+      {/* DJ Export Modal */}
+      <DJExportModal isOpen={showDJExport} onClose={() => setShowDJExport(false)} />
     </div>
   )
 }
