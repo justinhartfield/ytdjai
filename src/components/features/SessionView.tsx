@@ -816,20 +816,17 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
                       <span>{provider === 'openai' ? 'OpenAI' : provider === 'claude' ? 'Claude' : 'Gemini'}</span>
                     </button>
                   ))}
-                  {/* Combine All Button */}
-                  <button
-                    onClick={() => combineAllProviders()}
-                    className={cn(
-                      'flex items-center gap-1.5 px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-wider transition-all',
-                      generationProgress.primaryProvider === null
-                        ? 'bg-gradient-to-r from-[#10a37f] via-[#d97706] to-[#4285f4] text-white'
-                        : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
-                    )}
-                    title="Combine tracks from all AI providers and fit to arc template"
-                  >
-                    <Layers className="w-3 h-3" />
-                    <span>Combine All</span>
-                  </button>
+                  {/* Combine All Button - hidden after clicked */}
+                  {generationProgress.primaryProvider !== null && (
+                    <button
+                      onClick={() => combineAllProviders()}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-wider transition-all bg-white/10 text-white/70 hover:bg-white/20 hover:text-white"
+                      title="Combine tracks from all AI providers and fit to arc template"
+                    >
+                      <Layers className="w-3 h-3" />
+                      <span>Combine All</span>
+                    </button>
+                  )}
                 </div>
               )}
 
