@@ -461,3 +461,117 @@ export interface TransitionAnalysis {
   overallScore: number // 0-100
   recommendedCrossfadeDuration: number
 }
+
+// ===== MIXTAPE / SHARE TYPES =====
+
+// Cover template IDs
+export type CoverTemplateId =
+  | 'neon-gradient'
+  | 'vintage-cassette'
+  | 'minimal-wave'
+  | 'vinyl-classic'
+  | 'glitch-digital'
+  | 'sunset-gradient'
+  | 'dark-abstract'
+  | 'nature-organic'
+  | 'geometric-bold'
+  | 'holographic'
+  | 'paper-texture'
+  | 'circuit-tech'
+
+// Custom colors for cover templates
+export interface CoverColors {
+  primary: string   // Main color (hex)
+  secondary: string // Secondary/accent color (hex)
+  accent: string    // Highlight/glow color (hex)
+}
+
+// Mixtape metadata (extends Set when published)
+export interface MixtapeMetadata {
+  shareSlug: string           // Short URL slug (e.g., "neon-drive-42")
+  isPublic: boolean           // Visible in discover feed
+  coverTemplate: CoverTemplateId
+  coverColors: CoverColors
+  title: string               // Mixtape title (AI-generated or custom)
+  subtitle: string            // Tagline ("Why this set slaps for leg day")
+  description: string         // Longer AI-generated description
+  tags: string[]              // Genre/mood tags for discovery
+  viewCount: number
+  likeCount: number
+  publishedAt?: Date
+  youtubePlaylistId?: string
+  spotifyPlaylistId?: string
+}
+
+// Full public mixtape (what's returned from /api/mixtape/[slug])
+export interface PublicMixtape extends MixtapeMetadata {
+  id: string
+  setId: string               // Reference to original dj_sets.set_id
+  authorEmail: string
+  authorName?: string
+  authorAvatar?: string
+  playlist: PlaylistNode[]
+  prompt?: string
+  arcTemplate?: string
+  totalDuration: number       // Total duration in seconds
+  trackCount: number
+  energyRange: { min: number; max: number }
+  bpmRange?: { min: number; max: number }
+  createdAt: Date
+}
+
+// Mixtape card for discover grid (lightweight)
+export interface MixtapeCard {
+  shareSlug: string
+  title: string
+  subtitle: string
+  coverTemplate: CoverTemplateId
+  coverColors: CoverColors
+  authorName?: string
+  trackCount: number
+  totalDuration: number
+  viewCount: number
+  likeCount: number
+  tags: string[]
+  publishedAt: Date
+}
+
+// AI-generated metadata response
+export interface GeneratedMixtapeMeta {
+  title: string
+  subtitle: string
+  description: string
+  suggestedCoverTemplate: CoverTemplateId
+  tags: string[]
+}
+
+// Publish mixtape request
+export interface PublishMixtapeRequest {
+  setId: string
+  title: string
+  subtitle: string
+  description: string
+  coverTemplate: CoverTemplateId
+  coverColors: CoverColors
+  tags: string[]
+  isPublic: boolean
+  youtubePlaylistId?: string
+  spotifyPlaylistId?: string
+}
+
+// Discover feed filters
+export interface DiscoverFilters {
+  sort: 'recent' | 'popular' | 'trending'
+  tags?: string[]
+  search?: string
+  page?: number
+  limit?: number
+}
+
+// Discover feed response
+export interface DiscoverResponse {
+  mixtapes: MixtapeCard[]
+  total: number
+  page: number
+  hasMore: boolean
+}

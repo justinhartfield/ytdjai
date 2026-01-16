@@ -9,7 +9,8 @@ import {
 } from 'lucide-react'
 import { cn, formatDuration } from '@/lib/utils'
 import { useYTDJStore, arcTemplates } from '@/store'
-import { generatePlaylist, swapTrack } from '@/lib/ai-service'
+import { swapTrack } from '@/lib/ai-service'
+import { streamGeneratePlaylist } from '@/lib/ai-stream-service'
 import { formatTime } from './YouTubePlayer'
 import { TransportBar } from './TransportBar'
 import { IconSidebar } from './IconSidebar'
@@ -67,6 +68,15 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
     combineAllProviders,
     generationError,
     clearGenerationError,
+    // Streaming generation handlers
+    startParallelGeneration,
+    setProviderStarted,
+    receivePrimaryResult,
+    receiveAlternativeResult,
+    setProviderFailed,
+    enrichTrack,
+    completeGeneration,
+    failAllGeneration,
     // Segment state
     segments,
     activeSegmentId,
@@ -416,7 +426,7 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
     }
   }, [currentSet?.prompt, isPromptEditing])
 
-  const handleRegenerate = useCallback(async (overrideConstraints?: typeof constraints, promptOverride?: string) => {
+  const handleRegenerate = useCallback((overrideConstraints?: typeof constraints, promptOverride?: string) => {
     const prompt = promptOverride || currentSet?.prompt || ''
     if (!prompt.trim()) {
       console.warn('[Regenerate] No prompt provided')
@@ -427,21 +437,22 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
       return
     }
 
-    console.log('[Regenerate] Starting (no-count mode):', { prompt: prompt.substring(0, 50), provider: aiProvider })
+    const trackCount = playlist.length || 8
+    const activeConstraints = overrideConstraints || constraints
+
+    console.log('[Regenerate] Starting streaming generation:', { prompt: prompt.substring(0, 50), trackCount })
     setIsGenerating(true)
+    startParallelGeneration(trackCount)
 
-    try {
-      const trackCount = playlist.length || 8
-      const activeConstraints = overrideConstraints || constraints
-
-      console.log('[Regenerate] Requesting', trackCount, 'tracks')
-
-      const result = await generatePlaylist({
+    // Use streaming to avoid 504 timeout
+    streamGeneratePlaylist(
+      {
         prompt,
+        trackCount,
+        energyRange: { min: 20, max: 80 },
         constraints: {
           trackCount,
           energyRange: { min: 20, max: 80 },
-          // Map extended constraints to AIConstraints
           energyTolerance: activeConstraints.energyTolerance,
           syncopation: activeConstraints.syncopation,
           keyMatch: activeConstraints.keyMatch,
@@ -449,31 +460,54 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
           discovery: activeConstraints.discovery,
           activeDecades: activeConstraints.activeDecades,
           blacklist: activeConstraints.blacklist
-        } as AIConstraints,
-        provider: aiProvider
-      })
-
-      console.log('[Regenerate] API response:', { success: result.success, trackCount: result.playlist?.length, error: result.error })
-
-      if (result.success && result.playlist && result.playlist.length > 0) {
-        updateSetWithPrompt(result.playlist, prompt)
-        console.log('[Regenerate] Updated playlist with', result.playlist.length, 'tracks')
-      } else if (result.error) {
-        console.error('[Regenerate] API error:', result.error)
-        if (result.error.includes('credits') || result.error.includes('limit')) {
-          setShowUpgradeModal(true)
+        } as AIConstraints
+      },
+      {
+        onStarted: (providers) => {
+          console.log('[Stream] Started with providers:', providers)
+        },
+        onProviderStarted: (provider) => {
+          console.log('[Stream] Provider started:', provider)
+          setProviderStarted(provider)
+        },
+        onPrimaryResult: (provider, tracks) => {
+          console.log('[Stream] Primary result from:', provider, tracks.length, 'tracks')
+          receivePrimaryResult(provider, tracks)
+        },
+        onAlternativeResult: (provider, tracks) => {
+          console.log('[Stream] Alternative result from:', provider, tracks.length, 'tracks')
+          receiveAlternativeResult(provider, tracks)
+        },
+        onProviderFailed: (provider, error) => {
+          console.error('[Stream] Provider failed:', provider, error)
+          setProviderFailed(provider, error)
+        },
+        onTrackEnriched: (provider, index, track) => {
+          console.log('[Stream] Track enriched:', provider, index, track.title)
+          enrichTrack(provider, index, track)
+        },
+        onComplete: (summary) => {
+          console.log('[Stream] Complete:', summary)
+          completeGeneration(summary)
+          setIsGenerating(false)
+        },
+        onAllFailed: (errors) => {
+          console.error('[Stream] All providers failed:', errors)
+          failAllGeneration(errors)
+          setIsGenerating(false)
+        },
+        onError: (error, details) => {
+          console.error('[Stream] Error:', error, details)
+          setIsGenerating(false)
+          if (details?.code === 'no_credits') {
+            setShowUpgradeModal(true)
+          }
         }
-      } else {
-        console.error('[Regenerate] No tracks returned from API')
       }
-    } catch (error) {
-      console.error('[Regenerate] Exception:', error)
-    } finally {
-      setIsGenerating(false)
-    }
-  }, [currentSet?.prompt, isGenerating, playlist.length, aiProvider, constraints, updateSetWithPrompt, setIsGenerating, setShowUpgradeModal])
+    )
+  }, [currentSet?.prompt, isGenerating, playlist.length, constraints, setIsGenerating, startParallelGeneration, setProviderStarted, receivePrimaryResult, receiveAlternativeResult, setProviderFailed, enrichTrack, completeGeneration, failAllGeneration, setShowUpgradeModal])
 
-  const handleRegenerateWithCount = useCallback(async (mode: 'replace' | 'append', promptOverride?: string) => {
+  const handleRegenerateWithCount = useCallback((mode: 'replace' | 'append', promptOverride?: string) => {
     const prompt = promptOverride || currentSet?.prompt || ''
     if (!prompt.trim()) {
       console.warn('[Regenerate] No prompt provided')
@@ -484,22 +518,23 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
       return
     }
 
-    console.log('[Regenerate] Starting generation:', { mode, prompt: prompt.substring(0, 50), provider: aiProvider })
+    const countToGenerate = mode === 'append'
+      ? Math.min(targetTrackCount, 20 - playlist.length)
+      : targetTrackCount
+
+    console.log('[Regenerate] Starting streaming generation:', { mode, prompt: prompt.substring(0, 50), trackCount: countToGenerate })
     setIsGenerating(true)
+    startParallelGeneration(countToGenerate)
 
-    try {
-      const countToGenerate = mode === 'append'
-        ? Math.min(targetTrackCount, 20 - playlist.length)
-        : targetTrackCount
-
-      console.log('[Regenerate] Requesting', countToGenerate, 'tracks')
-
-      const result = await generatePlaylist({
+    // Use streaming to avoid 504 timeout
+    streamGeneratePlaylist(
+      {
         prompt,
+        trackCount: countToGenerate,
+        energyRange: { min: 20, max: 80 },
         constraints: {
           trackCount: countToGenerate,
           energyRange: { min: 20, max: 80 },
-          // Include all extended constraints
           energyTolerance: constraints.energyTolerance,
           syncopation: constraints.syncopation,
           keyMatch: constraints.keyMatch,
@@ -507,38 +542,61 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
           discovery: constraints.discovery,
           activeDecades: constraints.activeDecades,
           blacklist: constraints.blacklist
-        } as AIConstraints,
-        provider: aiProvider
-      })
-
-      console.log('[Regenerate] API response:', { success: result.success, trackCount: result.playlist?.length, error: result.error })
-
-      if (result.success && result.playlist && result.playlist.length > 0) {
-        if (mode === 'append') {
-          // Append new tracks to existing playlist
-          const newPlaylist = [...playlist, ...result.playlist]
-          updateSetWithPrompt(newPlaylist, prompt)
-          console.log('[Regenerate] Appended', result.playlist.length, 'tracks, total:', newPlaylist.length)
-        } else {
-          // Replace entire playlist
-          updateSetWithPrompt(result.playlist, prompt)
-          console.log('[Regenerate] Replaced playlist with', result.playlist.length, 'tracks')
+        } as AIConstraints
+      },
+      {
+        onStarted: (providers) => {
+          console.log('[Stream] Started with providers:', providers)
+        },
+        onProviderStarted: (provider) => {
+          console.log('[Stream] Provider started:', provider)
+          setProviderStarted(provider)
+        },
+        onPrimaryResult: (provider, tracks) => {
+          console.log('[Stream] Primary result from:', provider, tracks.length, 'tracks')
+          if (mode === 'append') {
+            // For append mode, merge with existing playlist
+            const newPlaylist = [...playlist, ...tracks]
+            updateSetWithPrompt(newPlaylist, prompt)
+            console.log('[Stream] Appended', tracks.length, 'tracks, total:', newPlaylist.length)
+          } else {
+            receivePrimaryResult(provider, tracks)
+          }
+        },
+        onAlternativeResult: (provider, tracks) => {
+          console.log('[Stream] Alternative result from:', provider, tracks.length, 'tracks')
+          if (mode !== 'append') {
+            receiveAlternativeResult(provider, tracks)
+          }
+        },
+        onProviderFailed: (provider, error) => {
+          console.error('[Stream] Provider failed:', provider, error)
+          setProviderFailed(provider, error)
+        },
+        onTrackEnriched: (provider, index, track) => {
+          console.log('[Stream] Track enriched:', provider, index, track.title)
+          enrichTrack(provider, index, track)
+        },
+        onComplete: (summary) => {
+          console.log('[Stream] Complete:', summary)
+          completeGeneration(summary)
+          setIsGenerating(false)
+        },
+        onAllFailed: (errors) => {
+          console.error('[Stream] All providers failed:', errors)
+          failAllGeneration(errors)
+          setIsGenerating(false)
+        },
+        onError: (error, details) => {
+          console.error('[Stream] Error:', error, details)
+          setIsGenerating(false)
+          if (details?.code === 'no_credits') {
+            setShowUpgradeModal(true)
+          }
         }
-      } else if (result.error) {
-        console.error('[Regenerate] API error:', result.error)
-        // Check if it's a credits error
-        if (result.error.includes('credits') || result.error.includes('limit')) {
-          setShowUpgradeModal(true)
-        }
-      } else {
-        console.error('[Regenerate] No tracks returned from API')
       }
-    } catch (error) {
-      console.error('[Regenerate] Exception:', error)
-    } finally {
-      setIsGenerating(false)
-    }
-  }, [currentSet?.prompt, isGenerating, targetTrackCount, playlist, aiProvider, constraints, updateSetWithPrompt, setIsGenerating, setShowUpgradeModal])
+    )
+  }, [currentSet?.prompt, isGenerating, targetTrackCount, playlist, constraints, setIsGenerating, startParallelGeneration, setProviderStarted, receivePrimaryResult, receiveAlternativeResult, setProviderFailed, enrichTrack, completeGeneration, failAllGeneration, updateSetWithPrompt, setShowUpgradeModal])
 
   // Fit songs to arc - rearrange unlocked tracks to best match the energy curve
   const handleFitToArc = useCallback((arcId: string) => {
@@ -644,44 +702,49 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
   }, [playlist, updatePlaylist])
 
   // Regenerate poor fit tracks to match arc
-  const handleRegeneratePoorFits = useCallback(async () => {
+  const handleRegeneratePoorFits = useCallback(() => {
     if (!arcMismatchInfo || isGenerating) return
 
     const arc = arcTemplates.find(a => a.id === arcMismatchInfo.arcId)
     if (!arc) return
 
+    // Calculate target energies for each position
+    const targetEnergies: number[] = []
+    for (let i = 0; i < playlist.length; i++) {
+      const position = i / (playlist.length - 1)
+      const profileIndex = position * (arc.energyProfile.length - 1)
+      const lowerIndex = Math.floor(profileIndex)
+      const upperIndex = Math.ceil(profileIndex)
+      const fraction = profileIndex - lowerIndex
+
+      if (upperIndex >= arc.energyProfile.length) {
+        targetEnergies.push(arc.energyProfile[arc.energyProfile.length - 1])
+      } else {
+        const interpolatedEnergy = arc.energyProfile[lowerIndex] * (1 - fraction) + arc.energyProfile[upperIndex] * fraction
+        targetEnergies.push(Math.round(interpolatedEnergy))
+      }
+    }
+
+    // Generate replacement tracks for poor fit positions
+    const poorFitPositions = arcMismatchInfo.poorFitPositions.filter(pos => !playlist[pos]?.isLocked)
+
+    if (poorFitPositions.length === 0) {
+      // All poor fits are locked, nothing we can do
+      setArcMismatchInfo(null)
+      return
+    }
+
     setIsGenerating(true)
     setArcMismatchInfo(null)
 
-    try {
-      // Calculate target energies for each position
-      const targetEnergies: number[] = []
-      for (let i = 0; i < playlist.length; i++) {
-        const position = i / (playlist.length - 1)
-        const profileIndex = position * (arc.energyProfile.length - 1)
-        const lowerIndex = Math.floor(profileIndex)
-        const upperIndex = Math.ceil(profileIndex)
-        const fraction = profileIndex - lowerIndex
+    const prompt = `${currentSet?.prompt || 'Generate tracks'}. Focus on tracks with these specific energy levels: ${poorFitPositions.map(pos => `position ${pos + 1} needs energy ~${targetEnergies[pos]}`).join(', ')}`
 
-        if (upperIndex >= arc.energyProfile.length) {
-          targetEnergies.push(arc.energyProfile[arc.energyProfile.length - 1])
-        } else {
-          const interpolatedEnergy = arc.energyProfile[lowerIndex] * (1 - fraction) + arc.energyProfile[upperIndex] * fraction
-          targetEnergies.push(Math.round(interpolatedEnergy))
-        }
-      }
-
-      // Generate replacement tracks for poor fit positions
-      const poorFitPositions = arcMismatchInfo.poorFitPositions.filter(pos => !playlist[pos]?.isLocked)
-
-      if (poorFitPositions.length === 0) {
-        // All poor fits are locked, nothing we can do
-        setIsGenerating(false)
-        return
-      }
-
-      const result = await generatePlaylist({
-        prompt: `${currentSet?.prompt || 'Generate tracks'}. Focus on tracks with these specific energy levels: ${poorFitPositions.map(pos => `position ${pos + 1} needs energy ~${targetEnergies[pos]}`).join(', ')}`,
+    // Use streaming to avoid 504 timeout
+    streamGeneratePlaylist(
+      {
+        prompt,
+        trackCount: poorFitPositions.length,
+        energyRange: { min: 1, max: 100 },
         constraints: {
           trackCount: poorFitPositions.length,
           energyRange: { min: 1, max: 100 },
@@ -692,30 +755,45 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
           discovery: constraints.discovery,
           activeDecades: constraints.activeDecades,
           blacklist: constraints.blacklist
-        } as AIConstraints,
-        provider: aiProvider
-      })
-
-      if (result.success && result.playlist && result.playlist.length > 0) {
-        // Replace poor fit tracks with new ones
-        const newPlaylist = [...playlist]
-        result.playlist.forEach((newNode, idx) => {
-          if (idx < poorFitPositions.length) {
-            const targetPos = poorFitPositions[idx]
-            newPlaylist[targetPos] = {
-              ...newNode,
-              targetEnergy: targetEnergies[targetPos]
+        } as AIConstraints
+      },
+      {
+        onStarted: () => {},
+        onProviderStarted: () => {},
+        onPrimaryResult: (provider, tracks) => {
+          console.log('[PoorFits] Got', tracks.length, 'replacement tracks from', provider)
+          // Replace poor fit tracks with new ones
+          const newPlaylist = [...playlist]
+          tracks.forEach((newNode, idx) => {
+            if (idx < poorFitPositions.length) {
+              const targetPos = poorFitPositions[idx]
+              newPlaylist[targetPos] = {
+                ...newNode,
+                targetEnergy: targetEnergies[targetPos]
+              }
             }
-          }
-        })
-        updatePlaylist(newPlaylist)
+          })
+          updatePlaylist(newPlaylist)
+        },
+        onAlternativeResult: () => {},
+        onProviderFailed: (provider, error) => {
+          console.error('[PoorFits] Provider failed:', provider, error)
+        },
+        onTrackEnriched: () => {},
+        onComplete: () => {
+          setIsGenerating(false)
+        },
+        onAllFailed: (errors) => {
+          console.error('[PoorFits] All providers failed:', errors)
+          setIsGenerating(false)
+        },
+        onError: (error) => {
+          console.error('[PoorFits] Error:', error)
+          setIsGenerating(false)
+        }
       }
-    } catch (error) {
-      console.error('Failed to regenerate poor fit tracks:', error)
-    } finally {
-      setIsGenerating(false)
-    }
-  }, [arcMismatchInfo, isGenerating, playlist, currentSet, constraints, aiProvider, updatePlaylist, setIsGenerating])
+    )
+  }, [arcMismatchInfo, isGenerating, playlist, currentSet, constraints, updatePlaylist, setIsGenerating])
 
   const handleArcChange = useCallback((arcId: string) => {
     if (arcId === activeArcTemplate) return

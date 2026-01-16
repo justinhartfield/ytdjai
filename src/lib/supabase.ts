@@ -51,4 +51,18 @@ export interface DbDjSet {
   data: any // The full Set object
   created_at: string
   updated_at: string
+  // Mixtape fields (nullable for non-published sets)
+  share_slug?: string | null
+  is_public?: boolean
+  cover_template?: string | null
+  cover_colors?: { primary: string; secondary: string; accent: string } | null
+  title?: string | null
+  subtitle?: string | null
+  description?: string | null
+  tags?: string[] | null
+  view_count?: number
+  like_count?: number
+  youtube_playlist_id?: string | null
+  spotify_playlist_id?: string | null
+  published_at?: string | null
 }
