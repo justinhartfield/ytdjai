@@ -349,12 +349,13 @@ function buildSegmentInstructions(segment: SegmentContext): string {
 }
 
 // Generate with OpenAI
-async function generateWithOpenAI(prompt: string, constraints: GeneratePlaylistRequest['constraints']): Promise<AITrackWithAlternatives[]> {
+async function generateWithOpenAI(prompt: string, constraints: GeneratePlaylistRequest['constraints'], segment?: SegmentContext): Promise<AITrackWithAlternatives[]> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error('OpenAI API key not configured')
 
   const constraintInstructions = buildConstraintInstructions(constraints)
-  console.log('[OpenAI] Starting request...')
+  const segmentInstructions = segment ? buildSegmentInstructions(segment) : ''
+  console.log('[OpenAI] Starting request...', segment ? `(Segment: ${segment.name})` : '')
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     signal: AbortSignal.timeout(45000), // 45 second timeout
@@ -372,11 +373,13 @@ async function generateWithOpenAI(prompt: string, constraints: GeneratePlaylistR
 - title, artist, key (e.g. "Am"), genre, energy (1-100 intensity), duration (seconds)
 - aiReasoning: 1 sentence on why it fits
 - alternatives: array of 2 objects with title, artist, key, genre, energy, duration, whyNotChosen, matchScore (70-95)
-Return ONLY valid JSON array, no markdown.${constraintInstructions ? `\n\nConstraints:\n${constraintInstructions}` : ''}`
+Return ONLY valid JSON array, no markdown.${constraintInstructions ? `\n\nConstraints:\n${constraintInstructions}` : ''}${segmentInstructions ? `\n${segmentInstructions}` : ''}`
         },
         {
           role: 'user',
-          content: `${constraints?.trackCount || 8} track set: ${prompt}. Energy: ${constraints?.energyRange?.min || 40}-${constraints?.energyRange?.max || 80}`
+          content: segment
+            ? `${segment.targetTrackCount} tracks for "${segment.name}" segment: ${prompt}. Energy: ${segment.constraints.energyRange?.min || constraints?.energyRange?.min || 40}-${segment.constraints.energyRange?.max || constraints?.energyRange?.max || 80}`
+            : `${constraints?.trackCount || 8} track set: ${prompt}. Energy: ${constraints?.energyRange?.min || 40}-${constraints?.energyRange?.max || 80}`
         }
       ],
       temperature: 0.8,
@@ -432,12 +435,13 @@ Return ONLY valid JSON array, no markdown.${constraintInstructions ? `\n\nConstr
 }
 
 // Generate with Claude
-async function generateWithClaude(prompt: string, constraints: GeneratePlaylistRequest['constraints']): Promise<AITrackWithAlternatives[]> {
+async function generateWithClaude(prompt: string, constraints: GeneratePlaylistRequest['constraints'], segment?: SegmentContext): Promise<AITrackWithAlternatives[]> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) throw new Error('Anthropic API key not configured')
 
   const constraintInstructions = buildConstraintInstructions(constraints)
-  console.log('[Claude] Starting request...')
+  const segmentInstructions = segment ? buildSegmentInstructions(segment) : ''
+  console.log('[Claude] Starting request...', segment ? `(Segment: ${segment.name})` : '')
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     signal: AbortSignal.timeout(45000), // 45 second timeout
