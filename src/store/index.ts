@@ -239,6 +239,7 @@ interface YTDJState {
   setIsRegeneratingSegment: (id: string | null) => void
   enableSegmentedMode: () => void
   disableSegmentedMode: () => void
+  regenerateSegment: (segmentId: string) => Promise<void>
 
   // Cloud Sync
   saveSetToCloud: (setId?: string) => Promise<{ success: boolean; error?: string }>
@@ -1174,6 +1175,131 @@ export const useYTDJStore = create<YTDJState>()(
           : state.currentSet,
         activeSegmentId: null
       })),
+
+      regenerateSegment: async (segmentId: string) => {
+        const state = get()
+        const segment = state.segments.find((s) => s.id === segmentId)
+        if (!segment || !state.currentSet) return
+
+        // Calculate target track count for this segment
+        let targetTrackCount: number
+        if (segment.duration.type === 'tracks') {
+          targetTrackCount = segment.duration.count
+        } else {
+          // Estimate tracks from duration (assume ~3.5 min avg per track)
+          targetTrackCount = Math.max(1, Math.round(segment.duration.duration / 3.5))
+        }
+
+        // Get context tracks from adjacent segments
+        const playlist = state.currentSet.playlist
+        const contextTracks: {
+          before: PlaylistNode[]
+          after: PlaylistNode[]
+        } = { before: [], after: [] }
+
+        if (segment.startIndex !== undefined && segment.startIndex > 0) {
+          // Get last 2 tracks from previous segment
+          const startIdx = Math.max(0, segment.startIndex - 2)
+          contextTracks.before = playlist.slice(startIdx, segment.startIndex)
+        }
+
+        if (segment.endIndex !== undefined && segment.endIndex < playlist.length - 1) {
+          // Get first 2 tracks from next segment
+          const endIdx = Math.min(playlist.length, segment.endIndex + 3)
+          contextTracks.after = playlist.slice(segment.endIndex + 1, endIdx)
+        }
+
+        set({ isRegeneratingSegment: segmentId })
+
+        try {
+          const response = await fetch('/api/ai/regenerate-segment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: state.currentSet.prompt || 'Generate DJ tracks',
+              segment: {
+                id: segment.id,
+                name: segment.name,
+                constraints: segment.constraints,
+                targetTrackCount,
+                prompt: segment.prompt,
+                anchorTracks: segment.anchorTracks,
+                contextTracks
+              }
+            })
+          })
+
+          if (!response.ok) {
+            const error = await response.json()
+            console.error('[regenerateSegment] API error:', error)
+            return
+          }
+
+          // Handle streaming response
+          const reader = response.body?.getReader()
+          if (!reader) return
+
+          const decoder = new TextDecoder()
+          let newTracks: PlaylistNode[] = []
+
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            const chunk = decoder.decode(value)
+            const lines = chunk.split('\n').filter((line) => line.startsWith('data: '))
+
+            for (const line of lines) {
+              try {
+                const data = JSON.parse(line.slice(6))
+                if (data.event === 'primary-result' && data.tracks) {
+                  newTracks = data.tracks
+                }
+              } catch {
+                // Ignore parse errors for incomplete chunks
+              }
+            }
+          }
+
+          // Replace tracks in the segment
+          if (newTracks.length > 0 && segment.startIndex !== undefined && segment.endIndex !== undefined) {
+            const currentState = get()
+            const currentPlaylist = currentState.currentSet?.playlist || []
+
+            // Build new playlist: before segment + new tracks + after segment
+            const beforeSegment = currentPlaylist.slice(0, segment.startIndex)
+            const afterSegment = currentPlaylist.slice(segment.endIndex + 1)
+
+            // Tag new tracks with segment ID and update positions
+            const taggedNewTracks = newTracks.map((track, idx) => ({
+              ...track,
+              segmentId,
+              position: segment.startIndex! + idx
+            }))
+
+            const newPlaylist = [...beforeSegment, ...taggedNewTracks, ...afterSegment]
+
+            // Update positions for tracks after the segment
+            const finalPlaylist = newPlaylist.map((track, idx) => ({
+              ...track,
+              position: idx
+            }))
+
+            set({
+              currentSet: currentState.currentSet
+                ? { ...currentState.currentSet, playlist: finalPlaylist }
+                : currentState.currentSet
+            })
+
+            // Recalculate segment boundaries
+            get().calculateSegmentBoundaries()
+          }
+        } catch (error) {
+          console.error('[regenerateSegment] Error:', error)
+        } finally {
+          set({ isRegeneratingSegment: null })
+        }
+      },
 
       // Cloud Sync
       isSyncing: false,

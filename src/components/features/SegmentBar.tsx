@@ -20,6 +20,7 @@ export function SegmentBar({ className, onSegmentClick, onAddSegment }: SegmentB
     currentSet,
     setActiveSegment,
     removeSegment,
+    regenerateSegment,
     subscription,
   } = useYTDJStore()
 
@@ -143,7 +144,7 @@ export function SegmentBar({ className, onSegmentClick, onAddSegment }: SegmentB
                   )}
                   onClick={(e) => {
                     e.stopPropagation()
-                    // TODO: Trigger segment regeneration
+                    regenerateSegment(segment.id)
                   }}
                   title="Regenerate this segment"
                   disabled={isRegenerating}

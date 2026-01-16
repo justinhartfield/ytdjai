@@ -75,6 +75,7 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
     enableSegmentedMode,
     disableSegmentedMode,
     calculateSegmentBoundaries,
+    regenerateSegment,
     subscription
   } = useYTDJStore()
   const playlist = currentSet?.playlist || []
@@ -1457,8 +1458,7 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
                   setActiveSegment(null)
                 }}
                 onRegenerate={(segmentId) => {
-                  // TODO: Implement segment regeneration
-                  console.log('Regenerate segment:', segmentId)
+                  regenerateSegment(segmentId)
                 }}
               />
             </motion.aside>

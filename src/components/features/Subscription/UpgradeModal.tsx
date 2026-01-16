@@ -13,8 +13,11 @@ interface UpgradeModalProps {
 
 const PRO_FEATURES = [
   '50 AI generations per month',
-  'AI Wizard PRO - advanced customization',
+  'AI Wizard PRO - 7-step customization',
   'All AI providers (OpenAI, Claude, Gemini)',
+  'AutoMix - continuous crossfade playback',
+  'Segmented Set Designer',
+  'Key compatibility (Camelot wheel)',
   'Unlimited cloud saves',
   'Priority generation queue',
 ]
