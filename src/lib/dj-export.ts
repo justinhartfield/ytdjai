@@ -324,14 +324,14 @@ export function generateM3U(tracks: DJExportTrack[], setName: string): string {
   ]
 
   for (const track of tracks) {
-    if (track.url) {
-      // Extended info: duration in seconds, artist - title
-      lines.push(`#EXTINF:${track.durationSeconds},${track.artist} - ${track.title}`)
-      // Additional metadata as comments
-      lines.push(`#YTDJ:energy=${track.energy},key=${track.camelotKey || track.key},segment=${track.segment}`)
-      lines.push(track.url)
-      lines.push('')
-    }
+    // Extended info: duration in seconds, artist - title
+    lines.push(`#EXTINF:${track.durationSeconds},${track.artist} - ${track.title}`)
+    // Additional metadata as comments
+    lines.push(`#YTDJ:energy=${track.energy},key=${track.camelotKey || track.key},segment=${track.segment}`)
+    // Use YouTube URL if available, otherwise create a search URL
+    const url = track.url || `https://www.youtube.com/results?search_query=${encodeURIComponent(`${track.artist} ${track.title}`)}`
+    lines.push(url)
+    lines.push('')
   }
 
   return lines.join('\n')
