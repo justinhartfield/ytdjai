@@ -7,7 +7,7 @@ import {
   Sparkles, Check, Heart, Clock, Settings, ChevronDown, ChevronUp, Sliders,
   Sun, Moon, Cloud, Snowflake, CloudRain, CloudLightning,
   Dumbbell, BookOpen, Briefcase, UtensilsCrossed, Car, Sofa, Music2,
-  User, Users, PartyPopper, Radio, Sunrise, Sunset, Leaf, Flower2
+  User, Users, PartyPopper, Radio, Sunrise, Sunset, Leaf, Flower2, X
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
@@ -441,11 +441,20 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
               {/* Current Set Prompt Display */}
               {currentSet?.prompt && (
                 <div className="mb-4 pb-4 border-b border-white/10">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                    <span className="text-[10px] font-bold tracking-widest text-cyan-400/70 uppercase">
-                      Current Set Prompt
-                    </span>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                      <span className="text-[10px] font-bold tracking-widest text-cyan-400/70 uppercase">
+                        Current Set Prompt
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => updatePrompt('')}
+                      className="p-1 rounded hover:bg-white/10 transition-colors group"
+                      title="Clear current prompt"
+                    >
+                      <X className="w-3.5 h-3.5 text-white/30 group-hover:text-white/60" />
+                    </button>
                   </div>
                   <p className="text-sm text-white/60 leading-relaxed line-clamp-2">
                     {currentSet.prompt}
