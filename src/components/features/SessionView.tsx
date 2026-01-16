@@ -20,7 +20,7 @@ import { AIControlsSidebar } from './AIControlsSidebar'
 import { SaveSetDialog } from './SaveSetDialog'
 import { BrowseSetsModal } from './BrowseSetsModal'
 import { DJExportModal } from './DJExportModal'
-import type { PlaylistNode, Track, Set, AIConstraints, AlternativeTrack, AIProvider } from '@/types'
+import type { PlaylistNode, Track, Set, AIConstraints, AlternativeTrack, AIProvider, SetSegment } from '@/types'
 import { GhostTrackCard, AIProviderBadge } from './GhostTrackNode'
 
 interface SessionViewProps {
@@ -60,7 +60,8 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
     activeArcTemplate,
     generationProgress,
     swapWithProviderAlternative,
-    combineAllProviders
+    combineAllProviders,
+    segments
   } = useYTDJStore()
   const playlist = currentSet?.playlist || []
 
@@ -123,6 +124,39 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
       alternatives: node.alternatives || [] // Pre-populated from AI generation
     }))
   }, [playlist])
+
+  // Check if set is segmented
+  const isSegmented = currentSet?.isSegmented && segments.length > 0
+
+  // Get segment for a given track index
+  const getSegmentForIndex = useCallback((index: number): SetSegment | null => {
+    if (!isSegmented) return null
+    for (const segment of segments) {
+      if (segment.startIndex !== undefined && segment.endIndex !== undefined) {
+        if (index >= segment.startIndex && index <= segment.endIndex) {
+          return segment
+        }
+      }
+    }
+    return null
+  }, [isSegmented, segments])
+
+  // Check if index is the first track of a segment
+  const isSegmentStart = useCallback((index: number): boolean => {
+    if (!isSegmented) return false
+    return segments.some(s => s.startIndex === index)
+  }, [isSegmented, segments])
+
+  // Get segment header info for rendering
+  const segmentHeaders = useMemo(() => {
+    if (!isSegmented) return []
+    return segments.map(segment => ({
+      segment,
+      startIndex: segment.startIndex ?? 0,
+      endIndex: segment.endIndex ?? 0,
+      trackCount: (segment.endIndex ?? 0) - (segment.startIndex ?? 0) + 1
+    }))
+  }, [isSegmented, segments])
 
   const totalDuration = playlist.reduce((acc, node) => acc + node.track.duration, 0)
 
@@ -714,6 +748,44 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
           backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px)',
           backgroundSize: '40px 40px'
         }}>
+          {/* Segment Header Row (only visible when segmented) */}
+          {isSegmented && segmentHeaders.length > 0 && (
+            <div className="h-8 border-b border-white/5 flex items-center bg-black/80 z-10">
+              {/* Spacer for SLOT column */}
+              <div className="w-16 flex-shrink-0" />
+              {/* Segment labels - scrolls with columns */}
+              <div
+                className="flex overflow-x-auto scrollbar-hide flex-1"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              >
+                {segmentHeaders.map(({ segment, trackCount }) => (
+                  <div
+                    key={segment.id}
+                    className="flex-shrink-0 flex items-center gap-2 px-3 border-r border-white/10"
+                    style={{
+                      width: `${trackCount * 200}px`, // 200px per column
+                      backgroundColor: `${segment.color}15`
+                    }}
+                  >
+                    <div
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: segment.color }}
+                    />
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-wider truncate"
+                      style={{ color: segment.color }}
+                    >
+                      {segment.name}
+                    </span>
+                    <span className="text-[9px] text-gray-500 ml-auto">
+                      {trackCount} tracks
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Session Header Labels */}
           <div className="h-10 border-b border-white/5 flex items-center justify-between bg-black/60 z-10">
             <div className="flex items-center">
@@ -881,15 +953,34 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
                 </button>
               </div>
 
-              {sessionColumns.map((col, colIdx) => (
+              {sessionColumns.map((col, colIdx) => {
+                const trackSegment = getSegmentForIndex(colIdx)
+                const isFirstOfSegment = isSegmentStart(colIdx) && colIdx > 0
+
+                return (
                 <div key={col.id} className="flex">
+                  {/* Segment Divider (between segments) */}
+                  {isFirstOfSegment && trackSegment && (
+                    <div
+                      className="w-1 flex-shrink-0 relative"
+                      style={{ backgroundColor: `${trackSegment.color}40` }}
+                    >
+                      <div
+                        className="absolute inset-0 w-0.5 mx-auto"
+                        style={{ backgroundColor: trackSegment.color }}
+                      />
+                    </div>
+                  )}
+
                   {/* Column */}
                   <div
                     className={cn(
                       "min-w-[200px] border-r border-white/5 flex flex-col p-2 space-y-4 transition-all",
                       draggedColumnIndex === colIdx && "opacity-50 scale-95",
-                      dropTargetIndex === colIdx && draggedColumnIndex !== null && "bg-cyan-500/10 border-cyan-500/30"
+                      dropTargetIndex === colIdx && draggedColumnIndex !== null && "bg-cyan-500/10 border-cyan-500/30",
+                      trackSegment && "relative"
                     )}
+                    style={trackSegment ? { backgroundColor: `${trackSegment.color}08` } : undefined}
                   >
                     {/* Active Track (Rank 0) with drag handle */}
                     <div className="space-y-2">
@@ -1084,7 +1175,8 @@ export function SessionView({ onViewChange, currentView, onGoHome }: SessionView
                     </button>
                   </div>
                 </div>
-              ))}
+              )})}
+
 
               {/* Empty State - show ghost tracks while generating */}
               {sessionColumns.length === 0 && generationProgress.isGenerating && generationProgress.primaryProvider === null && (

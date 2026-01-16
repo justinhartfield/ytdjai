@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useCallback, useState } from 'react'
-import YouTube, { YouTubeProps, YouTubePlayer as YTPlayer } from 'react-youtube'
+import YouTube, { YouTubeProps, YouTubePlayer as YTPlayer, YouTubeEvent } from 'react-youtube'
 import { useYTDJStore } from '@/store'
 
 /**
@@ -503,8 +503,8 @@ export function DualYouTubePlayer() {
           videoId={playerAVideoId}
           opts={opts}
           onReady={onPlayerAReady}
-          onStateChange={(e) => handleStateChange(e, 'A')}
-          onError={(e) => {
+          onStateChange={(e: YouTubeEvent) => handleStateChange(e, 'A')}
+          onError={(e: YouTubeEvent) => {
             console.error('[DualPlayer A] Error:', e.data)
           }}
         />
@@ -516,8 +516,8 @@ export function DualYouTubePlayer() {
           videoId={playerBVideoId}
           opts={opts}
           onReady={onPlayerBReady}
-          onStateChange={(e) => handleStateChange(e, 'B')}
-          onError={(e) => {
+          onStateChange={(e: YouTubeEvent) => handleStateChange(e, 'B')}
+          onError={(e: YouTubeEvent) => {
             console.error('[DualPlayer B] Error:', e.data)
           }}
         />

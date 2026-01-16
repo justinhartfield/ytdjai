@@ -27,12 +27,21 @@ export interface Track {
   key?: string
   isExplicit?: boolean
   aiReasoning?: string
+  // AutoMix fields
+  bpm?: number // Estimated BPM (60-200)
+  camelotCode?: string // Camelot notation (e.g., "8A", "5B")
 }
 
 export interface Transition {
   quality: TransitionQuality
-  type: 'cut' | 'blend' | 'fade'
+  type: 'cut' | 'blend' | 'fade' | 'crossfade'
   duration: number // in beats
+  // AutoMix fields
+  crossfadeDuration?: number // Duration in seconds (5-30)
+  mixOutPoint?: number // Seconds from end to start crossfade
+  mixInPoint?: number // Seconds from start to end crossfade
+  keyCompatibility?: KeyCompatibility
+  bpmDifference?: number
 }
 
 export interface AlternativeTrack extends Track {

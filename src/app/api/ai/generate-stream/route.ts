@@ -456,7 +456,13 @@ async function generateWithClaude(prompt: string, constraints: GeneratePlaylistR
       max_tokens: 4000,
       messages: [{
         role: 'user',
-        content: `You are a professional DJ. Generate a playlist for: "${prompt}"
+        content: segment
+          ? `You are a professional DJ. Generate tracks for the "${segment.name}" segment: "${prompt}"
+Requirements: ${segment.targetTrackCount} tracks, Energy ${segment.constraints.energyRange?.min || constraints?.energyRange?.min || 40}-${segment.constraints.energyRange?.max || constraints?.energyRange?.max || 80}
+${constraintInstructions ? `Constraints:\n${constraintInstructions}` : ''}${segmentInstructions ? `\n${segmentInstructions}` : ''}
+
+Return ONLY a JSON array with: title, artist, key, genre, energy (1-100), duration (seconds), aiReasoning, alternatives (2 objects with title, artist, key, genre, energy, duration, whyNotChosen, matchScore)`
+          : `You are a professional DJ. Generate a playlist for: "${prompt}"
 Requirements: ${constraints?.trackCount || 8} tracks, Energy ${constraints?.energyRange?.min || 40}-${constraints?.energyRange?.max || 80}
 ${constraintInstructions ? `Constraints:\n${constraintInstructions}` : ''}
 
@@ -512,12 +518,13 @@ Return ONLY a JSON array with: title, artist, key, genre, energy (1-100), durati
 }
 
 // Generate with Gemini
-async function generateWithGemini(prompt: string, constraints: GeneratePlaylistRequest['constraints']): Promise<AITrackWithAlternatives[]> {
+async function generateWithGemini(prompt: string, constraints: GeneratePlaylistRequest['constraints'], segment?: SegmentContext): Promise<AITrackWithAlternatives[]> {
   const apiKey = process.env.GOOGLE_AI_API_KEY
   if (!apiKey) throw new Error('Google AI API key not configured')
 
   const constraintInstructions = buildConstraintInstructions(constraints)
-  console.log('[Gemini] Starting request...')
+  const segmentInstructions = segment ? buildSegmentInstructions(segment) : ''
+  console.log('[Gemini] Starting request...', segment ? `(Segment: ${segment.name})` : '')
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
@@ -528,7 +535,13 @@ async function generateWithGemini(prompt: string, constraints: GeneratePlaylistR
       body: JSON.stringify({
         contents: [{
           parts: [{
-            text: `You are a professional DJ. Generate a playlist for: "${prompt}"
+            text: segment
+              ? `You are a professional DJ. Generate tracks for the "${segment.name}" segment: "${prompt}"
+Requirements: ${segment.targetTrackCount} tracks, Energy ${segment.constraints.energyRange?.min || constraints?.energyRange?.min || 40}-${segment.constraints.energyRange?.max || constraints?.energyRange?.max || 80}
+${constraintInstructions ? `Constraints:\n${constraintInstructions}` : ''}${segmentInstructions ? `\n${segmentInstructions}` : ''}
+
+Return ONLY a JSON array with: title, artist, key, genre, energy (1-100), duration (seconds), aiReasoning, alternatives (2 objects with title, artist, key, genre, energy, duration, whyNotChosen, matchScore)`
+              : `You are a professional DJ. Generate a playlist for: "${prompt}"
 Requirements: ${constraints?.trackCount || 8} tracks, Energy ${constraints?.energyRange?.min || 40}-${constraints?.energyRange?.max || 80}
 ${constraintInstructions ? `Constraints:\n${constraintInstructions}` : ''}
 
@@ -587,7 +600,7 @@ Return ONLY a JSON array with: title, artist, key, genre, energy (1-100), durati
 }
 
 // Convert AI tracks to PlaylistNodes
-function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], provider: AIProvider): PlaylistNode[] {
+function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], provider: AIProvider, segmentId?: string): PlaylistNode[] {
   // Validate tracks is an array
   if (!tracks || !Array.isArray(tracks)) {
     console.error(`[${provider}] Invalid tracks data:`, tracks)
@@ -615,6 +628,7 @@ function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], provider: AIPr
     },
     position: index,
     sourceProvider: provider, // Tag which AI generated this track
+    segmentId, // Tag which segment this track belongs to (for segmented sets)
     alternatives: (track.alternatives || []).map((alt, altIndex) => ({
       id: `alt-${provider}-${Date.now()}-${index}-${altIndex}`,
       youtubeId: '',
@@ -695,7 +709,8 @@ async function enrichTrackWithYouTube(track: Partial<Track>, apiKey: string): Pr
 function createStreamingResponse(
   prompt: string,
   constraints: GeneratePlaylistRequest['constraints'],
-  allowedProviders?: AIProvider[]
+  allowedProviders?: AIProvider[],
+  segment?: SegmentContext
 ) {
   const encoder = new TextEncoder()
 
@@ -785,25 +800,25 @@ function createStreamingResponse(
           sendEvent({ event: 'provider-started', provider })
 
           try {
-            console.log(`[Stream API] Starting ${provider} generation...`)
+            console.log(`[Stream API] Starting ${provider} generation...`, segment ? `(Segment: ${segment.name})` : '')
             let tracks: AITrackWithAlternatives[]
 
             switch (provider) {
               case 'openai':
-                tracks = await generateWithOpenAI(prompt, perProviderConstraints)
+                tracks = await generateWithOpenAI(prompt, perProviderConstraints, segment)
                 break
               case 'claude':
-                tracks = await generateWithClaude(prompt, perProviderConstraints)
+                tracks = await generateWithClaude(prompt, perProviderConstraints, segment)
                 break
               case 'gemini':
-                tracks = await generateWithGemini(prompt, perProviderConstraints)
+                tracks = await generateWithGemini(prompt, perProviderConstraints, segment)
                 break
               default:
                 throw new Error(`Unknown provider: ${provider}`)
             }
 
             console.log(`[Stream API] ${provider} returned ${tracks.length} tracks`)
-            const playlistNodes = tracksToPlaylistNodes(tracks, provider)
+            const playlistNodes = tracksToPlaylistNodes(tracks, provider, segment?.id)
 
             // Determine if this is primary or alternative
             if (primaryProvider === null) {
@@ -998,12 +1013,12 @@ export async function POST(request: NextRequest) {
   const tierConfig = TIER_CONFIG[subscription.tier as keyof typeof TIER_CONFIG]
 
   const body: GeneratePlaylistRequest = await request.json()
-  const { prompt, constraints } = body
+  const { prompt, constraints, segment } = body
 
-  console.log('[Stream API] POST request received')
+  console.log('[Stream API] POST request received', segment ? `(Segment: ${segment.name})` : '')
 
   // Consume credit before generation
   await consumeCredit(session.user.email)
 
-  return createStreamingResponse(prompt, constraints, tierConfig.allowedProviders as unknown as AIProvider[])
+  return createStreamingResponse(prompt, constraints, tierConfig.allowedProviders as unknown as AIProvider[], segment)
 }
