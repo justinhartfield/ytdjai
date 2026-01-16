@@ -134,7 +134,8 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
     setContextToken,
     clearContextToken,
     setGenerationError,
-    setActiveArcTemplate
+    setActiveArcTemplate,
+    currentSet
   } = useYTDJStore()
 
   const { contextTokens } = generationControls
@@ -437,6 +438,21 @@ export function LaunchPad({ onComplete }: LaunchPadProps) {
 
             {/* Atmosphere Prompt Card */}
             <div className="bg-[#0a0c1c]/80 backdrop-blur-xl rounded-2xl border border-white/10 p-6">
+              {/* Current Set Prompt Display */}
+              {currentSet?.prompt && (
+                <div className="mb-4 pb-4 border-b border-white/10">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                    <span className="text-[10px] font-bold tracking-widest text-cyan-400/70 uppercase">
+                      Current Set Prompt
+                    </span>
+                  </div>
+                  <p className="text-sm text-white/60 leading-relaxed line-clamp-2">
+                    {currentSet.prompt}
+                  </p>
+                </div>
+              )}
+
               <h3 className="text-xs font-bold tracking-widest text-cyan-400 mb-4">
                 THE ATMOSPHERE PROMPT
               </h3>
