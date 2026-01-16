@@ -5,10 +5,11 @@ import { useSession, signIn, signOut } from 'next-auth/react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, Check, Copy, ExternalLink, Share2, Twitter, Music2, Youtube,
-  Loader2, Sparkles, Globe, Lock, Link as LinkIcon, AlertCircle, LogIn
+  Loader2, Sparkles, Globe, Lock, Link as LinkIcon, AlertCircle, LogIn, Disc3
 } from 'lucide-react'
 import { cn, formatDuration } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
+import { PublishMixtapeModal } from './PublishMixtapeModal'
 
 // Key for storing pending export state in sessionStorage
 const PENDING_EXPORT_KEY = 'ytdj-pending-export'
@@ -55,6 +56,7 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
   const [progressMessage, setProgressMessage] = useState('')
   const [copied, setCopied] = useState(false)
   const [resumedFromAuth, setResumedFromAuth] = useState(false)
+  const [showPublishModal, setShowPublishModal] = useState(false)
 
   // Check for pending export on mount (returning from OAuth)
   useEffect(() => {
@@ -775,6 +777,15 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
                         </>
                       )}
                     </button>
+
+                    {/* Publish as Mixtape */}
+                    <button
+                      onClick={() => setShowPublishModal(true)}
+                      className="w-full py-4 bg-gradient-to-r from-cyan-500/20 to-pink-500/20 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:from-cyan-500/30 hover:to-pink-500/30 transition-all flex items-center justify-center gap-2 border border-cyan-500/30"
+                    >
+                      <Disc3 className="w-4 h-4" />
+                      Publish as Mixtape
+                    </button>
                   </div>
 
                   {/* Social Share */}
@@ -813,6 +824,15 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
           </motion.div>
         </motion.div>
       )}
+
+      {/* Publish Mixtape Modal */}
+      <PublishMixtapeModal
+        isOpen={showPublishModal}
+        onClose={() => setShowPublishModal(false)}
+        youtubePlaylistId={exportState.destination !== 'spotify' ? exportState.playlistUrl?.split('list=')[1] : undefined}
+        spotifyPlaylistId={exportState.destination === 'spotify' ? exportState.playlistUrl?.split('/playlist/')[1]?.split('?')[0] : undefined}
+        playlistUrl={exportState.playlistUrl}
+      />
     </AnimatePresence>
   )
 }

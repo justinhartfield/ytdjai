@@ -505,6 +505,15 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
         }
       }
     )
+
+    // Safety timeout - reset isGenerating after 90 seconds
+    setTimeout(() => {
+      const currentState = useYTDJStore.getState()
+      if (currentState.isGenerating) {
+        console.warn('[Stream] Timeout - resetting isGenerating state')
+        setIsGenerating(false)
+      }
+    }, 90000)
   }, [currentSet?.prompt, isGenerating, playlist.length, constraints, setIsGenerating, startParallelGeneration, setProviderStarted, receivePrimaryResult, receiveAlternativeResult, setProviderFailed, enrichTrack, completeGeneration, failAllGeneration, setShowUpgradeModal])
 
   const handleRegenerateWithCount = useCallback((mode: 'replace' | 'append', promptOverride?: string) => {
@@ -596,6 +605,15 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
         }
       }
     )
+
+    // Safety timeout - reset isGenerating after 90 seconds
+    setTimeout(() => {
+      const currentState = useYTDJStore.getState()
+      if (currentState.isGenerating) {
+        console.warn('[Stream] Timeout - resetting isGenerating state')
+        setIsGenerating(false)
+      }
+    }, 90000)
   }, [currentSet?.prompt, isGenerating, targetTrackCount, playlist, constraints, setIsGenerating, startParallelGeneration, setProviderStarted, receivePrimaryResult, receiveAlternativeResult, setProviderFailed, enrichTrack, completeGeneration, failAllGeneration, updateSetWithPrompt, setShowUpgradeModal])
 
   // Fit songs to arc - rearrange unlocked tracks to best match the energy curve
@@ -780,7 +798,8 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
           console.error('[PoorFits] Provider failed:', provider, error)
         },
         onTrackEnriched: () => {},
-        onComplete: () => {
+        onComplete: (summary) => {
+          console.log('[PoorFits] Complete:', summary)
           setIsGenerating(false)
         },
         onAllFailed: (errors) => {
@@ -793,6 +812,16 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
         }
       }
     )
+
+    // Safety timeout - reset isGenerating after 60 seconds if still generating
+    setTimeout(() => {
+      // Check if we're still generating (stale state protection)
+      const currentState = useYTDJStore.getState()
+      if (currentState.isGenerating) {
+        console.warn('[PoorFits] Timeout - resetting isGenerating state')
+        setIsGenerating(false)
+      }
+    }, 60000)
   }, [arcMismatchInfo, isGenerating, playlist, currentSet, constraints, updatePlaylist, setIsGenerating])
 
   const handleArcChange = useCallback((arcId: string) => {

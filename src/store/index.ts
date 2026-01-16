@@ -27,6 +27,9 @@ import type {
   SegmentPreset,
   AutoMixState,
   DualPlayerState,
+  PublishMixtapeRequest,
+  CoverTemplateId,
+  CoverColors,
 } from '@/types'
 import { SEGMENT_PRESETS } from '@/types'
 
@@ -263,6 +266,14 @@ interface YTDJState {
   // Track BPM/Key enrichment
   enrichTrackBpmKey: (nodeIndex: number, bpm: number, key: string, camelotCode?: string) => void
   batchEnrichBpmKey: (updates: Array<{ nodeIndex: number; bpm: number; key: string; camelotCode?: string }>) => void
+
+  // Mixtape Publishing
+  likedMixtapes: string[]
+  likeMixtape: (slug: string) => void
+  unlikeMixtape: (slug: string) => void
+  toggleMixtapeLike: (slug: string) => void
+  isMixtapeLiked: (slug: string) => boolean
+  publishMixtape: (request: PublishMixtapeRequest) => Promise<{ success: boolean; shareUrl?: string; error?: string }>
 }
 
 export const useYTDJStore = create<YTDJState>()(
@@ -1558,6 +1569,66 @@ export const useYTDJStore = create<YTDJState>()(
           }
         })
       },
+
+      // Mixtape Publishing
+      likedMixtapes: [],
+
+      likeMixtape: (slug) => {
+        set((state) => {
+          if (state.likedMixtapes.includes(slug)) return state
+          return { likedMixtapes: [...state.likedMixtapes, slug] }
+        })
+        // Also sync to server
+        fetch('/api/mixtape/like', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug, action: 'like' }),
+        }).catch(console.error)
+      },
+
+      unlikeMixtape: (slug) => {
+        set((state) => ({
+          likedMixtapes: state.likedMixtapes.filter(s => s !== slug)
+        }))
+        // Also sync to server
+        fetch('/api/mixtape/like', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug, action: 'unlike' }),
+        }).catch(console.error)
+      },
+
+      toggleMixtapeLike: (slug) => {
+        const state = get()
+        if (state.likedMixtapes.includes(slug)) {
+          get().unlikeMixtape(slug)
+        } else {
+          get().likeMixtape(slug)
+        }
+      },
+
+      isMixtapeLiked: (slug) => get().likedMixtapes.includes(slug),
+
+      publishMixtape: async (request) => {
+        try {
+          const response = await fetch('/api/mixtape/publish', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request),
+          })
+
+          const data = await response.json()
+
+          if (!response.ok) {
+            return { success: false, error: data.error || 'Failed to publish mixtape' }
+          }
+
+          return { success: true, shareUrl: data.shareUrl }
+        } catch (error) {
+          console.error('[publishMixtape] Error:', error)
+          return { success: false, error: 'Network error' }
+        }
+      },
     }),
     {
       name: 'ytdj-ai-storage',
@@ -1570,6 +1641,7 @@ export const useYTDJStore = create<YTDJState>()(
         generationControls: state.generationControls,
         autoMix: state.autoMix,
         segments: state.segments,
+        likedMixtapes: state.likedMixtapes,
       }),
     }
   )
