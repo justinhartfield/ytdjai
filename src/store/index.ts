@@ -968,7 +968,7 @@ export const useYTDJStore = create<YTDJState>()(
 
         // Second pass: deduplicate and average energy for duplicates
         const deduplicatedTracks: PlaylistNode[] = []
-        for (const [, { tracks }] of tracksByKey) {
+        Array.from(tracksByKey.values()).forEach(({ tracks }) => {
           // Take the first track as the base
           const baseTrack = tracks[0]
 
@@ -987,7 +987,7 @@ export const useYTDJStore = create<YTDJState>()(
           } else {
             deduplicatedTracks.push(baseTrack)
           }
-        }
+        })
 
         console.log(`[CombineAll] Reduced from ${Array.from(tracksByKey.values()).reduce((sum, v) => sum + v.tracks.length, 0)} to ${deduplicatedTracks.length} unique tracks`)
 
