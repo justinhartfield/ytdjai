@@ -158,7 +158,8 @@ export async function batchSearchVideoData(
   }
 
   // Step 2: Search uncached tracks via Invidious/Piped (parallel, limited concurrency)
-  const concurrency = 5
+  // Reduced concurrency to avoid overwhelming external APIs and prevent timeouts
+  const concurrency = 2
   const toCache: { artist: string; title: string; data: Omit<CachedVideoData, 'cachedAt'> }[] = []
 
   for (let i = 0; i < uncachedTracks.length; i += concurrency) {

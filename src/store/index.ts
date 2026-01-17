@@ -924,6 +924,11 @@ export const useYTDJStore = create<YTDJState>()(
         const { providerPlaylists } = state.generationProgress
         if (providerPlaylists.length < 2 || !state.currentSet) return state
 
+        // Helper to normalize track identifier for deduplication
+        const normalizeTrackKey = (artist: string, title: string): string => {
+          return `${artist.toLowerCase().trim()}::${title.toLowerCase().trim()}`
+        }
+
         // Collect all tracks from all providers
         const allTracks: PlaylistNode[] = []
         const providerOrder: AIProvider[] = ['openai', 'claude', 'gemini']
@@ -933,32 +938,82 @@ export const useYTDJStore = create<YTDJState>()(
           return providerOrder.indexOf(a.provider) - providerOrder.indexOf(b.provider)
         })
 
-        // Interleave tracks from each provider to create variety
-        // Round-robin: take 1 track from each provider in sequence
-        const maxTracks = Math.max(...sortedPlaylists.map(p => p.tracks.length))
+        // First pass: collect all tracks and group duplicates to average their energy
+        const tracksByKey = new Map<string, { tracks: PlaylistNode[], providers: AIProvider[] }>()
 
-        for (let i = 0; i < maxTracks; i++) {
-          for (const playlist of sortedPlaylists) {
-            if (i < playlist.tracks.length) {
-              const track = playlist.tracks[i]
-              // Ensure sourceProvider is set
-              allTracks.push({
-                ...track,
-                id: `combined-${Date.now()}-${allTracks.length}`,
-                position: allTracks.length,
-                sourceProvider: playlist.provider
+        for (const playlist of sortedPlaylists) {
+          for (const track of playlist.tracks) {
+            const key = normalizeTrackKey(track.track.artist, track.track.title)
+            const existing = tracksByKey.get(key)
+            if (existing) {
+              existing.tracks.push(track)
+              existing.providers.push(playlist.provider)
+            } else {
+              tracksByKey.set(key, {
+                tracks: [{ ...track, sourceProvider: playlist.provider }],
+                providers: [playlist.provider]
               })
             }
           }
         }
 
+        // Log duplicates found
+        const duplicates = Array.from(tracksByKey.entries()).filter(([, v]) => v.tracks.length > 1)
+        if (duplicates.length > 0) {
+          console.log(`[CombineAll] Found ${duplicates.length} duplicate tracks across providers:`)
+          duplicates.forEach(([key, { providers }]) => {
+            console.log(`  - "${key}" appears in: ${providers.join(', ')}`)
+          })
+        }
+
+        // Second pass: deduplicate and average energy for duplicates
+        const deduplicatedTracks: PlaylistNode[] = []
+        for (const [, { tracks }] of tracksByKey) {
+          // Take the first track as the base
+          const baseTrack = tracks[0]
+
+          if (tracks.length > 1) {
+            // Average the energy scores from all providers
+            const avgEnergy = Math.round(
+              tracks.reduce((sum, t) => sum + (t.track.energy || 50), 0) / tracks.length
+            )
+            deduplicatedTracks.push({
+              ...baseTrack,
+              track: {
+                ...baseTrack.track,
+                energy: avgEnergy
+              }
+            })
+          } else {
+            deduplicatedTracks.push(baseTrack)
+          }
+        }
+
+        console.log(`[CombineAll] Reduced from ${Array.from(tracksByKey.values()).reduce((sum, v) => sum + v.tracks.length, 0)} to ${deduplicatedTracks.length} unique tracks`)
+
+        // Interleave deduplicated tracks for variety (shuffle based on original provider)
+        // Sort by a mix of position and provider to maintain some variety
+        const finalTracks = deduplicatedTracks
+          .sort((a, b) => {
+            // Sort primarily by original position, secondarily by provider
+            const posA = a.position || 0
+            const posB = b.position || 0
+            if (posA !== posB) return posA - posB
+            return providerOrder.indexOf(a.sourceProvider || 'openai') - providerOrder.indexOf(b.sourceProvider || 'openai')
+          })
+          .map((track, index) => ({
+            ...track,
+            id: `combined-${Date.now()}-${index}`,
+            position: index
+          }))
+
         // Apply the active arc template's energy curve to combined tracks
         const activeTemplate = arcTemplates.find(t => t.id === state.activeArcTemplate)
-        if (activeTemplate && allTracks.length > 0 && activeTemplate.energyProfile.length > 0) {
+        if (activeTemplate && finalTracks.length > 0 && activeTemplate.energyProfile.length > 0) {
           const profile = activeTemplate.energyProfile
           // Map each track to the energy curve by interpolating the profile
-          allTracks.forEach((node, index) => {
-            const progress = index / (allTracks.length - 1 || 1)
+          finalTracks.forEach((node, index) => {
+            const progress = index / (finalTracks.length - 1 || 1)
             // Interpolate from energyProfile array
             const profileIndex = progress * (profile.length - 1)
             const lowerIndex = Math.floor(profileIndex)
@@ -976,7 +1031,7 @@ export const useYTDJStore = create<YTDJState>()(
         return {
           currentSet: {
             ...state.currentSet,
-            playlist: allTracks,
+            playlist: finalTracks,
             updatedAt: new Date()
           },
           generationProgress: {

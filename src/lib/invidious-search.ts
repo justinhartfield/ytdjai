@@ -31,8 +31,8 @@ const PIPED_INSTANCES = [
   'https://api.piped.yt',
 ]
 
-// Timeout for API calls
-const FETCH_TIMEOUT = 5000
+// Timeout for API calls (reduced to fail faster and avoid serverless function timeout)
+const FETCH_TIMEOUT = 3000
 
 /**
  * Fetch with timeout
@@ -161,41 +161,47 @@ async function searchPiped(
 
 /**
  * Search for a video using Invidious instances
- * Falls back through multiple instances for reliability
+ * Try instances in parallel for faster results, return first success
  */
 export async function searchWithInvidious(query: string): Promise<VideoSearchResult | null> {
-  // Shuffle instances to distribute load
-  const instances = [...INVIDIOUS_INSTANCES].sort(() => Math.random() - 0.5)
+  // Shuffle and take only first 2 instances to limit requests
+  const instances = [...INVIDIOUS_INSTANCES].sort(() => Math.random() - 0.5).slice(0, 2)
 
-  for (const instance of instances) {
-    const result = await searchInvidious(query, instance)
-    if (result) {
-      console.log(`[Invidious] Found via ${instance}: ${result.videoId}`)
-      return result
+  // Try instances in parallel, return first successful result
+  const results = await Promise.allSettled(
+    instances.map(instance => searchInvidious(query, instance))
+  )
+
+  for (const result of results) {
+    if (result.status === 'fulfilled' && result.value) {
+      console.log(`[Invidious] Found: ${result.value.videoId}`)
+      return result.value
     }
   }
 
-  console.log('[Invidious] All instances failed for:', query)
   return null
 }
 
 /**
  * Search for a video using Piped instances
- * Falls back through multiple instances for reliability
+ * Try instances in parallel for faster results, return first success
  */
 export async function searchWithPiped(query: string): Promise<VideoSearchResult | null> {
-  // Shuffle instances to distribute load
-  const instances = [...PIPED_INSTANCES].sort(() => Math.random() - 0.5)
+  // Shuffle and take only first 2 instances to limit requests
+  const instances = [...PIPED_INSTANCES].sort(() => Math.random() - 0.5).slice(0, 2)
 
-  for (const instance of instances) {
-    const result = await searchPiped(query, instance)
-    if (result) {
-      console.log(`[Piped] Found via ${instance}: ${result.videoId}`)
-      return result
+  // Try instances in parallel, return first successful result
+  const results = await Promise.allSettled(
+    instances.map(instance => searchPiped(query, instance))
+  )
+
+  for (const result of results) {
+    if (result.status === 'fulfilled' && result.value) {
+      console.log(`[Piped] Found: ${result.value.videoId}`)
+      return result.value
     }
   }
 
-  console.log('[Piped] All instances failed for:', query)
   return null
 }
 

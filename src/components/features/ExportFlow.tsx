@@ -180,42 +180,57 @@ export function ExportFlow({ isOpen, onClose }: ExportFlowProps) {
 
       console.log(`[Export] ${tracksWithYoutubeId.length} tracks have YouTube IDs, ${tracksNeedingEnrichment.length} need enrichment`)
 
-      // Enrich tracks that don't have YouTube IDs using the video search API with YouTube fallback
+      // Enrich tracks that don't have YouTube IDs
       if (tracksNeedingEnrichment.length > 0) {
         setProgress(10)
         setProgressMessage(`Finding ${tracksNeedingEnrichment.length} tracks on YouTube...`)
 
-        try {
-          // Use the new video search API with YouTube enabled (export-time only)
-          const response = await fetch('/api/video/search', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tracks: tracksNeedingEnrichment.map(t => ({ artist: t.artist, title: t.title })),
-              useYouTube: true, // Only use YouTube API at export time
-            }),
-          })
+        // Process in smaller batches to avoid timeout
+        const batchSize = 3
+        let foundCount = 0
 
-          if (response.ok) {
-            const data = await response.json()
-            if (data.success && data.tracks) {
-              for (const enrichedTrack of data.tracks) {
-                if (enrichedTrack.videoId) {
-                  tracksWithYoutubeId.push({
-                    youtubeId: enrichedTrack.videoId,
-                    title: enrichedTrack.title,
-                    artist: enrichedTrack.artist,
-                  })
+        for (let i = 0; i < tracksNeedingEnrichment.length; i += batchSize) {
+          const batch = tracksNeedingEnrichment.slice(i, i + batchSize)
+
+          try {
+            // Use the video search API with YouTube enabled (export-time only)
+            const response = await fetch('/api/video/search', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tracks: batch.map(t => ({ artist: t.artist, title: t.title })),
+                useYouTube: true, // Only use YouTube API at export time
+              }),
+            })
+
+            if (response.ok) {
+              const data = await response.json()
+              if (data.success && data.tracks) {
+                for (const enrichedTrack of data.tracks) {
+                  if (enrichedTrack.videoId) {
+                    tracksWithYoutubeId.push({
+                      youtubeId: enrichedTrack.videoId,
+                      title: enrichedTrack.title,
+                      artist: enrichedTrack.artist,
+                    })
+                    foundCount++
+                  }
                 }
               }
-              setProgress(15)
-              setProgressMessage(`Found ${data.stats?.withVideoId || 0} of ${tracksNeedingEnrichment.length} tracks...`)
             }
+          } catch (error) {
+            console.error(`[Export] Batch ${Math.floor(i / batchSize) + 1} enrichment error:`, error)
+            // Continue with next batch
           }
-        } catch (error) {
-          console.error('[Export] Enrichment error:', error)
-          // Continue with whatever tracks we have
+
+          // Update progress
+          const progressPercent = 10 + Math.floor((i + batch.length) / tracksNeedingEnrichment.length * 8)
+          setProgress(progressPercent)
+          setProgressMessage(`Finding tracks... (${foundCount} found)`)
         }
+
+        setProgress(18)
+        setProgressMessage(`Found ${foundCount} of ${tracksNeedingEnrichment.length} tracks...`)
       }
 
       const tracks = tracksWithYoutubeId
