@@ -79,8 +79,19 @@ export async function checkRateLimit(
   limiter: Ratelimit | null,
   identifier: string
 ): Promise<RateLimitResult> {
-  // If rate limiting is not configured, allow all requests
+  // If rate limiting is not configured
   if (!limiter) {
+    // FAIL CLOSED in production - rate limiting is required
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[Rate Limit] CRITICAL: Rate limiting not configured in production!')
+      return {
+        success: false,
+        limit: 0,
+        remaining: 0,
+        reset: Date.now() + 60000, // Retry in 1 minute
+      }
+    }
+    // Allow in development
     return {
       success: true,
       limit: Infinity,
@@ -99,7 +110,16 @@ export async function checkRateLimit(
     }
   } catch (error) {
     console.error('[Rate Limit] Error checking rate limit:', error)
-    // On error, allow the request (fail open) to avoid blocking users
+    // FAIL CLOSED in production - deny request on Redis errors
+    if (process.env.NODE_ENV === 'production') {
+      return {
+        success: false,
+        limit: 0,
+        remaining: 0,
+        reset: Date.now() + 10000, // Retry in 10 seconds
+      }
+    }
+    // Fail open in development to avoid blocking
     return {
       success: true,
       limit: Infinity,

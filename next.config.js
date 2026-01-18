@@ -1,3 +1,5 @@
+const { withSentryConfig } = require('@sentry/nextjs')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -17,6 +19,11 @@ const nextConfig = {
         hostname: 'picsum.photos',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'is1-ssl.mzstatic.com',
+        pathname: '/**',
+      },
     ],
   },
   // NOTE: Server-side API routes read from process.env directly at runtime
@@ -34,4 +41,32 @@ const nextConfig = {
   },
 }
 
-module.exports = nextConfig
+// Sentry configuration options
+const sentryWebpackPluginOptions = {
+  // Suppress source map upload logs in CI
+  silent: true,
+
+  // Upload source maps to Sentry
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+
+  // Auth token for uploading source maps
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+
+  // Hide source maps from being served to the browser
+  hideSourceMaps: true,
+
+  // Disable Sentry telemetry
+  disableLogger: true,
+
+  // Automatically instrument API routes
+  autoInstrumentServerFunctions: true,
+
+  // Tunnel Sentry events through the app to avoid ad blockers
+  tunnelRoute: '/monitoring',
+}
+
+// Only wrap with Sentry if DSN is configured
+module.exports = process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? withSentryConfig(nextConfig, sentryWebpackPluginOptions)
+  : nextConfig

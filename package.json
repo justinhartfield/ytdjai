@@ -11,6 +11,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.20.0",
     "@google/generative-ai": "^0.5.0",
+    "@sentry/nextjs": "^10.34.0",
     "@stripe/stripe-js": "^8.6.1",
     "@supabase/supabase-js": "^2.90.1",
     "@upstash/ratelimit": "^2.0.8",
