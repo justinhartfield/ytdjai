@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
 import { haptics } from '@/lib/haptics'
@@ -19,10 +19,12 @@ export function TransportBar() {
   } = useYTDJStore()
 
   const playlist = currentSet?.playlist || []
-  const { isPlaying, playingNodeIndex, currentTime, duration, volume } = player
+  const { isPlaying, playingNodeIndex, currentTime, duration, volume, enrichingNodeIndex } = player
+  const isEnriching = enrichingNodeIndex !== null
   const currentTrack = playingNodeIndex !== null ? playlist[playingNodeIndex] : null
 
   const handlePlayPause = () => {
+    if (isEnriching) return
     haptics.medium()
     if (isPlaying) {
       pauseTrack()
@@ -51,7 +53,7 @@ export function TransportBar() {
             haptics.light()
             skipPrevious()
           }}
-          disabled={playingNodeIndex === null || playingNodeIndex <= 0}
+          disabled={isEnriching || playingNodeIndex === null || playingNodeIndex <= 0}
           className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center disabled:opacity-30 transition-colors"
         >
           <SkipBack className="w-4 h-4 text-white" />
@@ -61,14 +63,17 @@ export function TransportBar() {
         <motion.button
           onClick={handlePlayPause}
           whileTap={{ scale: 0.95 }}
+          disabled={isEnriching}
           className={cn(
-            'w-12 h-12 rounded-full flex items-center justify-center transition-all',
+            'w-12 h-12 rounded-full flex items-center justify-center transition-all disabled:opacity-80',
             isPlaying
               ? 'bg-green-500 text-black shadow-[0_0_25px_rgba(34,197,94,0.4)]'
               : 'bg-white text-black shadow-[0_0_25px_rgba(255,255,255,0.2)]'
           )}
         >
-          {isPlaying ? (
+          {isEnriching ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : isPlaying ? (
             <Pause className="w-5 h-5" />
           ) : (
             <Play className="w-5 h-5 ml-0.5" />
@@ -81,7 +86,7 @@ export function TransportBar() {
             haptics.light()
             skipNext()
           }}
-          disabled={playingNodeIndex === null || playingNodeIndex >= playlist.length - 1}
+          disabled={isEnriching || playingNodeIndex === null || playingNodeIndex >= playlist.length - 1}
           className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center disabled:opacity-30 transition-colors"
         >
           <SkipForward className="w-4 h-4 text-white" />

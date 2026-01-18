@@ -27,6 +27,8 @@ interface TrackCardProps {
   index: number
   isPlaying?: boolean
   isActive?: boolean
+  isEnriching?: boolean
+  isUnavailable?: boolean
   transitionQuality?: TransitionQuality
   alternatives?: AlternativeTrack[]
   providerAlternatives?: { provider: AIProvider; track: Track }[]
@@ -52,6 +54,8 @@ export function TrackCard({
   index,
   isPlaying = false,
   isActive = false,
+  isEnriching = false,
+  isUnavailable = false,
   transitionQuality,
   alternatives = [],
   providerAlternatives = [],
@@ -189,14 +193,21 @@ export function TrackCard({
 
         {/* Play Overlay */}
         <button
-          onClick={isPlaying ? onPause : onPlay}
+          onClick={isEnriching ? undefined : (isPlaying ? onPause : onPlay)}
+          disabled={isEnriching || isUnavailable}
           className={cn(
             'absolute inset-0 flex items-center justify-center',
             'bg-black/50 opacity-0 group-hover:opacity-100',
-            'transition-opacity duration-200'
+            'transition-opacity duration-200',
+            isEnriching && 'opacity-100',
+            isUnavailable && 'opacity-100 bg-black/70'
           )}
         >
-          {isPlaying ? (
+          {isEnriching ? (
+            <Loader2 className="w-5 h-5 text-white animate-spin" />
+          ) : isUnavailable ? (
+            <AlertCircle className="w-5 h-5 text-red-400" />
+          ) : isPlaying ? (
             <Pause className="w-5 h-5 text-white" />
           ) : (
             <Play className="w-5 h-5 text-white" />

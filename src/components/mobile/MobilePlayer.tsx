@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Play, Pause, SkipBack, SkipForward, ChevronUp, Volume2, VolumeX } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, ChevronUp, Volume2, VolumeX, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useYTDJStore } from '@/store'
 import { formatTime } from '@/components/features/YouTubePlayer'
@@ -20,7 +20,8 @@ export function MobilePlayer() {
   } = useYTDJStore()
 
   const playlist = currentSet?.playlist || []
-  const { isPlaying, playingNodeIndex, currentTime, duration, volume } = player
+  const { isPlaying, playingNodeIndex, currentTime, duration, volume, enrichingNodeIndex } = player
+  const isEnriching = enrichingNodeIndex !== null
   const currentTrack = playingNodeIndex !== null ? playlist[playingNodeIndex] : null
 
   if (!currentTrack) {
@@ -65,11 +66,15 @@ export function MobilePlayer() {
             <button
               onClick={(e) => {
                 e.stopPropagation()
+                if (isEnriching) return
                 isPlaying ? pauseTrack() : playTrack(playingNodeIndex!)
               }}
-              className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center"
+              disabled={isEnriching}
+              className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center disabled:opacity-80"
             >
-              {isPlaying ? (
+              {isEnriching ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : isPlaying ? (
                 <Pause className="w-5 h-5" />
               ) : (
                 <Play className="w-5 h-5 ml-0.5" />
@@ -156,16 +161,22 @@ export function MobilePlayer() {
             <div className="flex items-center justify-center gap-6 mb-6">
               <button
                 onClick={skipPrevious}
-                disabled={playingNodeIndex === null || playingNodeIndex <= 0}
+                disabled={isEnriching || playingNodeIndex === null || playingNodeIndex <= 0}
                 className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center disabled:opacity-30"
               >
                 <SkipBack className="w-6 h-6 text-white" />
               </button>
               <button
-                onClick={() => isPlaying ? pauseTrack() : playTrack(playingNodeIndex!)}
-                className="w-20 h-20 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.3)]"
+                onClick={() => {
+                  if (isEnriching) return
+                  isPlaying ? pauseTrack() : playTrack(playingNodeIndex!)
+                }}
+                disabled={isEnriching}
+                className="w-20 h-20 rounded-full bg-white text-black flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.3)] disabled:opacity-80"
               >
-                {isPlaying ? (
+                {isEnriching ? (
+                  <Loader2 className="w-10 h-10 animate-spin" />
+                ) : isPlaying ? (
                   <Pause className="w-10 h-10" />
                 ) : (
                   <Play className="w-10 h-10 ml-1" />
@@ -173,7 +184,7 @@ export function MobilePlayer() {
               </button>
               <button
                 onClick={skipNext}
-                disabled={playingNodeIndex === null || playingNodeIndex >= playlist.length - 1}
+                disabled={isEnriching || playingNodeIndex === null || playingNodeIndex >= playlist.length - 1}
                 className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center disabled:opacity-30"
               >
                 <SkipForward className="w-6 h-6 text-white" />

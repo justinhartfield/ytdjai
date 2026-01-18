@@ -42,6 +42,7 @@ interface PlayerState {
   volume: number
   playingNodeIndex: number | null
   startTime: number // Start time for current track (for skipping intros)
+  enrichingNodeIndex: number | null // Track currently being enriched for playback
 }
 
 // UI State
@@ -152,6 +153,9 @@ interface YTDJState {
   stopTrack: () => void
   skipNext: () => void
   skipPrevious: () => void
+  enrichAndPlayTrack: (nodeIndex: number) => Promise<void>
+  updateTrackYouTubeData: (nodeIndex: number, data: { youtubeId: string; thumbnail?: string; duration?: number }) => void
+  setTrackState: (nodeIndex: number, state: NodeState) => void
 
   // UI State
   ui: UIState
@@ -463,17 +467,26 @@ export const useYTDJStore = create<YTDJState>()(
         duration: 0,
         volume: 80,
         playingNodeIndex: null,
-        startTime: 0
+        startTime: 0,
+        enrichingNodeIndex: null
       },
       setPlayerState: (playerUpdates) => set((state) => ({
         player: { ...state.player, ...playerUpdates }
       })),
-      playTrack: (nodeIndex) => set((state) => {
+      playTrack: (nodeIndex) => {
+        const state = get()
         const playlist = state.currentSet?.playlist || []
         const node = playlist[nodeIndex]
-        if (!node?.track?.youtubeId) return state
+        if (!node?.track) return
+
+        // If no youtubeId, trigger enrichment flow
+        if (!node.track.youtubeId) {
+          get().enrichAndPlayTrack(nodeIndex)
+          return
+        }
+
         const startTime = node.startTime || 0
-        return {
+        set({
           player: {
             ...state.player,
             currentVideoId: node.track.youtubeId,
@@ -482,8 +495,8 @@ export const useYTDJStore = create<YTDJState>()(
             currentTime: startTime,
             startTime
           }
-        }
-      }),
+        })
+      },
       pauseTrack: () => set((state) => ({
         player: { ...state.player, isPlaying: false }
       })),
@@ -496,15 +509,24 @@ export const useYTDJStore = create<YTDJState>()(
           playingNodeIndex: null
         }
       })),
-      skipNext: () => set((state) => {
+      skipNext: () => {
+        const state = get()
         const playlist = state.currentSet?.playlist || []
         const currentIndex = state.player.playingNodeIndex
-        if (currentIndex === null || currentIndex >= playlist.length - 1) return state
+        if (currentIndex === null || currentIndex >= playlist.length - 1) return
+
         const nextIndex = currentIndex + 1
         const nextNode = playlist[nextIndex]
-        if (!nextNode?.track?.youtubeId) return state
+        if (!nextNode?.track) return
+
+        // If no youtubeId, trigger enrichment flow
+        if (!nextNode.track.youtubeId) {
+          get().enrichAndPlayTrack(nextIndex)
+          return
+        }
+
         const startTime = nextNode.startTime || 0
-        return {
+        set({
           player: {
             ...state.player,
             currentVideoId: nextNode.track.youtubeId,
@@ -513,17 +535,26 @@ export const useYTDJStore = create<YTDJState>()(
             currentTime: startTime,
             startTime
           }
-        }
-      }),
-      skipPrevious: () => set((state) => {
+        })
+      },
+      skipPrevious: () => {
+        const state = get()
         const playlist = state.currentSet?.playlist || []
         const currentIndex = state.player.playingNodeIndex
-        if (currentIndex === null || currentIndex <= 0) return state
+        if (currentIndex === null || currentIndex <= 0) return
+
         const prevIndex = currentIndex - 1
         const prevNode = playlist[prevIndex]
-        if (!prevNode?.track?.youtubeId) return state
+        if (!prevNode?.track) return
+
+        // If no youtubeId, trigger enrichment flow
+        if (!prevNode.track.youtubeId) {
+          get().enrichAndPlayTrack(prevIndex)
+          return
+        }
+
         const startTime = prevNode.startTime || 0
-        return {
+        set({
           player: {
             ...state.player,
             currentVideoId: prevNode.track.youtubeId,
@@ -532,8 +563,108 @@ export const useYTDJStore = create<YTDJState>()(
             currentTime: startTime,
             startTime
           }
+        })
+      },
+
+      // On-demand enrichment for playback
+      enrichAndPlayTrack: async (nodeIndex: number) => {
+        const state = get()
+        const playlist = state.currentSet?.playlist || []
+        const node = playlist[nodeIndex]
+
+        if (!node?.track) return
+
+        // If track already has youtubeId, just play it
+        if (node.track.youtubeId) {
+          get().playTrack(nodeIndex)
+          return
         }
-      }),
+
+        // Set loading state
+        set((s) => ({
+          player: { ...s.player, enrichingNodeIndex: nodeIndex }
+        }))
+
+        try {
+          const response = await fetch('/api/video/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              artist: node.track.artist,
+              title: node.track.title,
+              useYouTube: true
+            })
+          })
+
+          const data = await response.json()
+
+          if (data.success && data.videoId) {
+            // Update track with enriched data
+            get().updateTrackYouTubeData(nodeIndex, {
+              youtubeId: data.videoId,
+              thumbnail: data.thumbnail,
+              duration: data.duration
+            })
+
+            // Clear enriching state and play
+            set((s) => ({
+              player: { ...s.player, enrichingNodeIndex: null }
+            }))
+            get().playTrack(nodeIndex)
+          } else {
+            // Mark as unavailable
+            get().setTrackState(nodeIndex, 'unavailable')
+            set((s) => ({
+              player: { ...s.player, enrichingNodeIndex: null }
+            }))
+          }
+        } catch (error) {
+          console.error('[enrichAndPlayTrack] Error:', error)
+          get().setTrackState(nodeIndex, 'unavailable')
+          set((s) => ({
+            player: { ...s.player, enrichingNodeIndex: null }
+          }))
+        }
+      },
+
+      updateTrackYouTubeData: (nodeIndex: number, data: { youtubeId: string; thumbnail?: string; duration?: number }) => {
+        set((state) => {
+          if (!state.currentSet) return state
+          const playlist = [...state.currentSet.playlist]
+          if (!playlist[nodeIndex]) return state
+
+          playlist[nodeIndex] = {
+            ...playlist[nodeIndex],
+            track: {
+              ...playlist[nodeIndex].track,
+              youtubeId: data.youtubeId,
+              ...(data.thumbnail && { thumbnail: data.thumbnail }),
+              ...(data.duration && { duration: data.duration })
+            }
+          }
+
+          return {
+            currentSet: { ...state.currentSet, playlist, updatedAt: new Date() }
+          }
+        })
+      },
+
+      setTrackState: (nodeIndex: number, nodeState: NodeState) => {
+        set((state) => {
+          if (!state.currentSet) return state
+          const playlist = [...state.currentSet.playlist]
+          if (!playlist[nodeIndex]) return state
+
+          playlist[nodeIndex] = {
+            ...playlist[nodeIndex],
+            state: nodeState
+          }
+
+          return {
+            currentSet: { ...state.currentSet, playlist }
+          }
+        })
+      },
 
       // UI State
       ui: {

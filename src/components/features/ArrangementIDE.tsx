@@ -141,7 +141,8 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
   }, [generationError, clearGenerationError])
 
   // Player state from store
-  const { isPlaying, playingNodeIndex, currentTime, duration, volume } = player
+  const { isPlaying, playingNodeIndex, currentTime, duration, volume, enrichingNodeIndex } = player
+  const isEnriching = enrichingNodeIndex !== null
   const activeTrackIndex = playingNodeIndex ?? 0
 
   // AutoMix hook for transition analysis
@@ -1428,20 +1429,25 @@ export function ArrangementIDE({ onViewChange, currentView, onGoHome }: Arrangem
                     />
                     <button
                       onClick={() => {
+                        if (isEnriching) return
                         if (isPlaying && playingNodeIndex === selectedNodeIndex) {
                           pauseTrack()
                         } else if (selectedNodeIndex !== null) {
                           playTrack(selectedNodeIndex)
                         }
                       }}
+                      disabled={isEnriching && enrichingNodeIndex === selectedNodeIndex}
                       className={cn(
                         "absolute bottom-4 right-4 w-10 h-10 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform",
                         isPlaying && playingNodeIndex === selectedNodeIndex
                           ? "bg-cyan-500 text-black"
-                          : "bg-white text-black"
+                          : "bg-white text-black",
+                        isEnriching && enrichingNodeIndex === selectedNodeIndex && "opacity-80"
                       )}
                     >
-                      {isPlaying && playingNodeIndex === selectedNodeIndex ? (
+                      {isEnriching && enrichingNodeIndex === selectedNodeIndex ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : isPlaying && playingNodeIndex === selectedNodeIndex ? (
                         <Pause className="w-5 h-5" />
                       ) : (
                         <Play className="w-5 h-5 ml-0.5" />

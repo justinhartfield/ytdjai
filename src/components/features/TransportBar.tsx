@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Loader2 } from 'lucide-react'
 import { formatDuration } from '@/lib/utils'
 import { formatTime } from './YouTubePlayer'
 import { useYTDJStore } from '@/store'
@@ -18,7 +18,8 @@ export function TransportBar() {
   } = useYTDJStore()
 
   const playlist = currentSet?.playlist || []
-  const { isPlaying, playingNodeIndex, currentTime, duration, volume } = player
+  const { isPlaying, playingNodeIndex, currentTime, duration, volume, enrichingNodeIndex } = player
+  const isEnriching = enrichingNodeIndex !== null
   const activeTrackIndex = playingNodeIndex ?? 0
   const totalDuration = playlist.reduce((acc, node) => acc + node.track.duration, 0)
 
@@ -28,13 +29,14 @@ export function TransportBar() {
       <div className="flex items-center gap-4">
         <button
           onClick={skipPrevious}
-          disabled={playingNodeIndex === null || playingNodeIndex <= 0}
+          disabled={isEnriching || playingNodeIndex === null || playingNodeIndex <= 0}
           className="text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <SkipBack className="w-5 h-5" />
         </button>
         <button
           onClick={() => {
+            if (isEnriching) return
             if (isPlaying) {
               pauseTrack()
             } else if (playingNodeIndex !== null) {
@@ -43,14 +45,20 @@ export function TransportBar() {
               playTrack(0)
             }
           }}
-          disabled={playlist.length === 0}
+          disabled={playlist.length === 0 || isEnriching}
           className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
+          {isEnriching ? (
+            <Loader2 className="w-6 h-6 animate-spin" />
+          ) : isPlaying ? (
+            <Pause className="w-6 h-6" />
+          ) : (
+            <Play className="w-6 h-6 ml-1" />
+          )}
         </button>
         <button
           onClick={skipNext}
-          disabled={playingNodeIndex === null || playingNodeIndex >= playlist.length - 1}
+          disabled={isEnriching || playingNodeIndex === null || playingNodeIndex >= playlist.length - 1}
           className="text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <SkipForward className="w-5 h-5" />
@@ -62,7 +70,9 @@ export function TransportBar() {
         <div className="flex justify-between text-[10px] font-mono text-gray-500">
           <div className="flex items-center gap-3">
             <span className="text-cyan-400 font-bold uppercase tracking-wider">
-              {isPlaying || playingNodeIndex !== null
+              {isEnriching
+                ? `Loading: ${playlist[enrichingNodeIndex]?.track.title || 'Unknown'}...`
+                : isPlaying || playingNodeIndex !== null
                 ? `Playing: ${playlist[activeTrackIndex]?.track.title || 'Unknown'}`
                 : 'Ready to play'}
             </span>
