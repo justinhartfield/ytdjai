@@ -3,9 +3,14 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getServerSupabase } from '@/lib/supabase'
 import { canSaveToCloud } from '@/lib/subscription'
+import { checkCSRF } from '@/lib/csrf'
 
 export async function POST(req: NextRequest) {
   try {
+    // CSRF protection
+    const csrfError = checkCSRF(req)
+    if (csrfError) return csrfError
+
     // Check authentication
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {

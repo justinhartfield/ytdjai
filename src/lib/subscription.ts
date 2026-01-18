@@ -79,8 +79,49 @@ export async function checkCanGenerate(email: string): Promise<CanGenerateResult
   }
 }
 
-// Consume a credit after successful generation
+// Type for the atomic credit consumption RPC response
+interface ConsumeCredtResult {
+  success: boolean
+  credits_before: number
+  credits_after: number
+  error_message: string | null
+}
+
+// Consume a credit after successful generation (uses atomic RPC to prevent race conditions)
 export async function consumeCredit(email: string): Promise<boolean> {
+  const supabase = getServerSupabase()
+
+  // Use atomic RPC function to prevent race conditions
+  // The function locks the row, checks credits, decrements, and logs in a single transaction
+  const { data, error } = await supabase
+    .rpc('consume_credit_atomic', {
+      p_email: email,
+      p_amount: 1
+    })
+    .single<ConsumeCredtResult>()
+
+  if (error) {
+    console.error('Failed to consume credit (RPC error):', error)
+    // Fallback to non-atomic method if RPC doesn't exist (for backwards compatibility)
+    // This can be removed after the RPC function is deployed to Supabase
+    if (error.code === 'PGRST202' || error.message.includes('function') || error.message.includes('does not exist')) {
+      console.warn('Atomic credit function not found, falling back to non-atomic method')
+      return consumeCreditFallback(email)
+    }
+    return false
+  }
+
+  if (!data?.success) {
+    console.error('Credit consumption failed:', data?.error_message || 'Unknown error')
+    return false
+  }
+
+  console.log(`[Credit] Consumed 1 credit for ${email}: ${data.credits_before} -> ${data.credits_after}`)
+  return true
+}
+
+// Fallback non-atomic method (only used if RPC function not deployed yet)
+async function consumeCreditFallback(email: string): Promise<boolean> {
   const supabase = getServerSupabase()
 
   // Get current subscription
@@ -89,7 +130,7 @@ export async function consumeCredit(email: string): Promise<boolean> {
     return false
   }
 
-  // Decrement credits
+  // Decrement credits (non-atomic - has race condition risk)
   const { error: updateError } = await supabase
     .from('user_subscriptions')
     .update({

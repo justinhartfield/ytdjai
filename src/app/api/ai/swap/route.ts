@@ -5,6 +5,7 @@ import { checkCanGenerate, consumeCredit, getUserSubscription } from '@/lib/subs
 import { TIER_CONFIG } from '@/lib/stripe'
 import { rateLimits, checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { swapTrackSchema, validateRequest } from '@/lib/validations'
+import { checkCSRF } from '@/lib/csrf'
 import type { AIProvider, SwapTrackRequest, Track } from '@/types'
 
 // Next.js route segment config - increase timeout for serverless functions
@@ -324,6 +325,10 @@ async function enrichTrackWithYouTube(track: Partial<Track>): Promise<Track> {
 
 export async function POST(request: NextRequest) {
   try {
+    // CSRF protection
+    const csrfError = checkCSRF(request)
+    if (csrfError) return csrfError
+
     // Authentication check
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {

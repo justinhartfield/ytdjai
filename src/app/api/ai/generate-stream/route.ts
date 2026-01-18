@@ -5,6 +5,7 @@ import { checkCanGenerate, consumeCredit, getUserSubscription } from '@/lib/subs
 import { TIER_CONFIG } from '@/lib/stripe'
 import { rateLimits, checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { batchSearchVideoData } from '@/lib/video-search'
+import { checkCSRF } from '@/lib/csrf'
 import type { AIProvider, GeneratePlaylistRequest, PlaylistNode, Track, AlternativeTrack, StreamEvent, SegmentContext } from '@/types'
 
 // Next.js route segment config - increase timeout for serverless functions
@@ -741,12 +742,7 @@ function createStreamingResponse(
   // Check for non-empty strings to handle shell env vars that might be set to ''
   const configuredProviders: AIProvider[] = []
 
-  // Debug logging to identify env var issues
-  console.log('[Stream API] Checking API keys:')
-  console.log('  OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? `${process.env.OPENAI_API_KEY.substring(0, 10)}... (len: ${process.env.OPENAI_API_KEY.length})` : 'NOT SET')
-  console.log('  ANTHROPIC_API_KEY:', process.env.ANTHROPIC_API_KEY ? `${process.env.ANTHROPIC_API_KEY.substring(0, 10)}... (len: ${process.env.ANTHROPIC_API_KEY.length})` : 'NOT SET')
-  console.log('  GOOGLE_AI_API_KEY:', process.env.GOOGLE_AI_API_KEY ? `${process.env.GOOGLE_AI_API_KEY.substring(0, 10)}... (len: ${process.env.GOOGLE_AI_API_KEY.length})` : 'NOT SET')
-
+  // Check which providers are configured (without logging sensitive key data)
   if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim().length > 0) configuredProviders.push('openai')
   if (process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY.trim().length > 0) configuredProviders.push('claude')
   if (process.env.GOOGLE_AI_API_KEY && process.env.GOOGLE_AI_API_KEY.trim().length > 0) configuredProviders.push('gemini')
@@ -979,6 +975,10 @@ export async function GET(request: NextRequest) {
 
 // POST handler - for more complex constraint data
 export async function POST(request: NextRequest) {
+  // CSRF protection
+  const csrfError = checkCSRF(request)
+  if (csrfError) return csrfError
+
   // Check authentication
   const session = await getServerSession(authOptions)
   if (!session?.user?.email) {

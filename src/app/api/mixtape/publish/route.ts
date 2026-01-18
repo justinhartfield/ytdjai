@@ -3,10 +3,15 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getServerSupabase } from '@/lib/supabase'
 import { generateShareSlug } from '@/lib/cover-templates'
+import { checkCSRF } from '@/lib/csrf'
 import type { PublishMixtapeRequest, PublicMixtape, PlaylistNode } from '@/types'
 
 export async function POST(request: NextRequest) {
   try {
+    // CSRF protection
+    const csrfError = checkCSRF(request)
+    if (csrfError) return csrfError
+
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
