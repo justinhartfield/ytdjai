@@ -6,6 +6,7 @@ import { TIER_CONFIG } from '@/lib/stripe'
 import { rateLimits, checkRateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 import { batchSearchVideoData } from '@/lib/video-search'
 import { checkCSRF } from '@/lib/csrf'
+import { trackApiCall } from '@/lib/quota-tracker'
 import type { AIProvider, GeneratePlaylistRequest, PlaylistNode, Track, AlternativeTrack, StreamEvent, SegmentContext } from '@/types'
 
 // Next.js route segment config - increase timeout for serverless functions
@@ -837,6 +838,10 @@ function createStreamingResponse(
             }
 
             console.log(`[Stream API] ${provider} returned ${tracks.length} tracks`)
+            // Track AI provider usage
+            const providerMapping = { openai: 'ai:openai', claude: 'ai:anthropic', gemini: 'ai:google' } as const
+            trackApiCall(providerMapping[provider])
+
             // Enrich all providers with Invidious/Piped + iTunes (no YouTube API used here)
             const playlistNodes = await tracksToPlaylistNodes(tracks, provider, segment?.id)
 
@@ -878,8 +883,10 @@ function createStreamingResponse(
               failed: failures.map(f => f.provider)
             }
           })
+          trackApiCall('generation:success')
         } else {
           sendEvent({ event: 'all-failed', errors: failures })
+          trackApiCall('generation:failure')
         }
 
         // Stop heartbeat
@@ -969,6 +976,7 @@ export async function GET(request: NextRequest) {
 
   // Consume credit before generation
   await consumeCredit(session.user.email)
+  trackApiCall('credits:consumed')
 
   return createStreamingResponse(prompt, finalConstraints, tierConfig.allowedProviders as unknown as AIProvider[])
 }
@@ -1031,6 +1039,7 @@ export async function POST(request: NextRequest) {
 
   // Consume credit before generation
   await consumeCredit(session.user.email)
+  trackApiCall('credits:consumed')
 
   return createStreamingResponse(prompt, constraints, tierConfig.allowedProviders as unknown as AIProvider[], segment)
 }
