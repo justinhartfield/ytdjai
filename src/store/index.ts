@@ -427,9 +427,16 @@ export const useYTDJStore = create<YTDJState>()(
         })
       },
       updatePrompt: (prompt) => set((state) => {
-        if (!state.currentSet) return state
+        // Create a new currentSet if one doesn't exist (fixes prompt being ignored on fresh start)
+        const currentSet = state.currentSet || {
+          id: `set-${Date.now()}`,
+          name: 'Untitled Set',
+          playlist: [],
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
         return {
-          currentSet: { ...state.currentSet, prompt, updatedAt: new Date() }
+          currentSet: { ...currentSet, prompt, updatedAt: new Date() }
         }
       }),
       updateCoverArt: (coverArt) => set((state) => {
