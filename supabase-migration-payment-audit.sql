@@ -14,6 +14,23 @@ CREATE TABLE IF NOT EXISTS stripe_events (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Add missing columns if table already existed
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'stripe_events' AND column_name = 'created_at') THEN
+    ALTER TABLE stripe_events ADD COLUMN created_at TIMESTAMPTZ DEFAULT NOW();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'stripe_events' AND column_name = 'processed_at') THEN
+    ALTER TABLE stripe_events ADD COLUMN processed_at TIMESTAMPTZ DEFAULT NOW();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'stripe_events' AND column_name = 'error') THEN
+    ALTER TABLE stripe_events ADD COLUMN error TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'stripe_events' AND column_name = 'status') THEN
+    ALTER TABLE stripe_events ADD COLUMN status TEXT NOT NULL DEFAULT 'processed';
+  END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_stripe_events_event_id ON stripe_events(event_id);
 CREATE INDEX IF NOT EXISTS idx_stripe_events_created_at ON stripe_events(created_at DESC);
 
