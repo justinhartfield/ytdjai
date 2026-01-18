@@ -46,6 +46,39 @@ async function markEventProcessed(
   })
 }
 
+/**
+ * Log payment event to audit trail for compliance
+ */
+async function logPaymentAudit(
+  stripeEventId: string,
+  eventType: string,
+  userEmail: string | null,
+  amountCents: number | null,
+  status: 'success' | 'failed' | 'pending',
+  actionTaken: string,
+  metadata?: Record<string, unknown>,
+  errorMessage?: string
+): Promise<void> {
+  const supabase = getServerSupabase()
+
+  try {
+    await supabase.from('payment_audit_log').insert({
+      stripe_event_id: stripeEventId,
+      event_type: eventType,
+      user_email: userEmail,
+      amount_cents: amountCents,
+      currency: 'usd',
+      status,
+      action_taken: actionTaken,
+      metadata: metadata || {},
+      error_message: errorMessage || null,
+    })
+  } catch (err) {
+    // Don't fail the webhook if audit logging fails
+    console.error('[Webhook] Failed to log payment audit:', err)
+  }
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text()
   const signature = req.headers.get('stripe-signature')
@@ -96,30 +129,30 @@ export async function POST(req: NextRequest) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
-        await handleCheckoutCompleted(session)
+        await handleCheckoutCompleted(session, event.id)
         break
       }
 
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription
-        await handleSubscriptionUpdated(subscription)
+        await handleSubscriptionUpdated(subscription, event.id)
         break
       }
 
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription
-        await handleSubscriptionDeleted(subscription)
+        await handleSubscriptionDeleted(subscription, event.id)
         break
       }
 
       case 'invoice.paid': {
         const invoice = event.data.object as Stripe.Invoice
-        await handleInvoicePaid(invoice)
+        await handleInvoicePaid(invoice, event.id)
         break
       }
 
       default:
-        console.log(`Unhandled event type: ${event.type}`)
+        console.log(`[Webhook] Unhandled event type: ${event.type}`)
     }
 
     // Mark event as processed
@@ -152,12 +185,13 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session, eventId: string) {
   const userEmail = session.metadata?.user_email
   const priceType = session.metadata?.price_type
 
   if (!userEmail) {
     console.error('No user email in checkout metadata')
+    await logPaymentAudit(eventId, 'checkout.session.completed', null, session.amount_total, 'failed', 'none', { session_id: session.id }, 'No user email in metadata')
     return
   }
 
@@ -167,7 +201,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     const subscriptionId = session.subscription as string
 
     await upgradeToProTier(userEmail, customerId, subscriptionId)
-    console.log(`Upgraded ${userEmail} to pro tier`)
+    await logPaymentAudit(eventId, 'checkout.session.completed', userEmail, session.amount_total, 'success', 'upgrade_to_pro', {
+      session_id: session.id,
+      customer_id: customerId,
+      subscription_id: subscriptionId,
+    })
+    console.log(`[Webhook] Upgraded ${userEmail} to pro tier`)
   } else if (priceType?.startsWith('credits_')) {
     // Credit pack purchase - find amount by looking at line items
     const stripe = getStripe()
@@ -181,9 +220,15 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
           stripe_session_id: session.id,
           price_type: priceType,
         })
-        console.log(`Added ${creditAmount} credits to ${userEmail}`)
+        await logPaymentAudit(eventId, 'checkout.session.completed', userEmail, session.amount_total, 'success', 'add_credits', {
+          session_id: session.id,
+          credit_amount: creditAmount,
+          price_type: priceType,
+        })
+        console.log(`[Webhook] Added ${creditAmount} credits to ${userEmail}`)
       } else {
-        console.error(`Unknown credit pack price ID: ${priceId}`)
+        await logPaymentAudit(eventId, 'checkout.session.completed', userEmail, session.amount_total, 'failed', 'add_credits', { price_id: priceId }, 'Unknown price ID')
+        console.error(`[Webhook] Unknown credit pack price ID: ${priceId}`)
       }
     }
   }
@@ -199,7 +244,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   }
 }
 
-async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+async function handleSubscriptionUpdated(subscription: Stripe.Subscription, eventId: string) {
   const stripe = getStripe()
   const customer = await stripe.customers.retrieve(subscription.customer as string)
 
@@ -208,7 +253,8 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   const userEmail = customer.metadata?.user_email || customer.email
 
   if (!userEmail) {
-    console.error('No user email found for subscription update')
+    console.error('[Webhook] No user email found for subscription update')
+    await logPaymentAudit(eventId, 'customer.subscription.updated', null, null, 'failed', 'none', { subscription_id: subscription.id }, 'No user email found')
     return
   }
 
@@ -222,11 +268,16 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
         subscription.customer as string,
         subscription.id
       )
+      await logPaymentAudit(eventId, 'customer.subscription.updated', userEmail, null, 'success', 'upgrade_to_pro', {
+        subscription_id: subscription.id,
+        subscription_status: subscription.status,
+      })
+      console.log(`[Webhook] Upgraded ${userEmail} to pro tier via subscription update`)
     }
   }
 }
 
-async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription, eventId: string) {
   const stripe = getStripe()
   const customer = await stripe.customers.retrieve(subscription.customer as string)
 
@@ -235,15 +286,19 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   const userEmail = customer.metadata?.user_email || customer.email
 
   if (!userEmail) {
-    console.error('No user email found for subscription deletion')
+    console.error('[Webhook] No user email found for subscription deletion')
+    await logPaymentAudit(eventId, 'customer.subscription.deleted', null, null, 'failed', 'none', { subscription_id: subscription.id }, 'No user email found')
     return
   }
 
   await downgradeToFreeTier(userEmail)
-  console.log(`Downgraded ${userEmail} to free tier`)
+  await logPaymentAudit(eventId, 'customer.subscription.deleted', userEmail, null, 'success', 'downgrade', {
+    subscription_id: subscription.id,
+  })
+  console.log(`[Webhook] Downgraded ${userEmail} to free tier`)
 }
 
-async function handleInvoicePaid(invoice: Stripe.Invoice) {
+async function handleInvoicePaid(invoice: Stripe.Invoice, eventId: string) {
   // Only handle subscription renewals (not initial payments)
   if (invoice.billing_reason !== 'subscription_cycle') {
     return
@@ -257,11 +312,16 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
   const userEmail = customer.metadata?.user_email || customer.email
 
   if (!userEmail) {
-    console.error('No user email found for invoice')
+    console.error('[Webhook] No user email found for invoice')
+    await logPaymentAudit(eventId, 'invoice.paid', null, invoice.amount_paid, 'failed', 'none', { invoice_id: invoice.id }, 'No user email found')
     return
   }
 
   // Reset monthly credits
   await resetMonthlyCredits(userEmail)
-  console.log(`Reset monthly credits for ${userEmail}`)
+  await logPaymentAudit(eventId, 'invoice.paid', userEmail, invoice.amount_paid, 'success', 'reset_credits', {
+    invoice_id: invoice.id,
+    billing_reason: invoice.billing_reason,
+  })
+  console.log(`[Webhook] Reset monthly credits for ${userEmail}`)
 }
