@@ -628,7 +628,10 @@ async function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], provider
   })
 
   return tracks.map((track, index) => {
-    const enriched = enrichedResults.get(String(index))
+    // Key must match format used in batchSearchVideoData: `${artist}:${title}`
+    const artist = track.artist || 'Unknown Artist'
+    const title = track.title || 'Unknown Track'
+    const enriched = enrichedResults.get(`${artist}:${title}`)
     const timestamp = Date.now()
 
     return {
@@ -636,8 +639,8 @@ async function tracksToPlaylistNodes(tracks: AITrackWithAlternatives[], provider
       track: {
         id: `track-${provider}-${timestamp}-${index}`,
         youtubeId: enriched?.videoId || '',
-        title: track.title || 'Unknown Track',
-        artist: track.artist || 'Unknown Artist',
+        title,
+        artist,
         duration: enriched?.duration || track.duration || 240,
         key: track.key,
         genre: track.genre,
